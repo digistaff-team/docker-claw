@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Задачи - AI Агент</title>
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>🦞 ProTalk Claw</h1>
+                    <p>Ваш личный ИИ агент за компьютером</p>
+                </div>
+                <div id="logoutButton" style="display: none;">
+                    <button class="btn btn-secondary" onclick="logout()" style="padding: 10px 20px; font-size: 14px;">🚪 Выйти</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="auth-section" id="authSection" style="display: none;">
+            <h2 style="margin-bottom: 20px;">Вход в систему</h2>
+            <p style="margin-bottom: 20px; color: #666;">Введите ваш Chat ID</p>
+            <input type="text" id="chatIdInput" placeholder="Введите Chat ID (например: user_12345)" />
+            <br>
+            <button onclick="login()">Войти</button>
+        </div>
+
+        <div class="main-content" id="mainContent">
+            <nav class="nav-tabs" id="mainMenu"></nav>
+
+            <div class="panel full-width">
+                <h2>📋 Задачи</h2>
+
+                <!-- Тулбар -->
+                <div class="apps-toolbar">
+                    <div class="apps-toolbar-left">
+                        <span class="apps-count-badge" id="tasksCountBadge">— задач</span>
+
+                        <!-- Фильтры -->
+                        <div class="tasks-filters">
+                            <button class="tasks-filter-btn active" data-filter="all"    onclick="setFilter('all')">
+                                Все <span class="filter-count">0</span>
+                            </button>
+                            <button class="tasks-filter-btn" data-filter="active"  onclick="setFilter('active')">
+                                🔄 Активные <span class="filter-count">0</span>
+                            </button>
+                            <button class="tasks-filter-btn" data-filter="done"    onclick="setFilter('done')">
+                                ✅ Готово <span class="filter-count">0</span>
+                            </button>
+                            <button class="tasks-filter-btn" data-filter="failed"  onclick="setFilter('failed')">
+                                ❌ Ошибки <span class="filter-count">0</span>
+                            </button>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="loadPlans()">🔄 Обновить</button>
+                </div>
+
+                <div class="console-info">
+                    <strong>ℹ️ Информация:</strong>
+                    Здесь отображаются сложные многошаговые задачи ИИ. Активные задачи обновляются автоматически каждые 5 секунд.
+                </div>
+
+                <!-- Сетка карточек -->
+                <div class="tasks-grid" id="tasksGrid">
+                    <div class="apps-empty" style="grid-column:1/-1">
+                        <span class="apps-empty-icon">⏳</span>
+                        <p>Загрузка…</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/tasks.js"></script>
+    <script>
+        window.addEventListener('load', () => {
+            renderMenu('/tasks.html');
+            initAuth();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Консоль - AI Агент</title>
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>🦞 ProTalk Claw</h1>
+                    <p>Ваш личный ИИ агент за компьютером</p>
+                </div>
+                <div id="logoutButton" style="display: none;">
+                    <button class="btn btn-secondary" onclick="logout()" style="padding: 10px 20px; font-size: 14px;">🚪 Выйти</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="auth-section" id="authSection" style="display: none;">
+            <h2 style="margin-bottom: 20px;">Вход в систему</h2>
+            <p style="margin-bottom: 20px; color: #666;">Введите ваш Chat ID</p>
+            <input type="text" id="chatIdInput" placeholder="Введите Chat ID (например: user_12345)" />
+            <br>
+            <button onclick="login()">Войти</button>
+        </div>
+
+        <div class="main-content" id="mainContent">
+            <nav class="nav-tabs" id="mainMenu"></nav>
+
+            <div class="panel full-width">
+                <div class="console-header">
+                    <h2>💻 Bash Консоль</h2>
+                    <div class="console-controls">
+                        <button class="btn btn-secondary" id="themeToggleBtn" onclick="toggleTheme()">🌙 Тёмная</button>
+                        <button class="btn btn-secondary" onclick="clearConsole()">🗑️ Очистить</button>
+                        <button class="btn btn-primary" onclick="downloadHistory()">📥 Скачать историю</button>
+                    </div>
+                </div>
+                
+                <div class="console-info">
+                    <strong>ℹ️ Информация:</strong> 
+                    Вы работаете в изолированном Docker-контейнере. 
+                    Команды выполняются в bash-оболочке. 
+                    Рабочая директория: <code>/workspace</code>
+                </div>
+
+                <div class="terminal-container">
+                    <div class="terminal" id="terminal">
+                        <div class="terminal-output" id="terminalOutput">
+                            <div class="welcome-message">
+                                <div style="color: #51cf66; font-weight: bold; margin-bottom: 0px;">
+                                    ╔════════════════════════════════════════════════════════════╗
+                                    ║     Добро пожаловать в интерактивную Bash-консоль!         ║
+                                    ╚════════════════════════════════════════════════════════════╝<br>
+                                    • Введите команду и нажмите Enter для выполнения<br>
+                                    • Используйте стрелки ↑↓ для навигации по истории команд<br>
+                                    • Нажмите Ctrl+C для прерывания текущей команды
+                                </div>
+                            </div>
+                        </div>
+                        <div class="terminal-input-line">
+                            <span class="terminal-prompt" id="terminalPrompt">user@container:~$</span>
+                            <input type="text" 
+                                   class="terminal-input" 
+                                   id="terminalInput" 
+                                   placeholder="Введите команду..."
+                                   autocomplete="off"
+                                   spellcheck="false"
+                                   autofocus>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="console-status">
+                    <span id="statusIndicator" class="status-indicator ready">● Готов</span>
+                    <span id="commandCount">Команд выполнено: 0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/js/common.js"></script>
+    <script src="/js/console.js"></script>
+    <script>
+        window.addEventListener('load', () => {
+            renderMenu('/console.html');
+            initAuth();
+        });
+    </script>
+</body>
+</html>

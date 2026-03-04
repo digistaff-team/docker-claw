@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Персонализация - AI Агент</title>
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>🦞 ProTalk Claw</h1>
+                    <p>Ваш личный ИИ агент за компьютером</p>
+                </div>
+                <div id="logoutButton" style="display: none;">
+                    <button class="btn btn-secondary" onclick="logout()" style="padding: 10px 20px; font-size: 14px;">🚪 Выйти</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="auth-section" id="authSection" style="display: none;">
+            <h2 style="margin-bottom: 20px;">Вход в систему</h2>
+            <p style="margin-bottom: 20px; color: #666;">Введите ваш Chat ID</p>
+            <input type="text" id="chatIdInput" placeholder="Введите Chat ID (например: user_12345)" />
+            <br>
+            <button onclick="login()">Войти</button>
+        </div>
+
+        <div class="main-content" id="mainContent">
+            <nav class="nav-tabs" id="mainMenu"></nav>
+
+            <div class="panel full-width">
+                <h2>🎭 Настройка личности AI агента</h2>
+                <div class="template-hint">
+                    <strong>💡 Совет:</strong> Заполните файлы персонализации, чтобы AI агент лучше понимал вас и работал в нужном стиле. Эти файлы автоматически добавляются в контекст каждого запроса.
+                </div>
+
+                <div class="personalization-grid">
+                    <div class="person-card" id="card-IDENTITY.md" onclick="selectPersonFile('IDENTITY.md')">
+                        <h3>👤 IDENTITY.md</h3>
+                        <p>Имя, роль и основные данные AI агента</p>
+                        <span class="status empty" id="status-IDENTITY.md">Не заполнено</span>
+                    </div>
+                    <div class="person-card" id="card-SOUL.md" onclick="selectPersonFile('SOUL.md')">
+                        <h3>💫 SOUL.md</h3>
+                        <p>Характер, личность и стиль общения</p>
+                        <span class="status empty" id="status-SOUL.md">Не заполнено</span>
+                    </div>
+                    <div class="person-card" id="card-USER.md" onclick="selectPersonFile('USER.md')">
+                        <h3>🤝 USER.md</h3>
+                        <p>Информация о вас и контекст работы</p>
+                        <span class="status empty" id="status-USER.md">Не заполнено</span>
+                    </div>
+                    <div class="person-card" id="card-MEMORY.md" onclick="selectPersonFile('MEMORY.md')">
+                        <h3>🔐 MEMORY.md</h3>
+                        <p>Токены, пароли, важные регламенты</p>
+                        <span class="status empty" id="status-MEMORY.md">Не заполнено</span>
+                    </div>
+                </div>
+
+                <div class="editor-container" id="editorContainer" style="display: none;">
+                    <div class="editor-header">
+                        <h3 id="editorTitle">Редактор</h3>
+                        <div class="editor-actions">
+                            <button class="btn btn-success" onclick="savePersonFile()">💾 Сохранить</button>
+                            <button class="btn btn-secondary" onclick="closeEditor()">✕ Закрыть</button>
+                        </div>
+                    </div>
+                    <textarea class="editor" id="personEditor" placeholder="Введите содержимое файла..."></textarea>
+                    <div id="templateHelp" style="margin-top: 15px; color: #666; font-size: 14px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/js/common.js"></script>
+    <script src="/js/personalization.js"></script>
+    <script>
+        window.addEventListener('load', () => {
+            renderMenu('/');
+            initAuth();
+        });
+    </script>
+</body>
+</html>

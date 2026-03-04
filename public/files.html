@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Файлы - AI Агент</title>
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>🦞 ProTalk Claw</h1>
+                    <p>Ваш личный ИИ агент за компьютером</p>
+                </div>
+                <div id="logoutButton" style="display: none;">
+                    <button class="btn btn-secondary" onclick="logout()" style="padding: 10px 20px; font-size: 14px;">🚪 Выйти</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="auth-section" id="authSection" style="display: none;">
+            <h2 style="margin-bottom: 20px;">Вход в систему</h2>
+            <p style="margin-bottom: 20px; color: #666;">Введите ваш Chat ID</p>
+            <input type="text" id="chatIdInput" placeholder="Введите Chat ID (например: user_12345)" />
+            <br>
+            <button onclick="login()">Войти</button>
+        </div>
+
+        <div class="main-content" id="mainContent">
+            <nav class="nav-tabs" id="mainMenu"></nav>
+
+            <div class="page-grid three-cols">
+                <div class="panel">
+                    <h2>📊 Статистика диска</h2>
+                    <div id="diskStats">Загрузка...</div>
+                </div>
+                <div class="panel">
+                    <h2>📁 Мои файлы</h2>
+                    <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+                        <div style="font-size: 48px; margin-bottom: 10px;">☁️</div>
+                        <div style="font-size: 16px; font-weight: 600; margin-bottom: 5px;">Перетащите файлы сюда</div>
+                        <div style="font-size: 14px; color: #999;">или нажмите для выбора · сохраняются в <strong>input</strong></div>
+                    </div>
+                    <input type="file" id="fileInput" multiple />
+                    <div id="fileList">
+                        <div style="text-align: center; padding: 40px; color: #999;">Загрузка файлов...</div>
+                    </div>
+                </div>
+                <div class="panel">
+                    <h2>🗄️ База данных PostgreSQL</h2>
+                    <div id="dbInfo" style="font-family: 'Courier New', monospace; font-size: 13px;">Загрузка...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/js/common.js"></script>
+    <script src="/js/files.js"></script>
+    <script>
+        window.addEventListener('load', () => {
+            renderMenu('/files.html');
+            initAuth();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Приложения - AI Агент</title>
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>🦞 ProTalk Claw</h1>
+                    <p>Ваш личный ИИ агент за компьютером</p>
+                </div>
+                <div id="logoutButton" style="display: none;">
+                    <button class="btn btn-secondary" onclick="logout()" style="padding: 10px 20px; font-size: 14px;">🚪 Выйти</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="auth-section" id="authSection" style="display: none;">
+            <h2 style="margin-bottom: 20px;">Вход в систему</h2>
+            <p style="margin-bottom: 20px; color: #666;">Введите ваш Chat ID</p>
+            <input type="text" id="chatIdInput" placeholder="Введите Chat ID (например: user_12345)" />
+            <br>
+            <button onclick="login()">Войти</button>
+        </div>
+
+        <div class="main-content" id="mainContent">
+            <nav class="nav-tabs" id="mainMenu"></nav>
+
+            <div class="panel full-width">
+                <h2>🚀 Приложения (PM2)</h2>
+
+                <div class="apps-toolbar">
+                    <div class="apps-toolbar-left">
+                        <span class="apps-count-badge" id="appsCountBadge">— процессов</span>
+                        <label class="apps-autoupdate">
+                            <input type="checkbox" id="autoUpdateCheckbox" onchange="toggleAutoUpdate(this.checked)">
+                            Авто-обновление каждые 5 сек
+                        </label>
+                    </div>
+                    <button class="btn btn-primary" onclick="loadApps()">🔄 Обновить</button>
+                </div>
+
+                <div class="console-info">
+                    <strong>ℹ️ Информация:</strong>
+                    Здесь отображаются все процессы, запущенные через <code>pm2</code> в вашем контейнере.
+                    Вы можете управлять ими прямо отсюда или через <a href="/console.html" style="color:#1971c2;">консоль</a>.
+                </div>
+
+                <div class="apps-grid" id="appsGrid">
+                    <div class="apps-empty" style="grid-column:1/-1">
+                        <span class="apps-empty-icon">⏳</span>
+                        <p>Загрузка…</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/apps.js"></script>
+    <script>
+        window.addEventListener('load', () => {
+            renderMenu('/apps.html');
+            initAuth();
+        });
+    </script>
+</body>
+</html>

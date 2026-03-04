@@ -1,0 +1,198 @@
+<!-- public/chat.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>ProTalk Claw — Web Chat</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, sans-serif; background: #0f0f0f; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
+  
+  #auth { display: flex; flex-direction: column; gap: 12px; max-width: 400px; margin: auto; padding: 32px; background: #1a1a1a; border-radius: 12px; }
+  #auth h2 { color: #fff; margin-bottom: 8px; }
+  #auth input { padding: 10px 14px; border: 1px solid #333; border-radius: 8px; background: #111; color: #fff; font-size: 14px; }
+  #auth button { padding: 12px; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 15px; }
+  
+  #chat { display: none; flex-direction: column; height: 100vh; }
+  
+  #header { padding: 12px 20px; background: #1a1a1a; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 12px; }
+  #header h3 { flex: 1; font-size: 15px; }
+  
+  #mode-btns button { padding: 6px 12px; border: 1px solid #333; background: #111; color: #aaa; border-radius: 6px; cursor: pointer; font-size: 12px; margin-left: 4px; }
+  #mode-btns button.active { background: #2563eb; color: white; border-color: #2563eb; }
+  
+  #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  
+  .msg { max-width: 80%; padding: 10px 14px; border-radius: 10px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+  .msg.user { background: #2563eb; color: white; align-self: flex-end; border-radius: 10px 10px 2px 10px; }
+  .msg.agent { background: #1e1e1e; border: 1px solid #2a2a2a; align-self: flex-start; border-radius: 10px 10px 10px 2px; }
+  .msg.system { background: transparent; border: 1px solid #333; color: #666; font-size: 12px; align-self: center; }
+  
+  .typing { display: flex; gap: 4px; align-items: center; padding: 12px 16px; }
+  .typing span { width: 6px; height: 6px; background: #555; border-radius: 50%; animation: blink 1.2s infinite; }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,80%,100% { opacity: 0.2; } 40% { opacity: 1; } }
+  
+  #input-row { padding: 16px 20px; background: #1a1a1a; border-top: 1px solid #222; display: flex; gap: 10px; }
+  #input-row textarea { flex: 1; padding: 10px 14px; border: 1px solid #333; border-radius: 8px; background: #111; color: #fff; font-size: 14px; resize: none; height: 44px; max-height: 120px; }
+  #input-row button { padding: 0 20px; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 18px; }
+  #input-row button:disabled { opacity: 0.4; cursor: default; }
+  
+  #logout { background: none; border: 1px solid #333; color: #666; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<!-- Экран авторизации -->
+<div id="auth">
+  <h2>🤖 ProTalk Claw</h2>
+  <p style="color:#666;font-size:13px">Введите Chat ID и токен из панели управления</p>
+  <input id="inp-chatid" placeholder="Chat ID (например: 123456789)" />
+  <input id="inp-token" type="password" placeholder="AI Auth Token (botId_botToken)" />
+  <button onclick="login()">Войти</button>
+  <p id="auth-err" style="color:#f87171;font-size:13px;display:none"></p>
+</div>
+
+<!-- Чат -->
+<div id="chat">
+  <div id="header">
+    <span>🤖</span>
+    <h3>ProTalk Claw</h3>
+    <div id="mode-btns">
+      <button onclick="setMode('CHAT')" id="btn-CHAT">💬 Чат</button>
+      <button onclick="setMode('WORKSPACE')" id="btn-WORKSPACE">📁 Workspace</button>
+      <button onclick="setMode('TERMINAL')" id="btn-TERMINAL">⚡ Терминал</button>
+    </div>
+    <button id="logout" onclick="logout()">Выйти</button>
+  </div>
+  <div id="messages"></div>
+  <div id="input-row">
+    <textarea id="inp-msg" placeholder="Введите задачу..." onkeydown="onKey(event)"></textarea>
+    <button id="send-btn" onclick="send()">↑</button>
+  </div>
+</div>
+
+<script>
+let chatId = '', token = '', mode = 'TERMINAL';
+
+function login() {
+  chatId = document.getElementById('inp-chatid').value.trim();
+  token  = document.getElementById('inp-token').value.trim();
+  if (!chatId || !token) return showErr('Заполните оба поля');
+  localStorage.setItem('claw_chatid', chatId);
+  localStorage.setItem('claw_token', token);
+  showChat();
+}
+
+function logout() {
+  localStorage.removeItem('claw_chatid');
+  localStorage.removeItem('claw_token');
+  location.reload();
+}
+
+function showErr(msg) {
+  const el = document.getElementById('auth-err');
+  el.textContent = msg; el.style.display = 'block';
+}
+
+function showChat() {
+  document.getElementById('auth').style.display = 'none';
+  document.getElementById('chat').style.display = 'flex';
+  setMode(localStorage.getItem('claw_mode') || 'TERMINAL');
+  addMsg('system', `Подключено к контейнеру ${chatId}`);
+}
+
+function setMode(m) {
+  mode = m;
+  localStorage.setItem('claw_mode', m);
+  document.querySelectorAll('#mode-btns button').forEach(b => b.classList.remove('active'));
+  document.getElementById(`btn-${m}`).classList.add('active');
+}
+
+function addMsg(role, text) {
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.textContent = text;
+  const msgs = document.getElementById('messages');
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+function showTyping() {
+  const div = document.createElement('div');
+  div.className = 'msg agent typing';
+  div.innerHTML = '<span></span><span></span><span></span>';
+  div.id = 'typing-indicator';
+  document.getElementById('messages').appendChild(div);
+  document.getElementById('messages').scrollTop = 99999;
+}
+
+function hideTyping() {
+  const el = document.getElementById('typing-indicator');
+  if (el) el.remove();
+}
+
+function onKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+}
+
+async function send() {
+  const inp = document.getElementById('inp-msg');
+  const text = inp.value.trim();
+  if (!text) return;
+  
+  inp.value = '';
+  inp.style.height = '44px';
+  document.getElementById('send-btn').disabled = true;
+  
+  addMsg('user', text);
+  showTyping();
+  
+  try {
+    const resp = await fetch(`/${chatId}/webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ message: text, mode, channel: 'web', sync: true })
+    });
+    
+    hideTyping();
+    
+    if (resp.status === 401) { addMsg('system', '❌ Неверный токен'); logout(); return; }
+    if (resp.status === 402) { addMsg('system', '❌ Аккаунт заблокирован — пополните баланс'); return; }
+    
+    const data = await resp.json();
+    if (data.ok && data.summary) {
+      addMsg('agent', data.summary);
+    } else {
+      addMsg('system', `❌ Ошибка: ${data.error || 'неизвестная ошибка'}`);
+    }
+  } catch (e) {
+    hideTyping();
+    addMsg('system', `❌ Сетевая ошибка: ${e.message}`);
+  } finally {
+    document.getElementById('send-btn').disabled = false;
+    inp.focus();
+  }
+}
+
+// Автоматический ресайз textarea
+document.addEventListener('DOMContentLoaded', () => {
+  const inp = document.getElementById('inp-msg');
+  if (inp) inp.addEventListener('input', function() {
+    this.style.height = '44px';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+  });
+  
+  // Восстановить сессию
+  chatId = localStorage.getItem('claw_chatid') || '';
+  token  = localStorage.getItem('claw_token') || '';
+  if (chatId && token) showChat();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ИИ - AI Агент</title>
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>🦞 ProTalk Claw</h1>
+                    <p>Ваш личный ИИ агент за компьютером</p>
+                </div>
+                <div id="logoutButton" style="display: none;">
+                    <button class="btn btn-secondary" onclick="logout()" style="padding: 10px 20px; font-size: 14px;">🚪 Выйти</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="auth-section" id="authSection" style="display: none;">
+            <h2 style="margin-bottom: 20px;">Вход в систему</h2>
+            <p style="margin-bottom: 20px; color: #666;">Введите ваш Chat ID</p>
+            <input type="text" id="chatIdInput" placeholder="Введите Chat ID (например: user_12345)" />
+            <br>
+            <button onclick="login()">Войти</button>
+        </div>
+
+        <div class="main-content" id="mainContent">
+            <nav class="nav-tabs" id="mainMenu"></nav>
+
+            <div class="panel full-width">
+                <h2>🤖 ИИ Ассистент</h2>
+                <p style="color: #666; margin-bottom: 20px;">Настройте ИИ ассистента через AI Router. После настройки в Telegram боте команды будут обрабатываться умным ассистентом вместо прямого выполнения.</p>
+
+                <div class="channels-grid">
+                    <div class="channel-card">
+                        <h3>🧠 AI Router</h3>
+                        <p>Токен авторизации и модель LLM. Ассистент будет знать контекст вашего окружения (файлы, последние команды, персонализацию) и помогать умно.</p>
+                        <label for="aiBotId">Bot ID</label>
+                        <input type="text" id="aiBotId" placeholder="Bot ID (например: 12345)" />
+                        <label for="aiBotToken">Bot Token</label>
+                        <input type="password" id="aiBotToken" placeholder="XXXXXXXXXXXXXXXXXXXXX" autocomplete="off" />
+                        <label for="aiUserEmail">User Email</label>
+                        <input type="text" id="aiUserEmail" placeholder="user@mail.com" />
+                        <label for="aiModel">Модель LLM</label>
+                        <select id="aiModel" style="width: 100%; padding: 12px 14px; font-size: 14px; border: 2px solid #ddd; border-radius: 8px; margin-bottom: 12px;">
+                            <option value="z-ai/glm-5">z-ai/glm-5 (по умолчанию)</option>
+                            <option value="deepseek/deepseek-v3.2">deepseek/deepseek-v3.2</option>
+                            <option value="openai/gpt-5.1-codex-mini">openai/gpt-5.1-codex-mini</option>
+                            <option value="openai/gpt-5.2-codex">openai/gpt-5.2-codex</option>
+                            <option value="x-ai/grok-code-fast-1">x-ai/grok-code-fast-1</option>
+                            <option value="minimax/minimax-m2.5">minimax/minimax-m2.5</option>
+                            <option value="x-ai/grok-4.1-fast">x-ai/grok-4.1-fast</option>
+                            <option value="google/gemini-3-flash-preview">google/gemini-3-flash-preview</option>
+                            <option value="google/gemini-3-pro-preview">google/gemini-3-pro-preview</option>
+                            <option value="openai/gpt-5-mini">openai/gpt-5-mini</option>
+                            <option value="openai/gpt-5.2">openai/gpt-5.2</option>
+                            <option value="anthropic/claude-haiku-4.5">anthropic/claude-haiku-4.5</option>
+                        </select>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                            <button class="btn btn-primary" onclick="saveAIToken()">💾 Сохранить</button>
+                            <button class="btn btn-secondary" id="disconnectAIBtn" style="display: none;" onclick="disconnectAI()">Отключить ИИ</button>
+                        </div>
+                        <div id="aiStatus" class="channel-status" style="margin-top: 14px; font-size: 14px;"></div>
+                    </div>
+
+                    <!-- Настройки контекста -->
+                    <div class="channel-card">
+                        <h3>⚙️ Настройки контекста</h3>
+                        <p style="color: #666; margin-bottom: 16px;">Параметры формирования контекста, который передаётся ИИ агенту при каждом запросе.</p>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div>
+                                <label for="ctxMaxCommands" style="font-size: 13px;">📋 Кол-во последних команд</label>
+                                <input type="number" id="ctxMaxCommands" min="1" max="50" value="5" style="width: 100%;" />
+                            </div>
+                            <div>
+                                <label for="ctxMaxFiles" style="font-size: 13px;">📁 Максимум файлов в списке</label>
+                                <input type="number" id="ctxMaxFiles" min="10" max="500" value="80" style="width: 100%;" />
+                            </div>
+                            <div>
+                                <label for="ctxMaxDepth" style="font-size: 13px;">🔍 Глубина поиска файлов</label>
+                                <input type="number" id="ctxMaxDepth" min="1" max="10" value="3" style="width: 100%;" />
+                            </div>
+                            <div>
+                                <label for="ctxMaxFileLines" style="font-size: 13px;">📄 Строк файлов показывать</label>
+                                <input type="number" id="ctxMaxFileLines" min="5" max="100" value="30" style="width: 100%;" />
+                            </div>
+                            <div>
+                                <label for="ctxPersonaLines" style="font-size: 13px;">🎭 Строк персоны (на файл)</label>
+                                <input type="number" id="ctxPersonaLines" min="5" max="100" value="20" style="width: 100%;" />
+                            </div>
+                            <div>
+                                <label for="ctxPersonaChars" style="font-size: 13px;">📝 Символов персоны (на файл)</label>
+                                <input type="number" id="ctxPersonaChars" min="100" max="5000" value="500" style="width: 100%;" />
+                            </div>
+                            <div>
+                                <label for="ctxStdoutMaxChars" style="font-size: 13px;">📤 Макс. символов stdout</label>
+                                <input type="number" id="ctxStdoutMaxChars" min="50" max="2000" value="200" style="width: 100%;" />
+                            </div>
+                            <div>
+                                <label for="ctxStderrMaxChars" style="font-size: 13px;">⚠️ Макс. символов stderr</label>
+                                <input type="number" id="ctxStderrMaxChars" min="50" max="2000" value="200" style="width: 100%;" />
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 16px; padding: 12px; background: #f8f9fa; border-radius: 8px;">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" id="ctxIncludeStdout" checked />
+                                    <span style="font-size: 13px;">Включать stdout в контекст</span>
+                                </label>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" id="ctxIncludeStderr" checked />
+                                    <span style="font-size: 13px;">Включать stderr в контекст</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 16px; display: flex; gap: 10px;">
+                            <button class="btn btn-primary" onclick="saveContextSettings()">💾 Сохранить настройки</button>
+                            <button class="btn btn-secondary" onclick="resetContextSettings()">🔄 Сбросить по умолчанию</button>
+                        </div>
+                        <div id="contextSettingsStatus" style="margin-top: 12px; font-size: 13px; color: #666;"></div>
+                    </div>
+
+                    <!-- Просмотр системного контекста -->
+                    <div class="channel-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <h3 style="margin: 0;">📋 Системный контекст</h3>
+                            <button class="btn btn-secondary" onclick="refreshSystemContext()" style="padding: 6px 12px; font-size: 12px;">🔄 Обновить</button>
+                        </div>
+                        <p style="color: #666; margin-bottom: 16px;">Итоговая системная роль ИИ агента с учётом персонализации и выбранных навыков.</p>
+                        
+                        <div style="margin-bottom: 12px;">
+                            <label style="font-size: 13px; font-weight: 600; color: #495057;">Активные навыки:</label>
+                            <div id="activeSkillsList" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; min-height: 30px;">
+                                <span style="color: #999; font-size: 13px;">Загрузка...</span>
+                            </div>
+                        </div>
+                        
+                        <label style="font-size: 13px; font-weight: 600; color: #495057;">Итоговый system prompt:</label>
+                        <textarea id="systemContextOutput" readonly style="width: 100%; min-height: 350px; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-family: 'Monaco', 'Courier New', monospace; font-size: 12px; line-height: 1.5; resize: vertical; background: #f8f9fa;" placeholder="Нажмите 'Обновить' для загрузки системного контекста..."></textarea>
+                        
+                        <div style="margin-top: 12px; display: flex; gap: 10px; align-items: center;">
+                            <button class="btn btn-primary" onclick="copySystemContext()" style="padding: 8px 16px;">📋 Копировать</button>
+                            <span id="contextCopyStatus" style="font-size: 13px; color: #51cf66; display: none;">✓ Скопировано!</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/js/common.js"></script>
+    <script src="/js/ai.js"></script>
+    <script>
+        window.addEventListener('load', () => {
+            renderMenu('/ai.html');
+            initAuth();
+        });
+    </script>
+</body>
+</html>

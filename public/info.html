@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Информация - AI Агент</title>
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>🦞 ProTalk Claw</h1>
+                    <p>Ваш личный ИИ агент за компьютером</p>
+                </div>
+                <div id="logoutButton" style="display: none;">
+                    <button class="btn btn-secondary" onclick="logout()" style="padding: 10px 20px; font-size: 14px;">🚪 Выйти</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="auth-section" id="authSection" style="display: none;">
+            <h2 style="margin-bottom: 20px;">Вход в систему</h2>
+            <p style="margin-bottom: 20px; color: #666;">Введите ваш Chat ID</p>
+            <input type="text" id="chatIdInput" placeholder="Введите Chat ID (например: user_12345)" />
+            <br>
+            <button onclick="login()">Войти</button>
+        </div>
+
+        <div class="main-content" id="mainContent">
+            <nav class="nav-tabs" id="mainMenu"></nav>
+
+            <div class="panel full-width">
+                <h2>📊 Информация о сессии</h2>
+                <div class="session-info" id="sessionInfo">Загрузка...</div>
+                
+                <div style="background: #f0f8ff; border-left: 4px solid #2196F3; padding: 12px 16px; margin: 20px 0; border-radius: 4px;">
+                    <div style="font-weight: 600; color: #1976D2; margin-bottom: 6px;">📁 Конфигурационный файл</div>
+                    <div style="font-family: monospace; font-size: 13px; color: #555; background: #fff; padding: 8px 12px; border-radius: 3px; word-break: break-all;">
+                        <span id="configPath">Загрузка...</span>
+                    </div>
+                    <div style="font-size: 12px; color: #666; margin-top: 6px;">Все настройки (токены, email, параметры ИИ) хранятся в этом файле</div>
+                </div>
+                
+                <div style="background: #f5f5f5; border-left: 4px solid #9C27B0; padding: 12px 16px; margin: 20px 0; border-radius: 4px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div style="font-weight: 600; color: #7B1FA2;">🤖 Логи AI Router</div>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-secondary" onclick="loadAIRouterLogs()" style="padding: 5px 12px; font-size: 12px;">🔄 Обновить</button>
+                            <button class="btn btn-danger" onclick="clearAIRouterLogs()" style="padding: 5px 12px; font-size: 12px;">🗑️ Очистить</button>
+                        </div>
+                    </div>
+                    <div id="aiRouterStats" style="font-size: 12px; color: #666; margin-bottom: 8px;">Статистика: загрузка...</div>
+                    <textarea id="aiRouterLogs" readonly style="width: 100%; height: 300px; font-family: monospace; font-size: 11px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; background: #fafafa;">Загрузка логов...</textarea>
+                </div>
+                
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn btn-primary" onclick="refreshAll()">🔄 Обновить</button>
+                    <button class="btn btn-danger" onclick="resetEnvironment()">🗑️ Очистить файлы</button>
+                    <button class="btn btn-danger" onclick="destroySession()">💣 Удалить всё</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/js/common.js"></script>
+    <script src="/js/info.js"></script>
+    <script>
+        window.addEventListener('load', () => {
+            renderMenu('/info.html');
+            initAuth();
+        });
+    </script>
+</body>
+</html>

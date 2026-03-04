@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Каналы связи - AI Агент</title>
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>🦞 ProTalk Claw</h1>
+                    <p>Ваш личный ИИ агент за компьютером</p>
+                </div>
+                <div id="logoutButton" style="display: none;">
+                    <button class="btn btn-secondary" onclick="logout()" style="padding: 10px 20px; font-size: 14px;">🚪 Выйти</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="auth-section" id="authSection" style="display: none;">
+            <h2 style="margin-bottom: 20px;">Вход в систему</h2>
+            <p style="margin-bottom: 20px; color: #666;">Введите ваш Chat ID</p>
+            <input type="text" id="chatIdInput" placeholder="Введите Chat ID (например: user_12345)" />
+            <br>
+            <button onclick="login()">Войти</button>
+        </div>
+
+        <div class="main-content" id="mainContent">
+            <nav class="nav-tabs" id="mainMenu"></nav>
+
+            <div class="panel full-width">
+                <h2>📡 Каналы связи</h2>
+                <p style="color: #666; margin-bottom: 20px;">Подключите канал (Telegram и др.). Только один подтверждённый пользователь может управлять окружением через бота.</p>
+
+                <div class="channels-grid">
+                    <div class="channel-card">
+                        <h3>📱 Телеграм Бот</h3>
+                        <p>Токен из @BotFather. После сохранения отправьте боту любое сообщение — он пришлёт код. Введите код ниже, чтобы привязать управление к вашему Telegram.</p>
+                        <label for="telegramBotToken">Токен бота</label>
+                        <input type="password" id="telegramBotToken" placeholder="123456789:AAH..." autocomplete="off" />
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                            <button class="btn btn-primary" onclick="saveTelegramToken()">💾 Сохранить токен</button>
+                            <button class="btn btn-secondary" id="disconnectTelegramBtn" style="display: none;" onclick="disconnectTelegram()">Отключить бота</button>
+                        </div>
+                        <div id="telegramStatus" class="channel-status" style="margin-top: 14px; font-size: 14px;"></div>
+                        <div id="telegramVerifyBlock" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
+                            <label for="telegramVerifyCode">Код подтверждения из Telegram</label>
+                            <input type="text" id="telegramVerifyCode" placeholder="123456" maxlength="6" style="width: 120px; margin-right: 8px;" />
+                            <button class="btn btn-success" onclick="verifyTelegramCode()">Подтвердить</button>
+                        </div>
+                    </div>
+
+                    <div class="channel-card">
+                        <h3>📧 Email</h3>
+                        <p>Настройки IMAP (входящие письма как команды) и SMTP (ответы от ИИ). Каждое непрочитанное письмо в INBOX обрабатывается ИИ-агентом, ответ отправляется на почту.</p>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                            <div>
+                                <label for="emailImapHost">IMAP Host</label>
+                                <input type="text" id="emailImapHost" placeholder="imap.gmail.com" />
+                            </div>
+                            <div>
+                                <label for="emailImapPort">IMAP Port</label>
+                                <input type="text" id="emailImapPort" type="number" value="993" style="width: 80px;" />
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                            <div>
+                                <label for="emailImapUser">IMAP User</label>
+                                <input type="text" id="emailImapUser" placeholder="user@gmail.com" />
+                            </div>
+                            <div>
+                                <label for="emailImapPass">IMAP Pass</label>
+                                <input id="emailImapPass" type="password" placeholder="password" />
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                            <div>
+                                <label for="emailSmtpHost">SMTP Host</label>
+                                <input type="text" id="emailSmtpHost" placeholder="smtp.gmail.com" />
+                            </div>
+                            <div>
+                                <label for="emailSmtpPort">SMTP Port</label>
+                                <input type="text" id="emailSmtpPort" type="number" value="587" style="width: 80px;" />
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                            <div>
+                                <label for="emailSmtpUser">SMTP User</label>
+                                <input type="text" id="emailSmtpUser" placeholder="user@gmail.com" />
+                            </div>
+                            <div>
+                                <label for="emailSmtpPass">SMTP Pass</label>
+                                <input id="emailSmtpPass" type="password" placeholder="password" />
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                            <button class="btn btn-primary" onclick="saveEmailConfig()">💾 Сохранить настройки</button>
+                            <button class="btn btn-secondary" id="disconnectEmailBtn" style="display: none;" onclick="disconnectEmail()">Отключить Email</button>
+                        </div>
+                        <div id="pollSettings" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+                            <label for="emailPollInterval" style="display: block; margin-bottom: 5px; font-weight: 500;">Интервал опроса новых писем:</label>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <select id="emailPollInterval">
+                                    <option value="5">5 минут</option>
+                                    <option value="10">10 минут</option>
+                                    <option value="15">15 минут</option>
+                                </select>
+                                <button class="btn btn-primary" onclick="updateEmailPoll()">🔄 Обновить интервал</button>
+                            </div>
+                        </div>
+                        <div id="emailStatus" class="channel-status" style="margin-top: 14px; font-size: 14px;"></div>
+                    </div>
+
+                    <div class="channel-card">
+                        <h3>⏰ Cron задачи</h3>
+                        <p>Статус периодических задач (опрос email и др.). Глобальный cron тикает каждую минуту, но опрос по индивидуальному интервалу.</p>
+                        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap;">
+                            <button class="btn btn-primary" onclick="loadCronStatus()">🔄 Обновить статус</button>
+                            <button class="btn btn-warning" onclick="testPollNow()" style="padding: 8px 16px;">🧪 Тест poll сейчас</button>
+                        </div>
+                        <div id="cronStatus" class="channel-status" style="margin-top: 14px; font-size: 14px; white-space: pre-line;"></div>
+                        <div id="cronLogs" style="margin-top: 20px; max-height: 200px; overflow: auto; background: #f5f5f5; padding: 10px; font-size: 12px; border-radius: 4px; white-space: pre-line;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/js/common.js"></script>
+    <script src="/js/channels.js"></script>
+    <script>
+        window.addEventListener('load', () => {
+            renderMenu('/channels.html');
+            initAuth();
+        });
+    </script>
+</body>
+</html>

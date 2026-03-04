@@ -1,0 +1,299 @@
+const config = require('../config');
+const dockerService = require('./docker.service');
+const postgresService = require('./postgres.service');
+const storageService = require('./storage.service');
+
+// Хранилище сессий в памяти
+const sessions = new Map();
+
+// Статусы инициализации контейнеров: chatId -> { status, step, stepIndex, total, error }
+const initStatuses = new Map();
+
+/**
+ * Проверяет наличие python3 в контейнере
+ */
+async function verifyContainerDeps(chatId) {
+    const result = await executeCommand(chatId, 'which python3 && python3 --version', 5);
+    const session = sessions.get(chatId);
+    if (session) {
+        if (!result.stdout.includes('python3')) {
+            console.warn(`[SESSION] python3 не найден в контейнере ${chatId} — patch_file будет недоступен`);
+            session.hasPython3 = false;
+        } else {
+            session.hasPython3 = true;
+        }
+    }
+}
+
+/**
+ * Создает новую сессию.
+ * Контейнер создаётся синхронно, инициализация (npm install и т.п.) — в фоне.
+ * Прогресс доступен через getInitStatus(chatId).
+ */
+async function createSession(chatId, options = {}) {
+    // Выставляем статус "создаём контейнер" до запуска
+    initStatuses.set(chatId, { status: 'pending', step: 'Создание контейнера', stepIndex: 0, total: 7, error: null });
+
+    const { containerId, containerName, dataDir, database } =
+        await dockerService.createUserContainer(chatId, options);
+
+    const session = {
+        chatId,
+        sessionId: chatId,
+        containerId,
+        containerName,
+        dataDir,
+        database,
+        created: Date.now(),
+        lastActivity: Date.now(),
+        commandCount: 0,
+        allowNetwork: options.allowNetwork !== false,
+        hasPython3: true
+    };
+
+    sessions.set(chatId, session);
+
+    // Запускаем инициализацию в фоне — не блокируем ответ клиенту
+    initStatuses.set(chatId, { status: 'initializing', step: 'Запуск инициализации', stepIndex: 0, total: 7, error: null });
+
+    dockerService.initializeWorkspaceStructure(containerId, (stepName, stepIndex, total) => {
+        initStatuses.set(chatId, { status: 'initializing', step: stepName, stepIndex, total, error: null });
+    }).then(() => {
+        initStatuses.set(chatId, { status: 'ready', step: 'Готово', stepIndex: 7, total: 7, error: null });
+        // Проверяем зависимости
+        verifyContainerDeps(chatId).catch(err =>
+            console.error(`[SESSION] Error verifying deps for ${chatId}:`, err.message)
+        );
+    }).catch(err => {
+        console.error(`[SESSION] Init failed for ${chatId}:`, err.message);
+        initStatuses.set(chatId, { status: 'error', step: 'Ошибка инициализации', stepIndex: 0, total: 7, error: err.message });
+    });
+
+    return session;
+}
+
+/**
+ * Возвращает текущий статус инициализации контейнера
+ */
+function getInitStatus(chatId) {
+    return initStatuses.get(chatId) || { status: 'unknown', step: '', stepIndex: 0, total: 0, error: null };
+}
+
+/**
+ * Восстанавливает сессию после перезапуска сервера
+ */
+async function recoverSession(chatId) {
+    const containerName = `sandbox-user-${chatId}`;
+    const containerId = await dockerService.getContainerIdByName(containerName);
+    
+    if (!containerId) {
+        return null;
+    }
+    
+    console.log(`[SESSION] Recovering session: ${chatId}`);
+    
+    // Проверяем и запускаем контейнер если остановлен
+    const status = await dockerService.getContainerStatus(containerId);
+    if (status !== 'running') {
+        console.log(`[SESSION] Starting stopped container: ${containerName}`);
+        try {
+            await dockerService.startContainer(containerId);
+        } catch (err) {
+            console.log(`[SESSION] Failed to start container ${containerName}: ${err.message}`);
+            // Удаляем старый контейнер и создаем новый
+            try {
+                await dockerService.removeContainer(containerId);
+            } catch (e) {
+                console.log(`[SESSION] Could not remove container: ${e.message}`);
+            }
+            return null;
+        }
+    }
+    
+    const dbInfo = await postgresService.getDatabaseInfo(chatId);
+    const dataDir = storageService.getDataDir(chatId);
+    
+    const session = {
+        chatId,
+        sessionId: chatId,
+        containerId,
+        containerName,
+        dataDir,
+        database: dbInfo,
+        created: Date.now(),
+        lastActivity: Date.now(),
+        commandCount: 0,
+        allowNetwork: true,
+        recovered: true
+    };
+    
+    sessions.set(chatId, session);
+
+    // Восстанавливаем pm2-процессы после рестарта контейнера.
+    // pm2 resurrect читает ~/.pm2/dump.pm2 — файл создаётся командой `pm2 save`.
+    // Если dump не существует — команда просто ничего не делает (не падает).
+    dockerService.executeInContainer(
+        containerId,
+        'pm2 resurrect 2>/dev/null || true',
+        15
+    ).then(r => {
+        if (r.stdout && r.stdout.includes('Resurrecting')) {
+            console.log(`[SESSION] pm2 resurrect OK for ${chatId}`);
+        }
+    }).catch(() => { /* ignore */ });
+
+    return session;
+}
+
+/**
+ * Получает или создает сессию
+ */
+async function getOrCreateSession(chatId, options = {}) {
+    let session = sessions.get(chatId);
+    
+    // Если сессия в памяти - проверяем контейнер
+    if (session) {
+        const isAlive = await dockerService.isContainerAlive(session.containerId);
+        if (isAlive) {
+            session.lastActivity = Date.now();
+            return session;
+        }
+        console.log(`[SESSION] Container dead, removing stale session`);
+        sessions.delete(chatId);
+    }
+    
+    // Пробуем восстановить существующий контейнер
+    session = await recoverSession(chatId);
+    if (session) {
+        return session;
+    }
+    
+    // Создаем новую сессию
+    console.log(`[SESSION] Creating new session: ${chatId}`);
+    return await createSession(chatId, options);
+}
+
+/**
+ * Получает сессию без создания
+ */
+function getSession(chatId) {
+    return sessions.get(chatId);
+}
+
+/**
+ * Удаляет сессию
+ */
+async function destroySession(chatId) {
+    const session = sessions.get(chatId);
+    
+    if (session) {
+        await dockerService.removeContainer(session.containerId);
+        await postgresService.deleteUserDatabase(chatId);
+        sessions.delete(chatId);
+        console.log(`[SESSION] Destroyed: ${chatId}`);
+    }
+}
+
+/**
+ * Выполняет команду в сессии
+ */
+async function executeCommand(chatId, command, timeout = 30) {
+    const session = await getOrCreateSession(chatId);
+    
+    const result = await dockerService.executeInContainer(
+        session.containerId, 
+        command, 
+        timeout
+    );
+    
+    session.commandCount++;
+    session.lastActivity = Date.now();
+    
+    return {
+        ...result,
+        chatId,
+        sessionId: session.sessionId,
+        commandNumber: session.commandCount
+    };
+}
+
+/**
+ * Возвращает все сессии
+ */
+function getAllSessions() {
+    return Array.from(sessions.values());
+}
+
+/**
+ * Очищает неактивные сессии
+ */
+async function cleanupIdleSessions() {
+    const now = Date.now();
+    const toRemove = [];
+    
+    for (const [chatId, session] of sessions) {
+        const idle = now - session.lastActivity;
+        
+        if (idle > config.SESSION_MAX_IDLE_MS) {
+            toRemove.push(chatId);
+        }
+    }
+    
+    for (const chatId of toRemove) {
+        console.log(`[CLEANUP] Removing idle session: ${chatId}`);
+        await destroySession(chatId);
+    }
+    
+    return toRemove.length;
+}
+
+/**
+ * Восстанавливает все контейнеры при старте сервера
+ */
+async function recoverAllSessions() {
+    console.log('[SESSION] Scanning for existing containers...');
+    
+    const { exec } = require('child_process');
+    
+    return new Promise((resolve) => {
+        exec(
+            `docker ps -a -f "name=sandbox-user-" --format "{{.Names}}"`,
+            async (error, stdout) => {
+                if (error) {
+                    resolve(0);
+                    return;
+                }
+                
+                const names = stdout.trim().split('\n').filter(n => n);
+                let recovered = 0;
+                
+                for (const name of names) {
+                    // sandbox-user-{chatId}
+                    const chatId = name.replace('sandbox-user-', '');
+                    try {
+                        await recoverSession(chatId);
+                        recovered++;
+                    } catch (err) {
+                        console.log(`[SESSION] Failed to recover ${chatId}: ${err.message}`);
+                    }
+                }
+                
+                console.log(`[SESSION] Recovered ${recovered} sessions`);
+                resolve(recovered);
+            }
+        );
+    });
+}
+
+module.exports = {
+    createSession,
+    getOrCreateSession,
+    getSession,
+    destroySession,
+    executeCommand,
+    getAllSessions,
+    cleanupIdleSessions,
+    recoverAllSessions,
+    getInitStatus,
+    sessions
+};

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Навыки - AI Агент</title>
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>🦞 ProTalk Claw</h1>
+                    <p>Ваш личный ИИ агент за компьютером</p>
+                </div>
+                <div id="logoutButton" style="display: none;">
+                    <button class="btn btn-secondary" onclick="logout()" style="padding: 10px 20px; font-size: 14px;">🚪 Выйти</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="auth-section" id="authSection" style="display: none;">
+            <h2 style="margin-bottom: 20px;">Вход в систему</h2>
+            <p style="margin-bottom: 20px; color: #666;">Введите ваш Chat ID</p>
+            <input type="text" id="chatIdInput" placeholder="Введите Chat ID (например: user_12345)" />
+            <br>
+            <button onclick="login()">Войти</button>
+        </div>
+
+        <div class="main-content" id="mainContent">
+            <nav class="nav-tabs" id="mainMenu"></nav>
+
+            <div class="panel full-width">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>🎯 Каталог навыков AI</h2>
+                    <button class="btn btn-primary" onclick="openAddSkillModal()">➕ Добавить навык</button>
+                </div>
+                
+                <div class="template-hint">
+                    <strong>💡 Совет:</strong> Отметьте галочками навыки, которые должен использовать ваш AI ассистент. Выбранные навыки будут добавлены в системный контекст при обработке команд. Также вы можете создавать собственные навыки.
+                </div>
+
+                <!-- Фильтры -->
+                <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center;">
+                    <select id="filterCategory" onchange="filterSkills()" style="max-width: 200px; margin-bottom: 0;">
+                        <option value="">Все категории</option>
+    
+                        <option value="development">Разработка и код</option>
+                        <option value="nodejs_dev">Node.js Разработка</option>
+                        <option value="backend_automation">Backend автоматизация</option>
+                        
+                        <option value="marketing_seo">Маркетинг и SEO</option>
+                        <option value="sales_crm">Продажи и CRM</option>
+                        <option value="ecommerce_tools">E-commerce инструменты</option>
+                        
+                        <option value="data_analysis">Анализ данных</option>
+                        <option value="office_docs">Обработка PDF и Office</option>
+                        <option value="data_formats">Структурированные данные</option>
+                        <option value="database">Работа с базами данных</option>
+                        
+                        <option value="automation">Автоматизация и файлы</option>
+                        <option value="tg_management">Управление Telegram</option>
+                        <option value="email_automation">Email-автоматизация</option>
+                        
+                        <option value="text_analysis">Текстовая аналитика</option>
+                        
+                        <option value="management_hr">Управление и HR</option>
+                        <option value="finance_legal">Финансы и право</option>
+                        
+                        <option value="sysadmin">Системное администрирование</option>
+                        <option value="alerts_reports">Уведомления и отчеты</option>
+                        <option value="channel_security">Безопасность каналов</option>
+                        
+                    </select>
+                    <input type="text" id="searchSkills" placeholder="Поиск по названию..." onkeyup="filterSkills()" style="max-width: 250px; margin-bottom: 0;" />
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="checkbox" id="showOnlySelected" onchange="filterSkills()" />
+                        <span>Только выбранные</span>
+                    </label>
+                </div>
+
+                <!-- Выбранные навыки (информация) -->
+                <div id="selectedSkillsInfo" style="display: none; background: #e7f5ff; border-left: 4px solid #339af0; padding: 12px 16px; border-radius: 4px; margin-bottom: 20px;">
+                    <strong>📌 Выбрано навыков: <span id="selectedCount">0</span></strong>
+                    <span style="color: #666; margin-left: 10px;">(будут добавлены в контекст AI)</span>
+                </div>
+
+                <!-- Сетка навыков -->
+                <div class="skills-grid" id="skillsGrid">
+                    <div style="text-align: center; padding: 40px; color: #666;">
+                        Загрузка навыков...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно добавления/редактирования навыка -->
+    <div id="skillModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; overflow-y: auto;">
+        <div class="modal-content" style="background: white; max-width: 700px; margin: 50px auto; border-radius: 12px; padding: 30px; max-height: 90vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 id="modalTitle">➕ Добавить навык</h3>
+                <button onclick="closeSkillModal()" style="background: none; border: none; font-size: 24px; cursor: pointer;">✕</button>
+            </div>
+            
+            <form id="skillForm" onsubmit="saveSkill(event)">
+                <input type="hidden" id="skillId" value="" />
+                
+                <label for="skillName">Название навыка *</label>
+                <input type="text" id="skillName" required placeholder="Например: Python разработчик" />
+                
+                <label for="skillSlug">Идентификатор (slug) *</label>
+                <input type="text" id="skillSlug" required placeholder="Например: python-developer" pattern="[a-z0-9-]+" title="Только латинские буквы, цифры и дефис" />
+                <small style="color: #666; display: block; margin-top: -8px; margin-bottom: 12px;">Уникальный идентификатор на английском</small>
+                
+                <label for="skillCategory">Категория *</label>
+                <select id="skillCategory" required>
+                    <option value="">Выберите категорию</option>
+                    <option value="development">Разработка и код</option>
+                        <option value="nodejs_dev">Node.js Разработка</option>
+                        <option value="backend_automation">Backend автоматизация</option>
+                        
+                        <option value="marketing_seo">Маркетинг и SEO</option>
+                        <option value="sales_crm">Продажи и CRM</option>
+                        <option value="ecommerce_tools">E-commerce инструменты</option>
+                        
+                        <option value="data_analysis">Анализ данных</option>
+                        <option value="office_docs">Обработка PDF и Office</option>
+                        <option value="data_formats">Структурированные данные</option>
+                        <option value="database">Работа с базами данных</option>
+                        
+                        <option value="automation">Автоматизация и файлы</option>
+                        <option value="tg_management">Управление Telegram</option>
+                        <option value="email_automation">Email-автоматизация</option>
+                        
+                        <option value="text_analysis">Текстовая аналитика</option>
+                        
+                        <option value="management_hr">Управление и HR</option>
+                        <option value="finance_legal">Финансы и право</option>
+                        
+                        <option value="sysadmin">Системное администрирование</option>
+                        <option value="alerts_reports">Уведомления и отчеты</option>
+                        <option value="channel_security">Безопасность каналов</option>
+                </select>
+                
+                <label for="skillShortDesc">Краткое описание</label>
+                <input type="text" id="skillShortDesc" placeholder="Короткое описание для пользователя" />
+                
+                <label for="skillSystemPrompt">Системный промпт *</label>
+                <textarea id="skillSystemPrompt" required placeholder="Инструкции для AI: например, 'Ты - Python разработчик. Пиши чистый код с type hints...'" style="width: 100%; min-height: 150px; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 14px; resize: vertical;"></textarea>
+                
+                <label for="skillExamples">Примеры (текстом)</label>
+                <textarea id="skillExamples" placeholder="User: ...&#10;AI: ..." style="width: 100%; min-height: 80px; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 14px; resize: vertical;"></textarea>
+                
+                <label for="skillTags">Теги (через запятую)</label>
+                <input type="text" id="skillTags" placeholder="python, coding, backend" />
+                
+                <label for="skillMetadata">Дополнительные настройки (JSON или текст)</label>
+                <input type="text" id="skillMetadata" placeholder='{"preferred_dialect": "postgresql"}' />
+                
+                <div style="margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="skillIsPublic" />
+                        <strong>Публичный навык</strong>
+                    </label>
+                    <p style="font-size: 13px; color: #666; margin-top: 8px;">Публичные навыки видны всем пользователям. Личные — только вам.</p>
+                </div>
+                
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="closeSkillModal()">Отмена</button>
+                    <button type="submit" class="btn btn-success">💾 Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Модальное окно просмотра навыка -->
+    <div id="viewSkillModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000;">
+        <div class="modal-content" style="background: white; max-width: 600px; margin: 50px auto; border-radius: 12px; padding: 30px;">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 20px;">
+                <div>
+                    <h3 id="viewSkillTitle" style="margin-bottom: 5px;"></h3>
+                    <span id="viewSkillCategory" class="badge" style="background: #e9ecef; color: #495057; padding: 4px 10px; border-radius: 12px; font-size: 12px;"></span>
+                </div>
+                <button onclick="closeViewModal()" style="background: none; border: none; font-size: 24px; cursor: pointer;">✕</button>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <strong>Описание:</strong>
+                <p id="viewSkillDesc" style="color: #666; margin-top: 5px;"></p>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <strong>Теги:</strong>
+                <div id="viewSkillTags" style="margin-top: 5px;"></div>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <strong>Системный промпт:</strong>
+                <pre id="viewSkillPrompt" style="background: #f8f9fa; padding: 12px; border-radius: 8px; white-space: pre-wrap; font-size: 13px; max-height: 200px; overflow-y: auto; margin-top: 5px;"></pre>
+            </div>
+            
+            <div id="viewSkillExamples" style="margin-bottom: 15px;">
+                <strong>Примеры:</strong>
+                <pre id="viewSkillExamplesText" style="background: #f8f9fa; padding: 12px; border-radius: 8px; white-space: pre-wrap; font-size: 13px; margin-top: 5px;"></pre>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeViewModal()">Закрыть</button>
+                <button class="btn btn-primary" id="editFromViewBtn">✏️ Редактировать</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/skills.js"></script>
+    <script>
+        window.addEventListener('load', () => {
+            renderMenu('/skills.html');
+            initAuth();
+        });
+    </script>
+</body>
+</html>
