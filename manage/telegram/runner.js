@@ -10,6 +10,7 @@ const { TOOLS_CHAT, TOOLS_WORKSPACE, TOOLS_TERMINAL } = require('./tools');
 const { executeAgentLoop, classifyTask } = require('./agentLoop');
 const { getSystemInstruction } = require('../prompts');
 const { enqueue } = require('../agentQueue');
+const contentMvpService = require('../../services/contentMvp.service');
 
 const bots = new Map(); // chatId -> { bot, token }
 const workingMessages = new Map(); // chatId -> messageId
@@ -270,6 +271,16 @@ async function handleTextMessage(ctx, chatId) {
     }
 
     const lower = text.toLowerCase();
+
+    if (lower === '/post_now') {
+        try {
+            const result = await contentMvpService.runNow(chatId, { telegram: ctx.telegram }, 'manual');
+            await ctx.reply(result?.message || 'Операция выполнена.');
+        } catch (e) {
+            await ctx.reply(`Ошибка запуска публикации: ${e.message}`);
+        }
+        return;
+    }
     
     // Команда /role - показать системную роль и историю переписки
     if (lower === '/role' || lower === '/context') {
@@ -738,6 +749,31 @@ function startBot(chatId, token) {
     });
 
     // Обработчик загрузки файлов
+    bot.action(/^content:(\d+):(approve|regen_text|regen_image|reject)$/, async (ctx) => {
+        const fromId = String(ctx.from?.id || '');
+        const moderatorId = String(process.env.CONTENT_MVP_MODERATOR_USER_ID || '128247430');
+        if (fromId !== moderatorId) {
+            await ctx.answerCbQuery('Недостаточно прав', { show_alert: true }).catch(() => {});
+            return;
+        }
+
+        const [, jobIdRaw, action] = ctx.match || [];
+        const jobId = Number(jobIdRaw);
+        if (!Number.isFinite(jobId)) {
+            await ctx.answerCbQuery('Некорректный ID').catch(() => {});
+            return;
+        }
+
+        try {
+            const result = await contentMvpService.handleModerationAction(chatId, { telegram: ctx.telegram }, action, jobId);
+            await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
+            await ctx.reply(result?.message || 'Операция выполнена.');
+        } catch (e) {
+            await ctx.answerCbQuery('Ошибка').catch(() => {});
+            await ctx.reply(`Ошибка модерации: ${e.message}`);
+        }
+    });
+
     bot.on('document', async (ctx) => {
         const fromId = ctx.from?.id;
         const username = ctx.from?.username ? `@${ctx.from.username}` : null;

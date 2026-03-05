@@ -1,15 +1,12 @@
 const path = require('path');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const config = require('../config');
 const postgresService = require('./postgres.service');
 const storageService = require('./storage.service');
 
-/**
- * Выполняет shell команду
- */
-function execCommand(command, options = {}) {
+function execFileCommand(file, args = [], options = {}) {
     return new Promise((resolve, reject) => {
-        exec(command, options, (error, stdout, stderr) => {
+        execFile(file, args, options, (error, stdout, stderr) => {
             if (error) {
                 reject({ error, stdout, stderr });
             } else {
@@ -19,14 +16,61 @@ function execCommand(command, options = {}) {
     });
 }
 
+async function findDockerViaShell() {
+    try {
+        const { stdout } = await execFileCommand('bash', ['-lc', 'command -v docker || true']);
+        const bin = String(stdout || '').trim().split(/\r?\n/).pop();
+        return bin || null;
+    } catch {
+        return null;
+    }
+}
+
+function wslPathToWindows(p) {
+    const m = String(p || '').match(/^\/mnt\/([a-zA-Z])\/(.*)$/);
+    if (!m) return p;
+    const drive = `${m[1].toUpperCase()}:\\`;
+    const rest = m[2].replace(/\//g, '\\');
+    return drive + rest;
+}
+
+function normalizeDockerBindPath(inputPath) {
+    if (!inputPath) return inputPath;
+    // Convert Windows-translated WSL path (C:\mnt\c\...) to Linux-style (/mnt/c/...)
+    const m = String(inputPath).match(/^[A-Za-z]:\\mnt\\([A-Za-z])(\\.*)?$/);
+    if (!m) return inputPath;
+
+    const drive = m[1].toLowerCase();
+    const tail = (m[2] || '').replace(/\\/g, '/');
+    return `/mnt/${drive}${tail}`;
+}
+
+function shEscape(arg) {
+    return `'${String(arg).replace(/'/g, `'\"'\"'`)}'`;
+}
+
+function toDockerCpLocalPath(localPath) {
+    const abs = path.resolve(String(localPath || ''));
+    const m = abs.match(/^([A-Za-z]):\\(.*)$/);
+    if (m) {
+        const drive = m[1].toLowerCase();
+        const rest = m[2].replace(/\\/g, '/');
+        return `/mnt/${drive}/${rest}`;
+    }
+    return abs.replace(/\\/g, '/');
+}
+
+async function execDocker(args = [], options = {}) {
+    const cmd = ['docker', ...args].map(shEscape).join(' ');
+    return execFileCommand('bash', ['-lc', cmd], options);
+}
+
 /**
  * Проверяет, жив ли контейнер
  */
 async function isContainerAlive(containerId) {
     try {
-        const { stdout } = await execCommand(
-            `docker inspect -f '{{.State.Running}}' ${containerId}`
-        );
+        const { stdout } = await execDocker(['inspect', '-f', '{{.State.Running}}', containerId]);
         return stdout.trim() === 'true';
     } catch {
         return false;
@@ -38,9 +82,7 @@ async function isContainerAlive(containerId) {
  */
 async function getContainerIdByName(containerName) {
     try {
-        const { stdout } = await execCommand(
-            `docker ps -a -q -f "name=${containerName}"`
-        );
+        const { stdout } = await execDocker(['ps', '-a', '-q', '-f', `name=${containerName}`]);
         return stdout.trim() || null;
     } catch {
         return null;
@@ -52,9 +94,7 @@ async function getContainerIdByName(containerName) {
  */
 async function getContainerStatus(containerId) {
     try {
-        const { stdout } = await execCommand(
-            `docker inspect -f '{{.State.Status}}' ${containerId}`
-        );
+        const { stdout } = await execDocker(['inspect', '-f', '{{.State.Status}}', containerId]);
         return stdout.trim();
     } catch {
         return 'unknown';
@@ -86,7 +126,7 @@ async function waitForContainer(containerId, timeoutMs = 15000) {
  * Запускает остановленный контейнер и ждёт его готовности
  */
 async function startContainer(containerId) {
-    await execCommand(`docker start ${containerId}`);
+    await execDocker(['start', containerId]);
     // Ждём, пока контейнер реально перейдёт в running, прежде чем слать exec
     await waitForContainer(containerId, 15000);
     // Убеждаемся, что структура папок существует (для старых контейнеров)
@@ -99,7 +139,7 @@ async function startContainer(containerId) {
 async function createUserContainer(chatId, options = {}) {
     const containerName = `sandbox-user-${chatId}`;
     const allowNetwork = options.allowNetwork !== false;
-    const networkConfig = allowNetwork ? '--network bridge' : '--network none';
+    const networkMode = allowNetwork ? 'bridge' : 'none';
 
     // Создаем БД
     let dbInfo;
@@ -113,6 +153,7 @@ async function createUserContainer(chatId, options = {}) {
 
     // Создаем папку для данных (абсолютный путь для надёжного bind mount)
     const dataDir = path.resolve(await storageService.ensureUserDir(chatId));
+    const dockerDataDir = normalizeDockerBindPath(dataDir);
 
     // Проверяем и удаляем существующий контейнер
     const existingContainerId = await getContainerIdByName(containerName);
@@ -121,51 +162,60 @@ async function createUserContainer(chatId, options = {}) {
         await removeContainer(existingContainerId);
     }
 
-    // Функция для безопасного экранирования значений env переменных для shell
-    const escapeEnvValue = (value) => {
-        if (!value) return '';
-        const str = String(value);
-        return str
-            .replace(/\\/g, '\\\\')
-            .replace(/"/g, '\\"')
-            .replace(/\$/g, '\\$')
-            .replace(/`/g, '\\`')
-            .replace(/\n/g, '\\n')
-            .replace(/\r/g, '\\r');
-    };
-
-    // Собираем переменные окружения для PostgreSQL
     const envVars = [];
     if (dbInfo) {
-        envVars.push(`--env PGHOST="${escapeEnvValue(dbInfo.host)}"`);
-        envVars.push(`--env PGPORT="${escapeEnvValue(dbInfo.port)}"`);
-        envVars.push(`--env PGDATABASE="${escapeEnvValue(dbInfo.database)}"`);
-        envVars.push(`--env PGUSER="${escapeEnvValue(dbInfo.user)}"`);
-        envVars.push(`--env PGPASSWORD="${escapeEnvValue(dbInfo.password)}"`);
-        envVars.push(`--env DATABASE_URL="${escapeEnvValue(dbInfo.connectionString)}"`);
+        // Keep credentials in PGUSER/PGPASSWORD env vars to avoid URL userinfo parsing edge-cases.
+        const databaseUrl = `postgresql://${dbInfo.host}:${dbInfo.port}/${dbInfo.database}`;
+        envVars.push('PGHOST', String(dbInfo.host));
+        envVars.push('PGPORT', String(dbInfo.port));
+        envVars.push('PGDATABASE', String(dbInfo.database));
+        envVars.push('PGUSER', String(dbInfo.user));
+        envVars.push('PGPASSWORD', String(dbInfo.password));
+        envVars.push('DATABASE_URL', databaseUrl);
     }
 
-    // Контейнер запускается от root — это даёт npm install -g, pm2, chmod без ограничений.
-    // Изоляция обеспечивается на уровне Docker (memory, cpus, pids-limit, network).
-    const dockerCommandParts = [
-        'docker run -d',
-        `--name ${containerName}`,
-        `--memory="${config.CONTAINER_MEMORY}"`,
-        `--cpus="${config.CONTAINER_CPUS}"`,
-        '--pids-limit=200',
-        '--user root',
-        '--tmpfs /tmp:rw,exec,nosuid,size=512m',
-        `-v "${dataDir}":/workspace`,
-        networkConfig,
-        `--label chat_id=${chatId}`,
-        ...envVars,
-        'mcr.microsoft.com/devcontainers/javascript-node:20-bookworm',
-        'bash -c "sleep infinity"'
+    const runArgs = [
+        'run',
+        '-d',
+        '--name', containerName,
+        '--memory', String(config.CONTAINER_MEMORY),
+        '--cpus', String(config.CONTAINER_CPUS),
+        '--pids-limit', '200',
+        '--user', 'root',
+        '--tmpfs', '/tmp:rw,exec,nosuid,size=512m',
+        '-v', `${dockerDataDir}:/workspace`,
+        '--network', networkMode,
+        '--label', `chat_id=${chatId}`
     ];
 
-    const dockerCommand = dockerCommandParts.join(' ');
+    for (let i = 0; i < envVars.length; i += 2) {
+        runArgs.push('--env', `${envVars[i]}=${envVars[i + 1]}`);
+    }
 
-    const { stdout } = await execCommand(dockerCommand);
+    runArgs.push(
+        'mcr.microsoft.com/devcontainers/javascript-node:20-bookworm',
+        'bash',
+        '-c',
+        'sleep infinity'
+    );
+
+    const printable = runArgs.map((a) => (/[\s"]/).test(a) ? `"${a.replace(/"/g, '\\"')}"` : a).join(' ');
+    console.log(`[DOCKER] Executing: docker ${printable}`);
+    let stdout;
+    try {
+        const res = await execDocker(runArgs);
+        stdout = res.stdout;
+    } catch (e) {
+        const msg = e?.error?.message || e?.message || 'docker run failed';
+        console.error(`[DOCKER] docker run failed: ${msg}`);
+        if (e?.stderr) {
+            console.error(`[DOCKER] stderr: ${String(e.stderr).trim()}`);
+        }
+        if (e?.stdout) {
+            console.error(`[DOCKER] stdout: ${String(e.stdout).trim()}`);
+        }
+        throw new Error(e?.stderr?.trim() || msg);
+    }
     const containerId = stdout.trim();
 
     // Ждём, пока контейнер реально перейдёт в running, прежде чем возвращать управление
@@ -212,30 +262,28 @@ async function executeInContainer(containerId, command, timeout = 30) {
         }
     }
 
-    const escapedCommand = command
-        .replace(/\\/g, '\\\\')
-        .replace(/"/g, '\\"')
-        .replace(/`/g, '\\`')
-        .replace(/\$/g, '\\$');
-
-    const dockerExec = `docker exec ${containerId} bash -c "${escapedCommand}"`;
-
     const startTime = Date.now();
-
-    return new Promise((resolve) => {
-        exec(dockerExec, {
-            timeout: timeout * 1000,
-            maxBuffer: 10 * 1024 * 1024
-        }, (error, stdout, stderr) => {
-            resolve({
-                success: !error,
-                stdout: stdout || '',
-                stderr: stderr || error?.message || '',
-                exitCode: error?.code || 0,
-                executionTime: Math.round((Date.now() - startTime) / 10) / 100
-            });
-        });
-    });
+    try {
+        const { stdout, stderr } = await execDocker(
+            ['exec', containerId, 'bash', '-c', command],
+            { timeout: timeout * 1000, maxBuffer: 10 * 1024 * 1024 }
+        );
+        return {
+            success: true,
+            stdout: stdout || '',
+            stderr: stderr || '',
+            exitCode: 0,
+            executionTime: Math.round((Date.now() - startTime) / 10) / 100
+        };
+    } catch (e) {
+        return {
+            success: false,
+            stdout: e?.stdout || '',
+            stderr: e?.stderr || e?.error?.message || '',
+            exitCode: e?.error?.code || 1,
+            executionTime: Math.round((Date.now() - startTime) / 10) / 100
+        };
+    }
 }
 
 /**
@@ -243,27 +291,25 @@ async function executeInContainer(containerId, command, timeout = 30) {
  * Используется для операций, требующих привилегий (chown и т.п.).
  */
 async function execAsRoot(containerId, command, timeout = 60) {
-    const escapedCommand = command
-        .replace(/\\/g, '\\\\')
-        .replace(/"/g, '\\"')
-        .replace(/`/g, '\\`')
-        .replace(/\$/g, '\\$');
-
-    const dockerExec = `docker exec -u root ${containerId} bash -c "${escapedCommand}"`;
-
-    return new Promise((resolve) => {
-        exec(dockerExec, {
-            timeout: timeout * 1000,
-            maxBuffer: 10 * 1024 * 1024
-        }, (error, stdout, stderr) => {
-            resolve({
-                success: !error,
-                stdout: stdout || '',
-                stderr: stderr || error?.message || '',
-                exitCode: error?.code || 0
-            });
-        });
-    });
+    try {
+        const { stdout, stderr } = await execDocker(
+            ['exec', '-u', 'root', containerId, 'bash', '-c', command],
+            { timeout: timeout * 1000, maxBuffer: 10 * 1024 * 1024 }
+        );
+        return {
+            success: true,
+            stdout: stdout || '',
+            stderr: stderr || '',
+            exitCode: 0
+        };
+    } catch (e) {
+        return {
+            success: false,
+            stdout: e?.stdout || '',
+            stderr: e?.stderr || e?.error?.message || '',
+            exitCode: e?.error?.code || 1
+        };
+    }
 }
 
 /**
@@ -271,7 +317,7 @@ async function execAsRoot(containerId, command, timeout = 60) {
  */
 async function removeContainer(containerId) {
     try {
-        await execCommand(`docker rm -f ${containerId}`);
+        await execDocker(['rm', '-f', containerId]);
         console.log(`[DOCKER] Removed container: ${containerId}`);
     } catch (error) {
         console.log(`[DOCKER] Remove failed: ${error.message}`);
@@ -282,14 +328,16 @@ async function removeContainer(containerId) {
  * Копирует файл из контейнера
  */
 async function copyFromContainer(containerId, containerPath, localPath) {
-    await execCommand(`docker cp ${containerId}:${containerPath} ${localPath}`);
+    const local = toDockerCpLocalPath(localPath);
+    await execDocker(['cp', `${containerId}:${containerPath}`, local]);
 }
 
 /**
  * Копирует файл в контейнер
  */
 async function copyToContainer(localPath, containerId, containerPath) {
-    await execCommand(`docker cp ${localPath} ${containerId}:${containerPath}`);
+    const local = toDockerCpLocalPath(localPath);
+    await execDocker(['cp', local, `${containerId}:${containerPath}`]);
 }
 
 /**
@@ -385,9 +433,7 @@ async function resetContainerWorkspace(containerId) {
  */
 async function getContainerIP(containerId) {
     try {
-        const { stdout } = await execCommand(
-            `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${containerId}`
-        );
+        const { stdout } = await execDocker(['inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', containerId]);
         return stdout.trim() || null;
     } catch {
         return null;

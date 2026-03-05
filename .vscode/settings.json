@@ -1,0 +1,8 @@
+{
+    "terminal.integrated.env.windows": {
+        "DOTENV_CONFIG_PATH": "${workspaceFolder}\\.env"
+    },
+    "files.exclude": {
+        "**/.env": true
+    }
+}

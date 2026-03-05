@@ -7,6 +7,10 @@ module.exports = {
     
     // PostgreSQL
     PG_HOST: process.env.PG_HOST || '172.17.0.1',
+    // Host used by this Node.js process for admin actions (CREATE/DROP DB)
+    PG_ADMIN_HOST: process.env.PG_ADMIN_HOST || process.env.PG_HOST || '172.17.0.1',
+    // Host passed into sandbox containers via PGHOST/DATABASE_URL
+    PG_SANDBOX_HOST: process.env.PG_SANDBOX_HOST || process.env.PG_HOST || '172.17.0.1',
     PG_PORT: process.env.PG_PORT || 5432,
     PG_USER: process.env.PG_USER || 'postgres',
     PG_PASSWORD: process.env.PG_PASSWORD || 'XXXXXXXXXXXXXXXXXXX',

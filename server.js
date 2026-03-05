@@ -5,6 +5,7 @@ const routes = require('./routes');
 const sessionService = require('./services/session.service');
 const storageService = require('./services/storage.service');
 const snapshotService = require('./services/snapshot.service');
+const contentMvpService = require('./services/contentMvp.service');
 
 const app = express();
 
@@ -61,6 +62,7 @@ async function startServer() {
     
     // Запуск Telegram-ботов
     telegramRunner.startAllBots();
+    contentMvpService.startScheduler(() => telegramRunner.bots);
     
     // Подключение Webhook API
     const webhookRoutes = require('./routes/webhook.routes');
@@ -115,6 +117,7 @@ async function gracefulShutdown() {
     try {
         const telegramRunner = require('./manage/telegram/runner');
         const manageStore = require('./manage/store');
+        const contentMvpService = require('./services/contentMvp.service');
         let emailProcessor;
         try {
             emailProcessor = require('./manage/email/processor');
@@ -127,6 +130,7 @@ async function gracefulShutdown() {
         if (emailProcessor) {
             emailProcessor.stopEmailCron();
         }
+        contentMvpService.stopScheduler();
         await manageStore.persist();
     } catch (e) {
         // ignore

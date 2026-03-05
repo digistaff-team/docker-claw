@@ -123,7 +123,8 @@ router.post('/:chat_id/upload', upload.single('file'), async (req, res) => {
     }
     
     try {
-        const remotePath = path.join(destination, req.file.originalname);
+        // Use POSIX path for container destinations regardless of host OS.
+        const remotePath = path.posix.join(destination, req.file.originalname);
         await dockerService.copyToContainer(req.file.path, session.containerId, remotePath);
         await fs.unlink(req.file.path).catch(() => {});
         

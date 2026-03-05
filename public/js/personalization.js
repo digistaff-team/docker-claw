@@ -166,7 +166,8 @@ async function savePersonFile() {
             showToast(currentPersonFile + ' сохранен', 'success');
             await loadPersonalizationStatus();
         } else {
-            showToast('Ошибка сохранения', 'error');
+            const err = await response.json().catch(() => ({}));
+            showToast(err.error || 'Ошибка сохранения', 'error');
         }
     } catch (e) {
         showToast('Ошибка сохранения', 'error');
