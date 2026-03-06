@@ -166,6 +166,68 @@ router.delete('/ai', (req, res) => {
     res.json({ success: true, message: 'ИИ отключён' });
 });
 
+// AI Provider settings (OpenAI / OpenRouter)
+router.post('/ai/provider', async (req, res) => {
+    const { chat_id: chatId, provider, api_key, model } = req.body;
+    
+    if (!chatId || !provider) {
+        return res.status(400).json({ error: 'chat_id and provider are required' });
+    }
+    
+    // Валидация провайдера
+    const validProviders = ['protalk', 'openai', 'openrouter'];
+    if (!validProviders.includes(provider)) {
+        return res.status(400).json({ error: `Invalid provider. Must be one of: ${validProviders.join(', ')}` });
+    }
+    
+    // Для openai и openrouter нужен API ключ
+    if ((provider === 'openai' || provider === 'openrouter') && !api_key) {
+        return res.status(400).json({ error: 'api_key is required for openai/openrouter providers' });
+    }
+    
+    try {
+        // Сохраняем настройки провайдера
+        await manageStore.setAIProvider(chatId, provider, api_key, model);
+        
+        let message = '';
+        switch (provider) {
+            case 'openai':
+                message = `Настройки OpenAI сохранены. Модель: ${model || 'gpt-4o'}`;
+                break;
+            case 'openrouter':
+                message = `Настройки OpenRouter сохранены. Модель: ${model || 'anthropic/claude-3-haiku'}`;
+                break;
+            case 'protalk':
+            default:
+                message = 'Переключено на ProTalk AI';
+                break;
+        }
+        
+        res.json({ success: true, message });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.get('/ai/provider', (req, res) => {
+    const chatId = req.query.chat_id;
+    if (!chatId) {
+        return res.status(400).json({ error: 'chat_id is required' });
+    }
+    
+    const providerInfo = manageStore.getAIProvider(chatId);
+    
+    res.json({
+        provider: providerInfo.provider,
+        model: providerInfo.model,
+        // Не возвращаем полный API ключ в целях безопасности
+        hasApiKey: !!providerInfo.apiKey,
+        // Для ProTalk возвращаем данные бота
+        hasProTalkConfig: !!(providerInfo.botId && providerInfo.botToken),
+        userEmail: providerInfo.userEmail
+    });
+});
+
 // Email settings
 router.post('/email', async (req, res) => {
     const { chat_id: chatId, imap_host, imap_port, imap_user, imap_pass, smtp_host, smtp_port, smtp_user, smtp_pass, poll_interval_minutes } = req.body;

@@ -28,9 +28,189 @@ async function mysqlQuery(sql, params = []) {
 }
 
 async function onLoginSuccess() {
+    await loadAIProviderStatus();
     await loadAIStatus();
     await loadContextSettings();
     await loadSystemContext();
+}
+
+/**
+ * Переключает видимость полей в зависимости от выбранного провайдера
+ */
+function toggleProviderFields() {
+    const provider = document.querySelector('input[name="aiProvider"]:checked')?.value || 'protalk';
+    
+    const protalkFields = document.getElementById('protalkFields');
+    const customApiFields = document.getElementById('customApiFields');
+    const protalkModels = document.getElementById('protalkModels');
+    const openaiModels = document.getElementById('openaiModels');
+    const openrouterModels = document.getElementById('openrouterModels');
+    
+    if (provider === 'protalk') {
+        if (protalkFields) protalkFields.style.display = 'block';
+        if (customApiFields) customApiFields.style.display = 'none';
+        if (protalkModels) protalkModels.style.display = 'block';
+        if (openaiModels) openaiModels.style.display = 'none';
+        if (openrouterModels) openrouterModels.style.display = 'none';
+    } else if (provider === 'openai') {
+        if (protalkFields) protalkFields.style.display = 'none';
+        if (customApiFields) customApiFields.style.display = 'block';
+        if (protalkModels) protalkModels.style.display = 'none';
+        if (openaiModels) openaiModels.style.display = 'block';
+        if (openrouterModels) openrouterModels.style.display = 'none';
+    } else if (provider === 'openrouter') {
+        if (protalkFields) protalkFields.style.display = 'none';
+        if (customApiFields) customApiFields.style.display = 'block';
+        if (protalkModels) protalkModels.style.display = 'none';
+        if (openaiModels) openaiModels.style.display = 'none';
+        if (openrouterModels) openrouterModels.style.display = 'block';
+    }
+}
+
+/**
+ * Загружает статус AI-провайдера
+ */
+async function loadAIProviderStatus() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    
+    try {
+        const res = await fetch(`${API_MANAGE}/ai/provider?chat_id=${encodeURIComponent(chatId)}`);
+        const data = await res.json();
+        
+        // Устанавливаем выбранный провайдер
+        const providerRadio = document.querySelector(`input[name="aiProvider"][value="${data.provider || 'protalk'}"]`);
+        if (providerRadio) {
+            providerRadio.checked = true;
+        }
+        
+        // Переключаем поля
+        toggleProviderFields();
+        
+        // Заполняем API ключ если есть (только звездочки показываем)
+        const apiKeyInput = document.getElementById('aiApiKey');
+        if (apiKeyInput && data.hasApiKey) {
+            apiKeyInput.placeholder = '•••••••••••••••• (установлен)';
+        }
+        
+    } catch (e) {
+        console.error('loadAIProviderStatus', e);
+        toggleProviderFields(); // По умолчанию показываем ProTalk
+    }
+}
+
+/**
+ * Сохраняет настройки AI-провайдера
+ */
+async function saveAIProvider() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    
+    const provider = document.querySelector('input[name="aiProvider"]:checked')?.value || 'protalk';
+    const modelSelect = document.getElementById('aiModel');
+    const model = modelSelect?.value;
+    
+    let apiKey = null;
+    let botId = null;
+    let botToken = null;
+    let userEmail = null;
+    
+    if (provider === 'protalk') {
+        // ProTalk - нужны данные бота
+        const botIdInput = document.getElementById('aiBotId');
+        const botTokenInput = document.getElementById('aiBotToken');
+        const userEmailInput = document.getElementById('aiUserEmail');
+        
+        botId = (botIdInput?.value || '').trim();
+        botToken = (botTokenInput?.value || '').trim();
+        userEmail = (userEmailInput?.value || '').trim();
+        
+        if (!botId || !botToken || !userEmail) {
+            showToast('Введите Bot ID, Bot Token и Email для ProTalk', 'error');
+            return;
+        }
+        
+        // Сохраняем через старый endpoint для ProTalk
+        try {
+            const res = await fetch(`${API_MANAGE}/ai`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    chat_id: chatId, 
+                    bot_id: botId, 
+                    bot_token: botToken, 
+                    user_email: userEmail, 
+                    model 
+                })
+            });
+            const data = await res.json().catch(() => ({}));
+            
+            if (res.ok) {
+                // Также сохраняем провайдер
+                await fetch(`${API_MANAGE}/ai/provider`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: chatId, provider: 'protalk', model })
+                });
+                
+                if (data.balanceWarning && data.balanceWarning.aiBlocked) {
+                    showToast('Настройки сохранены, но ИИ заблокирован: ' + data.balanceWarning.reason, 'warning');
+                } else {
+                    showToast('ProTalk AI настроен', 'success');
+                }
+            } else {
+                showToast(data.error || 'Ошибка сохранения', 'error');
+                return;
+            }
+        } catch (e) {
+            showToast('Ошибка сети', 'error');
+            return;
+        }
+        
+    } else {
+        // OpenAI или OpenRouter - нужен API ключ
+        const apiKeyInput = document.getElementById('aiApiKey');
+        apiKey = (apiKeyInput?.value || '').trim();
+        
+        if (!apiKey) {
+            showToast('Введите API-ключ для ' + (provider === 'openai' ? 'OpenAI' : 'OpenRouter'), 'error');
+            return;
+        }
+        
+        if (!apiKey.startsWith('sk-')) {
+            showToast('API-ключ должен начинаться с "sk-"', 'error');
+            return;
+        }
+        
+        try {
+            const res = await fetch(`${API_MANAGE}/ai/provider`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    chat_id: chatId, 
+                    provider, 
+                    api_key: apiKey,
+                    model 
+                })
+            });
+            const data = await res.json().catch(() => ({}));
+            
+            if (res.ok) {
+                showToast((provider === 'openai' ? 'OpenAI' : 'OpenRouter') + ' настроен', 'success');
+                // Очищаем поле ввода ключа после сохранения
+                if (apiKeyInput) apiKeyInput.value = '';
+            } else {
+                showToast(data.error || 'Ошибка сохранения', 'error');
+            }
+        } catch (e) {
+            showToast('Ошибка сети', 'error');
+            return;
+        }
+    }
+    
+    // Перезагружаем статус
+    await loadAIProviderStatus();
+    await loadAIStatus();
 }
 
 async function loadContextSettings() {
@@ -185,7 +365,7 @@ async function loadAIStatus() {
             if (userEmailInput) userEmailInput.value = data.aiUserEmail || '';
             if (modelSelect) modelSelect.value = data.aiModel || 'google/gemini-3-pro-preview';
         } else {
-            statusEl.textContent = 'ИИ не настроен. Введите данные для активации.';
+            statusEl.textContent = 'ИИ не настроен. Выберите провайдера и введите данные для активации.';
             if (disconnectBtn) disconnectBtn.style.display = 'none';
         }
     } catch (e) {
@@ -195,43 +375,8 @@ async function loadAIStatus() {
 }
 
 async function saveAIToken() {
-    const chatId = getChatId();
-    if (!chatId) return;
-    const botIdInput = document.getElementById('aiBotId');
-    const botTokenInput = document.getElementById('aiBotToken');
-    const userEmailInput = document.getElementById('aiUserEmail');
-    const modelSelect = document.getElementById('aiModel');
-    if (!botIdInput || !botTokenInput || !userEmailInput || !modelSelect) return;
-    const botId = (botIdInput.value || '').trim();
-    const botToken = (botTokenInput.value || '').trim();
-    const userEmail = (userEmailInput.value || '').trim();
-    const model = modelSelect.value;
-    if (!botId || !botToken || !userEmail || !model) {
-        showToast('Введите Bot ID, Bot Token, Email и выберите модель', 'error');
-        return;
-    }
-    try {
-        const res = await fetch(`${API_MANAGE}/ai`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: chatId, bot_id: botId, bot_token: botToken, user_email: userEmail, model })
-        });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok) {
-            // Проверяем, заблокирован ли AI из-за баланса
-            if (data.balanceWarning && data.balanceWarning.aiBlocked) {
-                showToast('Настройки сохранены, но ИИ заблокирован: ' + data.balanceWarning.reason, 'warning');
-            } else {
-                showToast('ИИ ассистент настроен', 'success');
-            }
-            // НЕ очищаем поля - перезагружаем статус чтобы сохранить токен в поле
-            await loadAIStatus();
-        } else {
-            showToast(data.error || 'Ошибка сохранения', 'error');
-        }
-    } catch (e) {
-        showToast('Ошибка сети', 'error');
-    }
+    // Перенаправляем на новую функцию
+    await saveAIProvider();
 }
 
 async function disconnectAI() {
@@ -241,6 +386,7 @@ async function disconnectAI() {
         const res = await fetch(`${API_MANAGE}/ai?chat_id=${encodeURIComponent(chatId)}`, { method: 'DELETE' });
         if (res.ok) {
             showToast('ИИ отключён', 'success');
+            await loadAIProviderStatus();
             await loadAIStatus();
         } else {
             showToast('Ошибка отключения', 'error');
@@ -345,8 +491,7 @@ async function refreshSystemContext() {
             systemPrompt += `Ты имеешь следующие активные навыки:\n\n`;
             
             selectedSkills.forEach((skill, idx) => {
-                systemPrompt += `--- НАВЫК ${idx + 1}: ${skill.name} ---\n`;
-                systemPrompt += `${skill.system_prompt}\n\n`;
+                systemPrompt += `--- НАВЫК ${idx + 1}: ${skill.name} ---\n${skill.system_prompt}\n\n`;
             });
         }
         

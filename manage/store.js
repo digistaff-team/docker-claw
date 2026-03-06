@@ -17,7 +17,6 @@ let statesCache = {};
 
 // Функция для получения пути к файлу состояния по chatId
 function getStateFilePath(chatId) {
-    // Заменяем недопустимые символы в chatId для имени файла
     const safeChatId = String(chatId).replace(/[^a-zA-Z0-9_-]/g, '_');
     return path.join(STATE_DIR, `${STATE_FILE_PREFIX}${safeChatId}${STATE_FILE_SUFFIX}`);
 }
@@ -27,35 +26,28 @@ function getBackupFilePath(chatId) {
     return getStateFilePath(chatId) + '.bak';
 }
 
-// Настройки контекста ИИ по умолчанию
 const DEFAULT_CONTEXT_SETTINGS = {
-    maxCommands: 5,           // Сколько последних команд показывать
-    maxFiles: 80,             // Максимум файлов в списке
-    maxDepth: 3,              // Глубина поиска файлов
-    maxFileLines: 30,         // Сколько строк файлов показывать
-    personaLines: 20,         // Строк на файл персонализации
-    personaChars: 500,        // Максимум символов на файл персонализации
-    includeStdout: true,      // Включать stdout в контекст
-    includeStderr: true,      // Включать stderr в контекст
-    stdoutMaxChars: 200,      // Максимум символов stdout
-    stderrMaxChars: 200       // Максимум символов stderr
+    maxCommands: 5,
+    maxFiles: 80,
+    maxDepth: 3,
+    maxFileLines: 30,
+    personaLines: 20,
+    personaChars: 500,
+    includeStdout: true,
+    includeStderr: true,
+    stdoutMaxChars: 200,
+    stderrMaxChars: 200
 };
 
-// Отслеживание процессов сохранения
 const persistingChatIds = new Set();
 
-/**
- * Сохраняет состояние конкретного chatId в отдельный файл с бэкапом
- */
 async function persist(chatId) {
     if (!chatId) {
         console.error('[MANAGE] persist called without chatId');
         return;
     }
     
-    // Предотвращаем параллельную запись одного файла
     if (persistingChatIds.has(chatId)) {
-        // Перезапланируем сохранение
         setImmediate(() => persist(chatId));
         return;
     }
@@ -66,26 +58,16 @@ async function persist(chatId) {
         const stateFile = getStateFilePath(chatId);
         const backupFile = getBackupFilePath(chatId);
         
-        // Создаём директорию если нет
         await fs.mkdir(STATE_DIR, { recursive: true });
         
-        // Формируем данные для сохранения
         const data = statesCache[chatId] || {};
-        const toSave = {
-            chatId,
-            data,
-            savedAt: Date.now()
-        };
+        const toSave = { chatId, data, savedAt: Date.now() };
         
-        // Создаём бэкап существующего файла
         try {
             await fs.access(stateFile);
             await fs.copyFile(stateFile, backupFile);
-        } catch (e) {
-            // Файл не существует - это нормально для нового chatId
-        }
+        } catch (e) {}
         
-        // Записываем во временный файл, затем переименовываем
         const tmpFile = `${stateFile}.tmp.${Date.now()}`;
         await fs.writeFile(tmpFile, JSON.stringify(toSave, null, 2), 'utf8');
         await fs.rename(tmpFile, stateFile);
@@ -97,9 +79,6 @@ async function persist(chatId) {
     }
 }
 
-/**
- * Загружает состояние конкретного chatId из файла
- */
 async function loadChatState(chatId) {
     const stateFile = getStateFilePath(chatId);
     
@@ -110,11 +89,9 @@ async function loadChatState(chatId) {
         return statesCache[chatId];
     } catch (err) {
         if (err.code === 'ENOENT') {
-            // Файл не существует - создаём пустое состояние
             statesCache[chatId] = {};
             return statesCache[chatId];
         }
-        // Ошибка парсинга - пробуем загрузить из бэкапа
         console.error(`[MANAGE] loadChatState parse error for ${chatId}:`, err.message);
         
         const backupFile = getBackupFilePath(chatId);
@@ -132,16 +109,11 @@ async function loadChatState(chatId) {
     }
 }
 
-/**
- * Загружает все состояния при старте
- * Также выполняет миграцию со старого единого файла
- */
 async function load() {
     try {
         await fs.mkdir(STATE_DIR, { recursive: true });
     } catch (e) {}
     
-    // Проверяем наличие старого файла для миграции
     try {
         const oldRaw = await fs.readFile(OLD_STATE_FILE, 'utf8');
         const oldParsed = JSON.parse(oldRaw);
@@ -149,13 +121,11 @@ async function load() {
         if (oldParsed.byChatId && Object.keys(oldParsed.byChatId).length > 0) {
             console.log('[MANAGE] Migrating from old single-file format...');
             
-            // Мигрируем каждый chatId в отдельный фа��л
             for (const [chatId, data] of Object.entries(oldParsed.byChatId)) {
                 statesCache[chatId] = data;
                 await persist(chatId);
             }
             
-            // Бэкапим старый файл и переименовываем
             const migratedFile = `${OLD_STATE_FILE}.migrated.${Date.now()}`;
             await fs.rename(OLD_STATE_FILE, migratedFile);
             console.log(`[MANAGE] Migration complete. Old file moved to ${migratedFile}`);
@@ -166,7 +136,6 @@ async function load() {
         }
     }
     
-    // Загружаем все файлы manage-state-*.json
     try {
         const files = await fs.readdir(STATE_DIR);
         const stateFiles = files.filter(f => 
@@ -177,8 +146,7 @@ async function load() {
         );
         
         for (const file of stateFiles) {
-            // Извлекаем chatId из имени файла
-            const match = file.match(new RegExp(`^${STATE_FILE_PREFIX}(.+)${STATE_FILE_SUFFIX}$`));
+            const match = file.match(new RegExp(`^${STATE_FILE_PREFIX}(.+)\\.json$`));
             if (match) {
                 const chatId = match[1];
                 await loadChatState(chatId);
@@ -190,8 +158,6 @@ async function load() {
         console.error('[MANAGE] load error:', err.message);
     }
 }
-
-// ============ API функции ============
 
 function getState(chatId) {
     return statesCache[chatId] || null;
@@ -250,7 +216,6 @@ function setAI(chatId, botId, botToken, userEmail, model, balanceCheck = null) {
     statesCache[chatId].aiAuthToken = `${botId}_${botToken}`;
     statesCache[chatId].aiModel = model;
     
-    // Сохраняем информацию о балансе
     if (balanceCheck) {
         statesCache[chatId].aiBalance = balanceCheck.balance;
         statesCache[chatId].aiBalanceExpired = balanceCheck.expired;
@@ -259,6 +224,34 @@ function setAI(chatId, botId, botToken, userEmail, model, balanceCheck = null) {
     }
     
     return persist(chatId);
+}
+
+function setAIProvider(chatId, provider, apiKey, model = null) {
+    if (!statesCache[chatId]) statesCache[chatId] = {};
+    statesCache[chatId].aiProvider = provider;
+    
+    if (provider === 'openai' || provider === 'openrouter') {
+        statesCache[chatId].aiCustomApiKey = apiKey;
+        if (model) {
+            statesCache[chatId].aiModel = model;
+        }
+    }
+    
+    return persist(chatId);
+}
+
+function getAIProvider(chatId) {
+    const data = statesCache[chatId];
+    if (!data) return { provider: 'protalk' };
+    
+    return {
+        provider: data.aiProvider || 'protalk',
+        apiKey: data.aiCustomApiKey || null,
+        model: data.aiModel || null,
+        botId: data.aiBotId || null,
+        botToken: data.aiBotToken || null,
+        userEmail: data.aiUserEmail || null
+    };
 }
 
 function getContextSettings(chatId) {
@@ -271,7 +264,6 @@ function getContextSettings(chatId) {
 
 function setContextSettings(chatId, settings) {
     if (!statesCache[chatId]) statesCache[chatId] = {};
-    // Валидация и санитизация
     const sanitized = {
         maxCommands: Math.min(Math.max(parseInt(settings.maxCommands) || 5, 1), 50),
         maxFiles: Math.min(Math.max(parseInt(settings.maxFiles) || 80, 10), 500),
@@ -310,11 +302,9 @@ function clearToken(chatId) {
     }
     delete statesCache[chatId];
     
-    // Удаляем файл состояния
     const stateFile = getStateFilePath(chatId);
     fs.unlink(stateFile).catch(() => {});
     
-    // Удаляем бэкап
     const backupFile = getBackupFilePath(chatId);
     fs.unlink(backupFile).catch(() => {});
 }
@@ -322,7 +312,7 @@ function clearToken(chatId) {
 function setEmail(chatId, emailConfig) {
     if (!statesCache[chatId]) statesCache[chatId] = {};
     statesCache[chatId].email = {
-        active: true, // Email активен по умолчанию при сохранении
+        active: true,
         imapHost: emailConfig.imapHost,
         imapPort: emailConfig.imapPort,
         imapUser: emailConfig.imapUser,
@@ -343,19 +333,18 @@ function getEmailStatus(chatId) {
     if (!data || !data.email) return { hasEmail: false };
     const lastPollAgoMinutes = data.email.lastPollTime ? Math.floor((Date.now() - data.email.lastPollTime) / 60000) : 0;
     
-    // Возвращаем полные пароли (пользователь авторизован по Chat ID)
     return {
         hasEmail: true,
-        active: data.email.active !== false, // true по умолчанию
+        active: data.email.active !== false,
         config: {
             imapHost: data.email.imapHost,
             imapPort: data.email.imapPort,
             imapUser: data.email.imapUser,
-            imapPass: data.email.imapPass, // Полный пароль
+            imapPass: data.email.imapPass,
             smtpHost: data.email.smtpHost,
             smtpPort: data.email.smtpPort,
             smtpUser: data.email.smtpUser,
-            smtpPass: data.email.smtpPass // Полный пароль
+            smtpPass: data.email.smtpPass
         },
         processedCount: (data.email.processedMessageIds || []).length,
         pollIntervalMinutes: data.email.pollIntervalMinutes || 5,
@@ -459,13 +448,9 @@ function getConfigPath(chatId) {
     if (chatId) {
         return getStateFilePath(chatId);
     }
-    // Для обратной совместимости возвращаем директорию
     return STATE_DIR;
 }
 
-/**
- * Добавляет сообщение в историю переписки с AI
- */
 function addAIMessage(chatId, channel = 'telegram', role, content) {
     const key = `${chatId}:${channel}`;
     if (!statesCache[chatId]) statesCache[chatId] = {};
@@ -474,19 +459,15 @@ function addAIMessage(chatId, channel = 'telegram', role, content) {
     
     statesCache[chatId].aiMessages[key].push({
         role,
-        content: (content || '').slice(0, 10000), // Ограничиваем размер сообщения
+        content: (content || '').slice(0, 10000),
         at: Date.now()
     });
-    // Ограничиваем историю
     if (statesCache[chatId].aiMessages[key].length > MAX_AI_MESSAGES) {
         statesCache[chatId].aiMessages[key] = statesCache[chatId].aiMessages[key].slice(-MAX_AI_MESSAGES);
     }
     return persist(chatId);
 }
 
-/**
- * Получает историю переписки с AI
- */
 function getAIMessages(chatId, channel = 'telegram', limit = 50) {
     const key = `${chatId}:${channel}`;
     const data = statesCache[chatId];
@@ -494,9 +475,6 @@ function getAIMessages(chatId, channel = 'telegram', limit = 50) {
     return data.aiMessages[key].slice(-limit);
 }
 
-/**
- * Очищает историю переписки с AI
- */
 function clearAIMessages(chatId, channel = 'telegram') {
     const key = `${chatId}:${channel}`;
     if (statesCache[chatId] && statesCache[chatId].aiMessages) {
@@ -505,9 +483,6 @@ function clearAIMessages(chatId, channel = 'telegram') {
     }
 }
 
-/**
- * Устанавливает полную историю сообщений (для обновления после tool calls)
- */
 function setAIMessages(chatId, channel = 'telegram', messages) {
     const key = `${chatId}:${channel}`;
     if (!statesCache[chatId]) statesCache[chatId] = {};
@@ -521,38 +496,27 @@ function setAIMessages(chatId, channel = 'telegram', messages) {
         name: m.name,
         at: Date.now()
     }));
-    // Ограничиваем историю
     if (statesCache[chatId].aiMessages[key].length > MAX_AI_MESSAGES) {
         statesCache[chatId].aiMessages[key] = statesCache[chatId].aiMessages[key].slice(-MAX_AI_MESSAGES);
     }
     return persist(chatId);
 }
 
-/**
- * Получает текущий режим агента
- */
 function getAgentMode(chatId) {
     const data = statesCache[chatId];
     return data?.agentMode || 'TERMINAL';
 }
 
-/**
- * Устанавливает режим агента
- */
 function setAgentMode(chatId, mode) {
     if (!statesCache[chatId]) statesCache[chatId] = {};
     statesCache[chatId].agentMode = mode;
     return persist(chatId);
 }
 
-/**
- * Возвращает путь к файлу бэкапа для chatId
- */
 function getBackupPath(chatId) {
     return getBackupFilePath(chatId);
 }
 
-// ====================== NODE.JS APPS REGISTRY ======================
 function getApps(chatId) {
     const data = statesCache[chatId] || {};
     return data.apps || [];
@@ -582,20 +546,11 @@ function getAppUrl(chatId, name) {
     return `https://claw.pro-talk.ru/sandbox/${chatId}/app/${name}`;
 }
 
-/**
- * Очищает удалённые и остановленные приложения из реестра
- * Возвращает количество удалённых записей
- */
 function cleanupDeletedApps(chatId) {
     if (!statesCache[chatId]?.apps) return 0;
     
     const before = statesCache[chatId].apps.length;
-    
-    // Оставляем только работающие приложения (status === 'running')
-    statesCache[chatId].apps = statesCache[chatId].apps.filter(app => {
-        return app.status === 'running';
-    });
-    
+    statesCache[chatId].apps = statesCache[chatId].apps.filter(app => app.status === 'running');
     const after = statesCache[chatId].apps.length;
     const deleted = before - after;
     
@@ -606,7 +561,6 @@ function cleanupDeletedApps(chatId) {
     return deleted;
 }
 
-// ====================== PYTHON MODULES REGISTRY ======================
 function getModules(chatId) {
     const data = statesCache[chatId] || {};
     return data.modules || [];
@@ -632,10 +586,6 @@ function removeModule(chatId, name) {
     }
 }
 
-// ====================== SESSION SUMMARY ======================
-/**
- * Сохраняет резюме завершённой сессии
- */
 function addSessionSummary(chatId, summary) {
     if (!statesCache[chatId]) statesCache[chatId] = {};
     if (!statesCache[chatId].sessionSummaries) statesCache[chatId].sessionSummaries = [];
@@ -646,7 +596,6 @@ function addSessionSummary(chatId, summary) {
         date: new Date().toISOString()
     });
     
-    // Храним последние 20 резюме
     if (statesCache[chatId].sessionSummaries.length > 20) {
         statesCache[chatId].sessionSummaries = statesCache[chatId].sessionSummaries.slice(0, 20);
     }
@@ -654,19 +603,12 @@ function addSessionSummary(chatId, summary) {
     return persist(chatId);
 }
 
-/**
- * Получает последние резюме сессий
- */
 function getSessionSummaries(chatId, limit = 5) {
     const data = statesCache[chatId];
     if (!data || !data.sessionSummaries) return [];
     return data.sessionSummaries.slice(0, limit);
 }
 
-// ====================== AI ROUTER LOGS ======================
-/**
- * Добавляет запись в лог AI Router
- */
 function addAIRouterLog(chatId, logObj) {
     if (!statesCache[chatId]) statesCache[chatId] = {};
     if (!statesCache[chatId].aiRouterLogs) statesCache[chatId].aiRouterLogs = [];
@@ -687,7 +629,6 @@ function addAIRouterLog(chatId, logObj) {
     
     statesCache[chatId].aiRouterLogs.unshift(entry);
     
-    // Ограничиваем размер лога
     if (statesCache[chatId].aiRouterLogs.length > MAX_AI_ROUTER_LOGS) {
         statesCache[chatId].aiRouterLogs = statesCache[chatId].aiRouterLogs.slice(0, MAX_AI_ROUTER_LOGS);
     }
@@ -696,18 +637,12 @@ function addAIRouterLog(chatId, logObj) {
     return entry;
 }
 
-/**
- * Получает лог AI Router
- */
 function getAIRouterLogs(chatId, limit = 50) {
     const data = statesCache[chatId];
     if (!data || !data.aiRouterLogs) return [];
     return data.aiRouterLogs.slice(0, limit);
 }
 
-/**
- * Очищает лог AI Router
- */
 function clearAIRouterLogs(chatId) {
     if (statesCache[chatId]) {
         statesCache[chatId].aiRouterLogs = [];
@@ -715,9 +650,6 @@ function clearAIRouterLogs(chatId) {
     }
 }
 
-/**
- * Получает статистику использования AI Router
- */
 function getAIRouterStats(chatId) {
     const data = statesCache[chatId];
     if (!data || !data.aiRouterLogs || data.aiRouterLogs.length === 0) {
@@ -757,6 +689,8 @@ module.exports = {
     verify,
     clearToken,
     setAI,
+    setAIProvider,
+    getAIProvider,
     clearAI,
     setEmail,
     setEmailPoll,

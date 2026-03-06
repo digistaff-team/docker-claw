@@ -37,31 +37,88 @@
 
                 <div class="channels-grid">
                     <div class="channel-card">
-                        <h3>🧠 AI Router</h3>
-                        <p>Токен авторизации и модель LLM. Ассистент будет знать контекст вашего окружения (файлы, последние команды, персонализацию) и помогать умно.</p>
-                        <label for="aiBotId">Bot ID</label>
-                        <input type="text" id="aiBotId" placeholder="Bot ID (например: 12345)" />
-                        <label for="aiBotToken">Bot Token</label>
-                        <input type="password" id="aiBotToken" placeholder="XXXXXXXXXXXXXXXXXXXXX" autocomplete="off" />
-                        <label for="aiUserEmail">User Email</label>
-                        <input type="text" id="aiUserEmail" placeholder="user@mail.com" />
+                        <h3>🧠 AI Провайдер</h3>
+                        <p>Выберите провайдера AI для работы ассистента. Вы можете использовать ProTalk или подключить свой API-ключ.</p>
+                        
+                        <!-- Выбор провайдера -->
+                        <div style="margin-bottom: 20px; padding: 16px; background: #f8f9fa; border-radius: 8px;">
+                            <label style="font-size: 14px; font-weight: 600; color: #495057; display: block; margin-bottom: 12px;">Выберите провайдера:</label>
+                            
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: white; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='#1971c2'" onmouseout="this.style.borderColor='#ddd'">
+                                    <input type="radio" name="aiProvider" value="protalk" checked onchange="toggleProviderFields()" />
+                                    <div>
+                                        <strong>🤖 ProTalk AI</strong>
+                                        <span style="display: block; font-size: 12px; color: #666;">Баланс списывается с аккаунта ProTalk</span>
+                                    </div>
+                                </label>
+                                
+                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: white; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='#1971c2'" onmouseout="this.style.borderColor='#ddd'">
+                                    <input type="radio" name="aiProvider" value="openai" onchange="toggleProviderFields()" />
+                                    <div>
+                                        <strong>🔵 OpenAI</strong>
+                                        <span style="display: block; font-size: 12px; color: #666;">Использует ваш API-ключ OpenAI</span>
+                                    </div>
+                                </label>
+                                
+                                <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: white; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='#1971c2'" onmouseout="this.style.borderColor='#ddd'">
+                                    <input type="radio" name="aiProvider" value="openrouter" onchange="toggleProviderFields()" />
+                                    <div>
+                                        <strong>🌐 OpenRouter</strong>
+                                        <span style="display: block; font-size: 12px; color: #666;">Прокси с множеством моделей, часто дешевле</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- ProTalk настройки -->
+                        <div id="protalkFields">
+                            <label for="aiBotId">Bot ID</label>
+                            <input type="text" id="aiBotId" placeholder="Bot ID (например: 12345)" />
+                            <label for="aiBotToken">Bot Token</label>
+                            <input type="password" id="aiBotToken" placeholder="XXXXXXXXXXXXXXXXXXXXX" autocomplete="off" />
+                            <label for="aiUserEmail">User Email</label>
+                            <input type="text" id="aiUserEmail" placeholder="user@mail.com" />
+                        </div>
+                        
+                        <!-- OpenAI / OpenRouter настройки -->
+                        <div id="customApiFields" style="display: none;">
+                            <label for="aiApiKey">API Key</label>
+                            <input type="password" id="aiApiKey" placeholder="sk-..." autocomplete="off" style="width: 100%; padding: 12px 14px; font-size: 14px; border: 2px solid #ddd; border-radius: 8px; margin-bottom: 12px;" />
+                            <p style="font-size: 12px; color: #666; margin-bottom: 16px;">🔐 Ваш API-ключ хранится локально и никогда не передаётся на наши сервера</p>
+                        </div>
+                        
                         <label for="aiModel">Модель LLM</label>
                         <select id="aiModel" style="width: 100%; padding: 12px 14px; font-size: 14px; border: 2px solid #ddd; border-radius: 8px; margin-bottom: 12px;">
-                            <option value="z-ai/glm-5">z-ai/glm-5 (по умолчанию)</option>
-                            <option value="deepseek/deepseek-v3.2">deepseek/deepseek-v3.2</option>
-                            <option value="openai/gpt-5.1-codex-mini">openai/gpt-5.1-codex-mini</option>
-                            <option value="openai/gpt-5.2-codex">openai/gpt-5.2-codex</option>
-                            <option value="x-ai/grok-code-fast-1">x-ai/grok-code-fast-1</option>
-                            <option value="minimax/minimax-m2.5">minimax/minimax-m2.5</option>
-                            <option value="x-ai/grok-4.1-fast">x-ai/grok-4.1-fast</option>
-                            <option value="google/gemini-3-flash-preview">google/gemini-3-flash-preview</option>
-                            <option value="google/gemini-3-pro-preview">google/gemini-3-pro-preview</option>
-                            <option value="openai/gpt-5-mini">openai/gpt-5-mini</option>
-                            <option value="openai/gpt-5.2">openai/gpt-5.2</option>
-                            <option value="anthropic/claude-haiku-4.5">anthropic/claude-haiku-4.5</option>
+                            <!-- ProTalk модели (по умолчанию) -->
+                            <optgroup id="protalkModels" label="ProTalk (AI Router)">
+                                <option value="google/gemini-3-pro-preview" selected>google/gemini-3-pro-preview</option>
+                                <option value="google/gemini-3-flash-preview">google/gemini-3-flash-preview</option>
+                                <option value="openai/gpt-5.2">openai/gpt-5.2</option>
+                                <option value="openai/gpt-5-mini">openai/gpt-5-mini</option>
+                                <option value="deepseek/deepseek-v3.2">deepseek/deepseek-v3.2</option>
+                                <option value="x-ai/grok-4.1-fast">x-ai/grok-4.1-fast</option>
+                                <option value="z-ai/glm-5">z-ai/glm-5</option>
+                                <option value="minimax/minimax-m2.5">minimax/minimax-m2.5</option>
+                            </optgroup>
+                            <optgroup id="openaiModels" label="OpenAI" style="display: none;">
+                                <option value="gpt-4o">gpt-4o (recommended)</option>
+                                <option value="gpt-4o-mini">gpt-4o-mini</option>
+                                <option value="gpt-4-turbo">gpt-4-turbo</option>
+                                <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                            </optgroup>
+                            <optgroup id="openrouterModels" label="OpenRouter" style="display: none;">
+                                <option value="anthropic/claude-3-haiku">anthropic/claude-3-haiku (fast)</option>
+                                <option value="anthropic/claude-3.5-sonnet">anthropic/claude-3.5-sonnet</option>
+                                <option value="openai/gpt-4o">openai/gpt-4o</option>
+                                <option value="openai/gpt-4o-mini">openai/gpt-4o-mini</option>
+                                <option value="google/gemini-pro-1.5">google/gemini-pro-1.5</option>
+                                <option value="meta-llama/llama-3.1-70b-instruct">meta-llama/llama-3.1-70b</option>
+                                <option value="mistralai/mistral-7b-instruct">mistralai/mistral-7b</option>
+                            </optgroup>
                         </select>
                         <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-                            <button class="btn btn-primary" onclick="saveAIToken()">💾 Сохранить</button>
+                            <button class="btn btn-primary" onclick="saveAIProvider()">💾 Сохранить</button>
                             <button class="btn btn-secondary" id="disconnectAIBtn" style="display: none;" onclick="disconnectAI()">Отключить ИИ</button>
                         </div>
                         <div id="aiStatus" class="channel-status" style="margin-top: 14px; font-size: 14px;"></div>
