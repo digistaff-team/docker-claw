@@ -21,11 +21,40 @@
         </div>
 
         <div class="auth-section" id="authSection" style="display: none;">
-            <h2 style="margin-bottom: 20px;">Вход в систему</h2>
-            <p style="margin-bottom: 20px; color: #666;">Введите ваш Chat ID</p>
-            <input type="text" id="chatIdInput" placeholder="Введите Chat ID (например: user_12345)" />
-            <br>
-            <button onclick="login()">Войти</button>
+            <h2 style="margin-bottom: 20px;">🔐 Вход в систему</h2>
+            
+            <!-- Вариант 1: Через Telegram бота -->
+            <div style="background: #f0f7ff; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                <h3 style="margin: 0 0 10px 0; font-size: 16px;">📱 Войти через Telegram</h3>
+                <p style="margin: 0 0 15px 0; color: #555; font-size: 14px;">
+                    Перейдите в бот и нажмите кнопку <strong>"Войти в аккаунт"</strong>
+                </p>
+                <a href="https://t.me/DigiStaff_Team_bot" target="_blank" style="display: inline-block; background: #0088cc; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">
+                    🤖 Открыть @DigiStaff_Team_bot
+                </a>
+            </div>
+            
+            <!-- Разделитель -->
+            <div style="display: flex; align-items: center; margin: 25px 0;">
+                <div style="flex: 1; height: 1px; background: #ddd;"></div>
+                <span style="padding: 0 15px; color: #999; font-size: 14px;">или</span>
+                <div style="flex: 1; height: 1px; background: #ddd;"></div>
+            </div>
+            
+            <!-- Вариант 2: По Telegram ID -->
+            <div>
+                <h3 style="margin: 0 0 10px 0; font-size: 16px;">🆔 Войти по Telegram ID</h3>
+                <p style="margin-bottom: 10px; color: #666; font-size: 14px;">
+                    Если вы знаете свой <strong>Telegram ID</strong>, введите его:
+                </p>
+                <input type="text" id="chatIdInput" placeholder="Например: 123456789" style="margin-bottom: 10px;" />
+                <p style="font-size: 12px; color: #999; margin-bottom: 15px;">
+                    💡 Узнать свой Telegram ID: напишите боту <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a>
+                </p>
+                <button onclick="login()">Войти по ID</button>
+            </div>
+            
+            <div id="authStatus" style="margin-top: 15px;"></div>
         </div>
 
         <div class="main-content" id="mainContent">

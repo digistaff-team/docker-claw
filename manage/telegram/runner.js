@@ -693,6 +693,100 @@ function startBot(chatId, token) {
         ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
     });
 
+    // Обработчик "Войти в аккаунт" — авторизация через Telegram ID
+    bot.action('login_account', async (ctx) => {
+        const fromId = String(ctx.from?.id || '');
+        const username = ctx.from?.username ? `@${ctx.from.username}` : null;
+
+        await ctx.answerCbQuery('Авторизация...').catch(() => {});
+
+        console.log(`[TG-LOGIN] telegram_id=${fromId}, username=${username}`);
+
+        try {
+            // Вызываем API авторизации
+            const apiUrl = process.env.API_URL || 'https://claw.pro-talk.ru';
+            const response = await fetch(`${apiUrl}/api/auth/telegram-login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    telegram_id: fromId,
+                    username: username
+                })
+            });
+
+            const result = await response.json();
+
+            // Убираем кнопки
+            await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
+
+            if (result.success) {
+                // Формируем приветственное сообщение
+                let welcomeMsg;
+
+                if (result.isNewUser) {
+                    // Новый пользователь — аккаунт создан
+                    welcomeMsg = `🎉 <b>Добро пожаловать, ${username || 'пользователь'}!</b>\n\n`;
+                    welcomeMsg += `✅ Ваш аккаунт создан и активирован.\n\n`;
+                    welcomeMsg += `<b>Вам доступно:</b>\n`;
+                    welcomeMsg += `• 🐍 Python 3 с основными библиотеками\n`;
+                    welcomeMsg += `• 📦 Node.js + npm\n`;
+                    welcomeMsg += `• 🗄️ PostgreSQL база данных\n`;
+                    welcomeMsg += `• 📁 Персональное рабочее пространство\n\n`;
+                    welcomeMsg += `🔗 <a href="${result.redirectUrl}">Открыть панель управления</a>\n\n`;
+                    welcomeMsg += `<i>💡 Совет: подключите AI-ассистента в разделе "Каналы связи" для работы с кодом через чат.</i>`;
+                } else {
+                    // Существующий пользователь
+                    welcomeMsg = `✅ <b>С возвращением, ${result.username || username || 'пользователь'}!</b>\n\n`;
+                    welcomeMsg += `Вы успешно вошли в свой аккаунт.\n\n`;
+
+                    if (result.hasAI) {
+                        welcomeMsg += `🤖 <b>AI-ассистент:</b> подключён\n`;
+                    } else {
+                        welcomeMsg += `🤖 <b>AI-ассистент:</b> не подключён\n`;
+                    }
+
+                    if (result.hasBot) {
+                        welcomeMsg += `🤖 <b>Telegram бот:</b> активен\n\n`;
+                    }
+
+                    welcomeMsg += `🔗 <a href="${result.redirectUrl}">Открыть панель управления</a>`;
+                }
+
+                await ctx.reply(welcomeMsg, {
+                    parse_mode: 'HTML',
+                    disable_web_page_preview: true
+                }).catch(() => {});
+
+                console.log(`[TG-LOGIN] Success for telegram_id=${fromId}, chatId=${result.chatId}, isNew=${result.isNewUser || false}`);
+            } else {
+                // Ошибка авторизации
+                const errorMsg = result.error || 'Неизвестная ошибка';
+                await ctx.reply(`❌ <b>Ошибка авторизации</b>\n\n${errorMsg}\n\nПопробуйте позже или обратитесь в поддержку.`, {
+                    parse_mode: 'HTML'
+                }).catch(() => {});
+
+                console.error(`[TG-LOGIN] Failed for telegram_id=${fromId}:`, errorMsg);
+            }
+        } catch (e) {
+            console.error('[TG-LOGIN-ERROR]', e.message);
+            console.error('[TG-LOGIN-ERROR] API URL:', apiUrl);
+            console.error('[TG-LOGIN-ERROR] Full error:', e);
+            
+            // Более подробное сообщение об ошибке для отладки
+            let errorMsg = '❌ Ошибка соединения. Попробуйте позже.';
+            
+            if (e.code === 'ECONNREFUSED') {
+                errorMsg = '❌ Сервер недоступен. Убедитесь, что сервер запущен.';
+            } else if (e.code === 'ENOTFOUND') {
+                errorMsg = '❌ Неверный адрес сервера. Проверьте API_URL.';
+            } else if (e.message.includes('fetch')) {
+                errorMsg = `❌ Ошибка: ${e.message}`;
+            }
+            
+            await ctx.reply(errorMsg).catch(() => {});
+        }
+    });
+
     // Обработчик очистки контекста
     bot.action('clear_context', async (ctx) => {
         // chatId из замыкания — правильный внутренний ID сессии

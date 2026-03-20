@@ -153,90 +153,217 @@ function stopInitPolling() {
     }
 }
 
-// ─── Авторизация ─────────────────────────────────────────────────────────────
+// ─── Авторизация через Telegram ID ───────────────────────────────────────────
 
 async function login() {
     const chatIdInput = document.getElementById('chatIdInput');
     if (!chatIdInput) return;
-    const chatId = chatIdInput.value.trim();
-    if (!chatId) {
-        showToast('Введите Chat ID', 'error');
+    const telegramId = chatIdInput.value.trim();
+    
+    if (!telegramId) {
+        showToast('Введите ваш Telegram ID', 'error');
+        return;
+    }
+    
+    // Валидация Telegram ID (число)
+    if (!/^\d+$/.test(telegramId)) {
+        showToast('Telegram ID должен быть числом (например: 123456789)', 'error');
         return;
     }
 
-    currentChatId = chatId;
-    localStorage.setItem('chatId', chatId);
+    setApiStatus('Проверка авторизации...', 'info');
 
     try {
-        const response = await fetch(`${API_URL}/session/create`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: chatId })
-        });
-
-        if (response.ok) {
+        // Проверяем, есть ли пользователь с таким Telegram ID
+        const checkRes = await fetch(`${API_URL}/auth/check?telegram_id=${encodeURIComponent(telegramId)}`);
+        const checkData = await checkRes.json();
+        
+        if (checkData.authorized) {
+            // Пользователь найден - входим
+            currentChatId = checkData.chatId;
+            localStorage.setItem('chatId', checkData.chatId);
+            localStorage.setItem('telegramId', telegramId);
+            
+            setApiStatus('Авторизация успешна', 'ok');
+            
             document.getElementById('authSection').style.display = 'none';
             const logoutBtn = document.getElementById('logoutButton');
             if (logoutBtn) logoutBtn.style.display = 'block';
-
-            // Проверяем, нужна ли инициализация
-            const initRes = await fetch(`${API_URL}/session/init-status/${encodeURIComponent(chatId)}`);
+            
+            // Проверяем статус сессии
+            const initRes = await fetch(`${API_URL}/session/init-status/${encodeURIComponent(checkData.chatId)}`);
             const initData = initRes.ok ? await initRes.json() : { status: 'ready' };
-
+            
             if (initData.status === 'ready' || initData.status === 'unknown') {
-                // Контейнер уже готов (восстановленная сессия)
                 document.getElementById('mainContent').style.display = 'block';
                 if (typeof onLoginSuccess === 'function') await onLoginSuccess();
             } else {
-                // Идёт инициализация — показываем лоадер
-                showInitLoader(chatId);
+                showInitLoader(checkData.chatId);
                 updateInitLoader(initData.status, initData.step, initData.stepIndex, initData.total);
-                startInitPolling(chatId, async () => {
+                startInitPolling(checkData.chatId, async () => {
                     document.getElementById('mainContent').style.display = 'block';
                     if (typeof onLoginSuccess === 'function') await onLoginSuccess();
                 });
             }
         } else {
-            const errorData = await response.json().catch(() => ({}));
-            showToast(errorData.error || 'Ошибка создания сессии', 'error');
+            // Сессия не найдена - создаём новую
+            setApiStatus('Создание сессии...', 'info');
+            
+            const createRes = await fetch(`${API_URL}/auth/create-session`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ telegram_id: telegramId })
+            });
+            
+            if (createRes.ok) {
+                currentChatId = telegramId;
+                localStorage.setItem('chatId', telegramId);
+                localStorage.setItem('telegramId', telegramId);
+                
+                setApiStatus('Сессия создана', 'ok');
+                showToast('Сессия создана. Теперь подключите бота в разделе "Каналы"', 'success');
+                
+                document.getElementById('authSection').style.display = 'none';
+                const logoutBtn = document.getElementById('logoutButton');
+                if (logoutBtn) logoutBtn.style.display = 'block';
+                
+                // Проверяем статус сессии
+                const initRes = await fetch(`${API_URL}/session/init-status/${encodeURIComponent(telegramId)}`);
+                const initData = initRes.ok ? await initRes.json() : { status: 'ready' };
+                
+                if (initData.status === 'ready' || initData.status === 'unknown') {
+                    document.getElementById('mainContent').style.display = 'block';
+                    if (typeof onLoginSuccess === 'function') await onLoginSuccess();
+                } else {
+                    showInitLoader(telegramId);
+                    updateInitLoader(initData.status, initData.step, initData.stepIndex, initData.total);
+                    startInitPolling(telegramId, async () => {
+                        document.getElementById('mainContent').style.display = 'block';
+                        if (typeof onLoginSuccess === 'function') await onLoginSuccess();
+                    });
+                }
+            } else {
+                const errData = await createRes.json().catch(() => ({}));
+                setApiStatus(errData.error || 'Ошибка создания сессии', 'error');
+            }
         }
     } catch (error) {
-        showToast('Ошибка подключения к серверу', 'error');
+        setApiStatus('Ошибка подключения к серверу', 'error');
+        showToast('Ошибка сети', 'error');
     }
 }
 
 function logout() {
-    if (!confirm('Вы уверены, что хотите выйти? Вы сможете войти с другим Chat ID.')) return;
+    if (!confirm('Вы уверены, что хотите выйти?')) return;
     stopInitPolling();
     hideInitLoader();
     currentChatId = null;
     localStorage.removeItem('chatId');
+    localStorage.removeItem('telegramId');
     document.getElementById('authSection').style.display = 'block';
     document.getElementById('mainContent').style.display = 'none';
     const logoutBtn = document.getElementById('logoutButton');
     if (logoutBtn) logoutBtn.style.display = 'none';
     const chatIdInput = document.getElementById('chatIdInput');
     if (chatIdInput) chatIdInput.value = '';
+    const statusEl = document.getElementById('authStatus');
+    if (statusEl) statusEl.innerHTML = '';
     showToast('Вы вышли из системы', 'success');
 }
 
+/**
+ * Пытается авторизовать пользователя по chat_id из URL
+ * (используется при редиректе из Telegram-бота)
+ */
+async function autoLoginByChatId(chatId) {
+    if (!chatId) return false;
+    
+    console.log('[AUTH] Auto-login attempt with chat_id:', chatId);
+    
+    try {
+        // Проверяем существование сессии
+        const checkRes = await fetch(`${API_URL}/auth/check?telegram_id=${encodeURIComponent(chatId)}`);
+        const checkData = await checkRes.json();
+        
+        if (checkData.authorized) {
+            currentChatId = checkData.chatId;
+            localStorage.setItem('chatId', checkData.chatId);
+            localStorage.setItem('telegramId', chatId);
+            
+            // Убираем chat_id из URL
+            const url = new URL(window.location);
+            url.searchParams.delete('chat_id');
+            window.history.replaceState({}, '', url);
+            
+            return true;
+        }
+    } catch (e) {
+        console.error('[AUTH] Auto-login error:', e);
+    }
+    
+    return false;
+}
+
 function initAuth() {
-    const savedChatId = localStorage.getItem('chatId');
     const authSection = document.getElementById('authSection');
     const mainContent = document.getElementById('mainContent');
     const logoutBtn = document.getElementById('logoutButton');
+    const chatIdInput = document.getElementById('chatIdInput');
 
-    if (savedChatId) {
+    // Проверяем chat_id в URL (редирект из Telegram-бота)
+    const urlParams = new URLSearchParams(window.location.search);
+    const chatIdFromUrl = urlParams.get('chat_id');
+    
+    // Проверяем сохранённые данные
+    const savedChatId = localStorage.getItem('chatId');
+    const savedTelegramId = localStorage.getItem('telegramId');
+
+    // Приоритет: chat_id из URL > сохранённые данные
+    if (chatIdFromUrl) {
+        // Автовход по chat_id из URL (редирект из бота)
+        autoLoginByChatId(chatIdFromUrl).then(success => {
+            if (success) {
+                if (logoutBtn) logoutBtn.style.display = 'block';
+                login();
+            } else {
+                // Ошибка автовхода — показываем форму
+                if (authSection) authSection.style.display = 'block';
+                if (mainContent) mainContent.style.display = 'none';
+                if (logoutBtn) logoutBtn.style.display = 'none';
+                showToast('Не удалось войти автоматически. Войдите вручную.', 'error');
+            }
+        });
+    } else if (savedChatId && savedTelegramId) {
+        // Обычный вход по сохранённым данным
         currentChatId = savedChatId;
-        const chatIdInput = document.getElementById('chatIdInput');
-        if (chatIdInput) chatIdInput.value = savedChatId;
+        if (chatIdInput) chatIdInput.value = savedTelegramId;
         if (logoutBtn) logoutBtn.style.display = 'block';
         login();
     } else {
+        // Не авторизован — показываем форму входа
         if (authSection) authSection.style.display = 'block';
         if (mainContent) mainContent.style.display = 'none';
         if (logoutBtn) logoutBtn.style.display = 'none';
     }
+}
+
+// Утилита для отображения статуса API
+function setApiStatus(message, type) {
+    const el = document.getElementById('authStatus');
+    if (!el) return;
+    
+    if (!message) {
+        el.innerHTML = '';
+        return;
+    }
+    
+    const colors = {
+        'ok': '#0a0',
+        'error': '#d00',
+        'info': '#0066cc'
+    };
+    
+    el.innerHTML = `<span style="color: ${colors[type] || '#666'};">${message}</span>`;
 }
 
 // ─── Утилиты ─────────────────────────────────────────────────────────────────
@@ -259,6 +386,7 @@ function renderMenu(currentPage) {
         { href: '/', label: '🎭 Личность' },
         { href: '/files.html', label: '📁 Файлы' },
         { href: '/channels.html', label: '📡 Каналы' },
+        { href: '/content.html', label: '📝 Контент' },
         { href: '/ai.html', label: '🤖 ИИ' },
         { href: '/skills.html', label: '🎯 Навыки' },
         { href: '/tasks.html', label: '📋 Задачи' },

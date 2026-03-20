@@ -1,4 +1,6 @@
+// Загрузка переменных окружения: сначала .env, затем .env.local (переопределяет)
 require('dotenv').config();
+require('dotenv').config({ path: '.env.local', override: true });
 const express = require('express');
 const config = require('./config');
 const routes = require('./routes');
@@ -39,9 +41,19 @@ async function startServer() {
     // Управление: загрузка состояния и запуск Telegram-ботов
     const manageStore = require('./manage/store');
     const telegramRunner = require('./manage/telegram/runner');
+    const authBot = require('./manage/telegram/authBot');
     
     // Сначала загружаем состояние
     await manageStore.load();
+    
+    // Запуск главного бота авторизации @DigiStaff_Team_bot
+    const authBotToken = process.env.AUTH_BOT_TOKEN;
+    if (authBotToken) {
+        authBot.startAuthBot(authBotToken);
+        console.log('🤖 Auth bot: ✅ STARTED (@DigiStaff_Team_bot)');
+    } else {
+        console.log('🤖 Auth bot: ⏸️  SKIPPED (AUTH_BOT_TOKEN not set)');
+    }
     
     // Email processor - запуск cron для опроса почты
     let emailProcessor;
@@ -116,6 +128,7 @@ async function gracefulShutdown() {
     // Остановка Telegram-ботов
     try {
         const telegramRunner = require('./manage/telegram/runner');
+        const authBot = require('./manage/telegram/authBot');
         const manageStore = require('./manage/store');
         const contentMvpService = require('./services/contentMvp.service');
         let emailProcessor;
@@ -124,6 +137,11 @@ async function gracefulShutdown() {
         } catch (e) {
             // ignore
         }
+        
+        // Остановка auth-бота
+        authBot.stopAuthBot();
+        
+        // Остановка пользовательских ботов
         for (const chatId of Array.from(telegramRunner.bots.keys())) {
             telegramRunner.stopBot(chatId);
         }

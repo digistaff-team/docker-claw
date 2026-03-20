@@ -1,4 +1,7 @@
+// Загрузка переменных окружения: сначала .env, затем .env.local (переопределяет)
 require('dotenv').config();
+require('dotenv').config({ path: '.env.local', override: true });
+
 const path = require('path');
 
 module.exports = {
@@ -38,6 +41,12 @@ module.exports = {
     SNAPSHOT_ROOT: path.resolve(process.env.SNAPSHOT_ROOT || '/var/sandbox-snapshots'),
     SNAPSHOT_MAX_DEPTH: parseInt(process.env.SNAPSHOT_MAX_DEPTH) || 10, // глубина стека на файл
     SNAPSHOT_TTL_DAYS: parseInt(process.env.SNAPSHOT_TTL_DAYS) || 7, // время жизни снапшота
+
+    
+    // App URL (для Telegram inline keyboard — должен быть https://)
+    // Используйте ngrok или другой туннель для локальной разработки:
+    // ngrok http 3015 -> получаете https://xxx.ngrok-free.app
+    APP_URL: process.env.APP_URL || 'https://claw.pro-talk.ru',
     
     // Project Cache (постоянная карта проекта)
     PROJECT_CACHE_DIR: process.env.PROJECT_CACHE_DIR || '.project',

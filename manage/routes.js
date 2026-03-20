@@ -369,6 +369,43 @@ router.get('/ai/skills', async (req, res) => {
     }
 });
 
+router.get('/content/settings', (req, res) => {
+    const chatId = req.query.chat_id;
+    if (!chatId) {
+        return res.status(400).json({ error: 'chat_id is required' });
+    }
+    const settings = manageStore.getContentSettings(chatId) || {};
+    res.json({ settings });
+});
+
+router.post('/content/settings', async (req, res) => {
+    const {
+        chat_id: chatId,
+        channel_id: channelId,
+        moderator_user_id: moderatorUserId,
+        schedule_time: scheduleTime,
+        schedule_tz: scheduleTz,
+        daily_limit: dailyLimit
+    } = req.body;
+
+    if (!chatId) {
+        return res.status(400).json({ error: 'chat_id is required' });
+    }
+    try {
+        await manageStore.setContentSettings(chatId, {
+            channelId,
+            moderatorUserId,
+            scheduleTime,
+            scheduleTz,
+            dailyLimit
+        });
+        const settings = manageStore.getContentSettings(chatId) || {};
+        res.json({ success: true, settings });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
 router.get('/config-path', (req, res) => {
     const chatId = req.query.chat_id;
     const configPath = manageStore.getConfigPath(chatId);

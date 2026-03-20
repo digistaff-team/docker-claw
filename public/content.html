@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Content Pipeline - AI Агент</title>
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>Контент-пайплайн</h1>
+                    <p>Запуск, модерация, мониторинг публикаций</p>
+                </div>
+                <div id="logoutButton" style="display: none;">
+                    <button class="btn btn-secondary" onclick="logout()" style="padding: 10px 20px; font-size: 14px;">Выйти</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="auth-section" id="authSection" style="display: none;">
+            <h2 style="margin-bottom: 20px;">Вход в систему</h2>
+            <p style="margin-bottom: 20px; color: #666;">Введите ваш Chat ID</p>
+            <input type="text" id="chatIdInput" placeholder="Введите Chat ID (например: user_12345)" />
+            <br>
+            <button onclick="login()">Войти</button>
+        </div>
+
+        <div class="main-content" id="mainContent">
+            <nav class="nav-tabs" id="mainMenu"></nav>
+
+            <div class="page-grid">
+                <div class="panel">
+                    <h2>Управление</h2>
+                    <div class="content-actions">
+                        <button class="btn btn-primary" id="runNowBtn" onclick="runNow()">Run now</button>
+                        <button class="btn btn-secondary" onclick="loadDashboard()">Обновить</button>
+                    </div>
+                    <div class="content-status-line" id="apiStatusLine"></div>
+                </div>
+
+                <div class="panel">
+                    <h2>Метрики</h2>
+                    <div class="content-metrics-grid">
+                        <div class="content-metric-card">
+                            <div class="content-metric-label">24h published</div>
+                            <div class="content-metric-value" id="metricPublished24h">-</div>
+                        </div>
+                        <div class="content-metric-card">
+                            <div class="content-metric-label">24h failed</div>
+                            <div class="content-metric-value" id="metricFailed24h">-</div>
+                        </div>
+                        <div class="content-metric-card">
+                            <div class="content-metric-label">24h success rate</div>
+                            <div class="content-metric-value" id="metricSuccess24h">-</div>
+                        </div>
+                        <div class="content-metric-card">
+                            <div class="content-metric-label">7d published</div>
+                            <div class="content-metric-value" id="metricPublished7d">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel full-width">
+                <h2>Контент-настройки</h2>
+                <div class="content-settings-grid">
+                    <div>
+                        <label for="contentChannelId">Channel ID</label>
+                        <input type="text" id="contentChannelId" placeholder="-100..." />
+                    </div>
+                    <div>
+                        <label for="contentModeratorUserId">Moderator User ID</label>
+                        <input type="text" id="contentModeratorUserId" placeholder="123456789" />
+                    </div>
+                    <div>
+                        <label for="contentScheduleTime">Schedule Time (HH:MM)</label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <select id="contentScheduleHour" style="width: 80px; margin-bottom: 0;" onchange="updateScheduleTime()">
+                                <option value="00">00</option>
+                                <option value="01">01</option>
+                                <option value="02">02</option>
+                                <option value="03">03</option>
+                                <option value="04">04</option>
+                                <option value="05">05</option>
+                                <option value="06">06</option>
+                                <option value="07">07</option>
+                                <option value="08">08</option>
+                                <option value="09">09</option>
+                                <option value="10">10</option>
+                                <option value="11">11</option>
+                                <option value="12">12</option>
+                                <option value="13">13</option>
+                                <option value="14">14</option>
+                                <option value="15">15</option>
+                                <option value="16">16</option>
+                                <option value="17">17</option>
+                                <option value="18">18</option>
+                                <option value="19">19</option>
+                                <option value="20">20</option>
+                                <option value="21">21</option>
+                                <option value="22">22</option>
+                                <option value="23">23</option>
+                            </select>
+                            <span style="font-size: 18px; font-weight: 600;">:</span>
+                            <input type="text" id="contentScheduleMinute" placeholder="00" style="width: 70px; margin-bottom: 0; text-align: center;" maxlength="2" onchange="validateMinutes()" oninput="validateMinutes()" />
+                            <input type="hidden" id="contentScheduleTime" />
+                        </div>
+                    </div>
+                    <div>
+                        <label for="contentScheduleTz">Schedule TZ</label>
+                        <select id="contentScheduleTz" onchange="updateScheduleTz()">
+                            <option value="UTC">UTC (Coordinated Universal Time)</option>
+                            <option value="Europe/London">Europe/London (UTC+0)</option>
+                            <option value="Europe/Berlin">Europe/Berlin (UTC+1)</option>
+                            <option value="Europe/Paris">Europe/Paris (UTC+1)</option>
+                            <option value="Europe/Rome">Europe/Rome (UTC+1)</option>
+                            <option value="Europe/Madrid">Europe/Madrid (UTC+1)</option>
+                            <option value="Europe/Amsterdam">Europe/Amsterdam (UTC+1)</option>
+                            <option value="Europe/Brussels">Europe/Brussels (UTC+1)</option>
+                            <option value="Europe/Vienna">Europe/Vienna (UTC+1)</option>
+                            <option value="Europe/Warsaw">Europe/Warsaw (UTC+1)</option>
+                            <option value="Europe/Prague">Europe/Prague (UTC+1)</option>
+                            <option value="Europe/Stockholm">Europe/Stockholm (UTC+1)</option>
+                            <option value="Europe/Oslo">Europe/Oslo (UTC+1)</option>
+                            <option value="Europe/Copenhagen">Europe/Copenhagen (UTC+1)</option>
+                            <option value="Europe/Helsinki">Europe/Helsinki (UTC+2)</option>
+                            <option value="Europe/Athens">Europe/Athens (UTC+2)</option>
+                            <option value="Europe/Bucharest">Europe/Bucharest (UTC+2)</option>
+                            <option value="Europe/Sofia">Europe/Sofia (UTC+2)</option>
+                            <option value="Europe/Riga">Europe/Riga (UTC+2)</option>
+                            <option value="Europe/Tallinn">Europe/Tallinn (UTC+2)</option>
+                            <option value="Europe/Vilnius">Europe/Vilnius (UTC+2)</option>
+                            <option value="Europe/Kiev">Europe/Kiev (UTC+2)</option>
+                            <option value="Europe/Minsk">Europe/Minsk (UTC+3)</option>
+                            <option value="Europe/Moscow" selected>Europe/Moscow (UTC+3)</option>
+                            <option value="Europe/Istanbul">Europe/Istanbul (UTC+3)</option>
+                            <option value="Asia/Dubai">Asia/Dubai (UTC+4)</option>
+                            <option value="Asia/Baku">Asia/Baku (UTC+4)</option>
+                            <option value="Asia/Tbilisi">Asia/Tbilisi (UTC+4)</option>
+                            <option value="Asia/Yerevan">Asia/Yerevan (UTC+4)</option>
+                            <option value="Asia/Samarkand">Asia/Samarkand (UTC+5)</option>
+                            <option value="Asia/Tashkent">Asia/Tashkent (UTC+5)</option>
+                            <option value="Asia/Almaty">Asia/Almaty (UTC+5)</option>
+                            <option value="Asia/Yekaterinburg">Asia/Yekaterinburg (UTC+5)</option>
+                            <option value="Asia/Kolkata">Asia/Kolkata (UTC+5:30)</option>
+                            <option value="Asia/Novosibirsk">Asia/Novosibirsk (UTC+7)</option>
+                            <option value="Asia/Bangkok">Asia/Bangkok (UTC+7)</option>
+                            <option value="Asia/Jakarta">Asia/Jakarta (UTC+7)</option>
+                            <option value="Asia/Ho_Chi_Minh">Asia/Ho_Chi_Minh (UTC+7)</option>
+                            <option value="Asia/Singapore">Asia/Singapore (UTC+8)</option>
+                            <option value="Asia/Shanghai">Asia/Shanghai (UTC+8)</option>
+                            <option value="Asia/Hong_Kong">Asia/Hong_Kong (UTC+8)</option>
+                            <option value="Asia/Taipei">Asia/Taipei (UTC+8)</option>
+                            <option value="Asia/Kuala_Lumpur">Asia/Kuala_Lumpur (UTC+8)</option>
+                            <option value="Asia/Manila">Asia/Manila (UTC+8)</option>
+                            <option value="Asia/Seoul">Asia/Seoul (UTC+9)</option>
+                            <option value="Asia/Tokyo">Asia/Tokyo (UTC+9)</option>
+                            <option value="Asia/Pyongyang">Asia/Pyongyang (UTC+9)</option>
+                            <option value="Australia/Perth">Australia/Perth (UTC+8)</option>
+                            <option value="Australia/Adelaide">Australia/Adelaide (UTC+9:30)</option>
+                            <option value="Australia/Sydney">Australia/Sydney (UTC+10)</option>
+                            <option value="Australia/Melbourne">Australia/Melbourne (UTC+10)</option>
+                            <option value="Pacific/Auckland">Pacific/Auckland (UTC+12)</option>
+                            <option value="Pacific/Fiji">Pacific/Fiji (UTC+12)</option>
+                            <option value="America/New_York">America/New_York (UTC-5)</option>
+                            <option value="America/Chicago">America/Chicago (UTC-6)</option>
+                            <option value="America/Denver">America/Denver (UTC-7)</option>
+                            <option value="America/Los_Angeles">America/Los_Angeles (UTC-8)</option>
+                            <option value="America/Anchorage">America/Anchorage (UTC-9)</option>
+                            <option value="America/Honolulu">America/Honolulu (UTC-10)</option>
+                            <option value="America/Sao_Paulo">America/Sao_Paulo (UTC-3)</option>
+                            <option value="America/Argentina/Buenos_Aires">America/Argentina/Buenos_Aires (UTC-3)</option>
+                            <option value="America/Mexico_City">America/Mexico_City (UTC-6)</option>
+                            <option value="America/Toronto">America/Toronto (UTC-5)</option>
+                            <option value="America/Vancouver">America/Vancouver (UTC-8)</option>
+                            <option value="Africa/Cairo">Africa/Cairo (UTC+2)</option>
+                            <option value="Africa/Johannesburg">Africa/Johannesburg (UTC+2)</option>
+                            <option value="Africa/Lagos">Africa/Lagos (UTC+1)</option>
+                            <option value="Africa/Nairobi">Africa/Nairobi (UTC+3)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="contentDailyLimit">Daily Limit</label>
+                        <input type="number" id="contentDailyLimit" min="1" placeholder="1" />
+                    </div>
+                </div>
+                <button class="btn btn-success" onclick="saveContentSettings()">Сохранить настройки</button>
+            </div>
+
+            <div class="panel full-width">
+                <div class="content-jobs-head">
+                    <h2>Jobs</h2>
+                    <div class="content-jobs-filters">
+                        <select id="jobsStatusFilter" onchange="loadJobs()">
+                            <option value="">Все статусы</option>
+                            <option value="ready">ready</option>
+                            <option value="approved">approved</option>
+                            <option value="published">published</option>
+                            <option value="failed">failed</option>
+                        </select>
+                        <button class="btn btn-secondary" onclick="loadJobs()">Обновить список</button>
+                    </div>
+                </div>
+
+                <div class="content-jobs-table-wrap">
+                    <table class="content-jobs-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Тема</th>
+                                <th>Статус</th>
+                                <th>Публикация</th>
+                                <th>Создано</th>
+                                <th>Действие</th>
+                            </tr>
+                        </thead>
+                        <tbody id="jobsTableBody">
+                            <tr><td colspan="6" class="content-empty-cell">Данные не загружены</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="panel full-width">
+                <h2>Детали Job</h2>
+                <div id="jobDetailsEmpty" class="content-empty-state">Выберите job из списка выше.</div>
+                <div id="jobDetailsCard" style="display:none;">
+                    <div class="content-job-meta" id="jobMeta"></div>
+                    <div class="content-job-text-wrap">
+                        <label>Текст поста</label>
+                        <textarea id="jobBodyText" class="editor" readonly style="min-height: 180px;"></textarea>
+                    </div>
+                    <div class="content-actions" style="margin-top: 12px;">
+                        <button class="btn btn-success" onclick="moderateSelectedJob('approve')">Approve</button>
+                        <button class="btn btn-secondary" onclick="moderateSelectedJob('regen-text')">Regen text</button>
+                        <button class="btn btn-secondary" onclick="moderateSelectedJob('regen-image')">Regen image</button>
+                        <button class="btn btn-danger" onclick="moderateSelectedJob('reject')">Reject</button>
+                    </div>
+                    <div class="content-log-wrap">
+                        <label>Publish logs</label>
+                        <pre id="jobPublishLogs" class="content-log-box"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/content.js"></script>
+    <script>
+        window.addEventListener('load', () => {
+            renderMenu('/content.html');
+            initAuth();
+        });
+    </script>
+</body>
+</html>

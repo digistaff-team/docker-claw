@@ -6,6 +6,81 @@ async function onLoginSuccess() {
     await loadCronStatus();
 }
 
+// Специальная инициализация для страницы каналов
+// Позволяет подключить бота без авторизации
+async function initChannelsAuth() {
+    const savedChatId = localStorage.getItem('chatId');
+    const savedTelegramId = localStorage.getItem('telegramId');
+    const authSection = document.getElementById('authSection');
+    const mainContent = document.getElementById('mainContent');
+    const logoutBtn = document.getElementById('logoutButton');
+    const chatIdInput = document.getElementById('chatIdInput');
+
+    if (savedChatId && savedTelegramId) {
+        // Уже авторизован - показываем контент
+        currentChatId = savedChatId;
+        if (chatIdInput) chatIdInput.value = savedTelegramId;
+        if (logoutBtn) logoutBtn.style.display = 'block';
+        if (authSection) authSection.style.display = 'none';
+        if (mainContent) mainContent.style.display = 'block';
+        await onLoginSuccess();
+    } else {
+        // Не авторизован - показываем форму для ввода Telegram ID
+        if (authSection) authSection.style.display = 'block';
+        if (mainContent) mainContent.style.display = 'none';
+        if (logoutBtn) logoutBtn.style.display = 'none';
+    }
+}
+
+// Вход для страницы каналов - создаёт временную сессию
+async function loginForChannels() {
+    const chatIdInput = document.getElementById('chatIdInput');
+    if (!chatIdInput) return;
+    const telegramId = chatIdInput.value.trim();
+    
+    if (!telegramId) {
+        showToast('Введите ваш Telegram ID', 'error');
+        return;
+    }
+    
+    if (!/^\d+$/.test(telegramId)) {
+        showToast('Telegram ID должен быть числом (например: 123456789)', 'error');
+        return;
+    }
+
+    setApiStatus('Создание сессии...', 'info');
+
+    try {
+        // Создаём новую сессию с chat_id = telegram_id
+        const response = await fetch(`${API_URL}/session/create`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: telegramId })
+        });
+
+        if (response.ok) {
+            currentChatId = telegramId;
+            localStorage.setItem('chatId', telegramId);
+            localStorage.setItem('telegramId', telegramId);
+            
+            setApiStatus('', '');
+            
+            document.getElementById('authSection').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+            const logoutBtn = document.getElementById('logoutButton');
+            if (logoutBtn) logoutBtn.style.display = 'block';
+            
+            showToast('Сессия создана. Теперь подключите бота.', 'success');
+            await onLoginSuccess();
+        } else {
+            const errorData = await response.json().catch(() => ({}));
+            showToast(errorData.error || 'Ошибка создания сессии', 'error');
+        }
+    } catch (error) {
+        showToast('Ошибка подключения к серверу', 'error');
+    }
+}
+
 async function loadTelegramStatus() {
     const chatId = getChatId();
     if (!chatId) return;

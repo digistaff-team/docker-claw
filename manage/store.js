@@ -163,6 +163,10 @@ function getState(chatId) {
     return statesCache[chatId] || null;
 }
 
+function getAllStates() {
+    return statesCache;
+}
+
 function getByToken(token) {
     for (const [cid, data] of Object.entries(statesCache)) {
         if (data.token === token) return cid;
@@ -451,6 +455,48 @@ function getConfigPath(chatId) {
     return STATE_DIR;
 }
 
+function getContentSettings(chatId) {
+    const data = statesCache[chatId];
+    return data?.contentSettings || null;
+}
+
+function setContentSettings(chatId, patch = {}) {
+    if (!statesCache[chatId]) statesCache[chatId] = {};
+    const current = statesCache[chatId].contentSettings || {};
+    const next = { ...current };
+
+    if (patch.channelId !== undefined) {
+        next.channelId = String(patch.channelId || '').trim() || null;
+    }
+    if (patch.moderatorUserId !== undefined) {
+        next.moderatorUserId = String(patch.moderatorUserId || '').trim() || null;
+    }
+    if (patch.scheduleTime !== undefined) {
+        const scheduleTime = String(patch.scheduleTime || '').trim();
+        if (scheduleTime && !/^\d{2}:\d{2}$/.test(scheduleTime)) {
+            throw new Error('scheduleTime must be in HH:MM format');
+        }
+        next.scheduleTime = scheduleTime || null;
+    }
+    if (patch.scheduleTz !== undefined) {
+        next.scheduleTz = String(patch.scheduleTz || '').trim() || null;
+    }
+    if (patch.dailyLimit !== undefined) {
+        if (patch.dailyLimit === null || patch.dailyLimit === '') {
+            next.dailyLimit = null;
+        } else {
+            const parsedLimit = parseInt(patch.dailyLimit, 10);
+            if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) {
+                throw new Error('dailyLimit must be a positive integer');
+            }
+            next.dailyLimit = parsedLimit;
+        }
+    }
+
+    statesCache[chatId].contentSettings = next;
+    return persist(chatId);
+}
+
 function addAIMessage(chatId, channel = 'telegram', role, content) {
     const key = `${chatId}:${channel}`;
     if (!statesCache[chatId]) statesCache[chatId] = {};
@@ -710,6 +756,8 @@ module.exports = {
     addCronLog,
     getCronLogs,
     getConfigPath,
+    getContentSettings,
+    setContentSettings,
     getContextSettings,
     setContextSettings,
     addAIMessage,

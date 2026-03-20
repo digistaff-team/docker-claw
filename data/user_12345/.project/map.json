@@ -1,5 +1,5 @@
 {
-  "updatedAt": 1772738544024,
+  "updatedAt": 1772798774371,
   "tree": {
     ".project": {
       "type": "dir",
@@ -108,6 +108,30 @@
       "size": 5575,
       "mtime": 1772738543000,
       "path": "/workspace/USER.md"
+    },
+    "input/ÐÐÐ.rtf": {
+      "type": "file",
+      "size": 21168,
+      "mtime": 1772798766000,
+      "path": "/workspace/input/ÐÐÐ.rtf"
+    },
+    "input/Ð¸Ð½ÑÐ°Ð¸ÌÑÑ.txt": {
+      "type": "file",
+      "size": 10773,
+      "mtime": 1772798767000,
+      "path": "/workspace/input/Ð¸Ð½ÑÐ°Ð¸ÌÑÑ.txt"
+    },
+    "input/ÑÐµÐ¼Ñ.txt": {
+      "type": "file",
+      "size": 29284,
+      "mtime": 1772798771000,
+      "path": "/workspace/input/ÑÐµÐ¼Ñ.txt"
+    },
+    "input/Ð¦Ð.txt": {
+      "type": "file",
+      "size": 7395,
+      "mtime": 1772798773000,
+      "path": "/workspace/input/Ð¦Ð.txt"
     }
   },
   "deps": {},
@@ -173,6 +197,30 @@
       "mtime": 1772738543000,
       "size": 5575,
       "updatedAt": 1772738544024
+    },
+    "input/ÐÐÐ.rtf": {
+      "exports": [],
+      "mtime": 1772798766000,
+      "size": 21168,
+      "updatedAt": 1772798767182
+    },
+    "input/Ð¸Ð½ÑÐ°Ð¸ÌÑÑ.txt": {
+      "exports": [],
+      "mtime": 1772798767000,
+      "size": 10773,
+      "updatedAt": 1772798769065
+    },
+    "input/ÑÐµÐ¼Ñ.txt": {
+      "exports": [],
+      "mtime": 1772798771000,
+      "size": 29284,
+      "updatedAt": 1772798772670
+    },
+    "input/Ð¦Ð.txt": {
+      "exports": [],
+      "mtime": 1772798773000,
+      "size": 7395,
+      "updatedAt": 1772798774371
     }
   },
   "stats": {
@@ -180,7 +228,7 @@
     "totalDirs": 8,
     "cacheHits": 0,
     "cacheMisses": 7,
-    "lastUpdate": 1772738544024,
-    "updatedFile": "USER.md"
+    "lastUpdate": 1772798774371,
+    "updatedFile": "input/Ð¦Ð.txt"
   }
 }
