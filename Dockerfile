@@ -1,5 +1,8 @@
 FROM node:18-alpine
 
+# Устанавливаем bash и другие утилиты
+RUN apk add --no-cache bash docker curl
+
 WORKDIR /app
 
 # Копируем package.json и устанавливаем зависимости

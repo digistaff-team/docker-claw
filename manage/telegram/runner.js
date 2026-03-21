@@ -13,6 +13,18 @@ const { enqueue } = require('../agentQueue');
 const contentMvpService = require('../../services/contentMvp.service');
 
 const bots = new Map(); // chatId -> { bot, token }
+const LOGIN_LINK_MESSAGE_TTL_MS = 10 * 60 * 1000;
+
+function scheduleMessageDeletion(bot, chatId, messageId, delayMs = LOGIN_LINK_MESSAGE_TTL_MS) {
+    if (!bot || !chatId || !messageId) return;
+    setTimeout(async () => {
+        try {
+            await bot.telegram.deleteMessage(chatId, messageId);
+        } catch (e) {
+            // Сообщение уже удалено или недоступно
+        }
+    }, delayMs);
+}
 const workingMessages = new Map(); // chatId -> messageId
 
 const MODE_LABELS = {
@@ -716,8 +728,12 @@ function startBot(chatId, token) {
 
             const result = await response.json();
 
-            // Убираем кнопки
-            await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
+            // Удаляем исходное сообщение с кнопкой сразу после нажатия
+            try {
+                await ctx.deleteMessage();
+            } catch (e) {
+                await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
+            }
 
             if (result.success) {
                 // Формируем приветственное сообщение
@@ -732,7 +748,8 @@ function startBot(chatId, token) {
                     welcomeMsg += `• 📦 Node.js + npm\n`;
                     welcomeMsg += `• 🗄️ PostgreSQL база данных\n`;
                     welcomeMsg += `• 📁 Персональное рабочее пространство\n\n`;
-                    welcomeMsg += `🔗 <a href="${result.redirectUrl}">Открыть панель управления</a>\n\n`;
+                    welcomeMsg += `⏱ Ссылка на вход действует 10 минут.\n`;
+                    welcomeMsg += `🔗 <a href="${result.redirectUrl}">Открыть панель (10 мин)</a>\n\n`;
                     welcomeMsg += `<i>💡 Совет: подключите AI-ассистента в разделе "Каналы связи" для работы с кодом через чат.</i>`;
                 } else {
                     // Существующий пользователь
@@ -749,13 +766,15 @@ function startBot(chatId, token) {
                         welcomeMsg += `🤖 <b>Telegram бот:</b> активен\n\n`;
                     }
 
-                    welcomeMsg += `🔗 <a href="${result.redirectUrl}">Открыть панель управления</a>`;
+                    welcomeMsg += `⏱ Ссылка на вход действует 10 минут.\n`;
+                    welcomeMsg += `🔗 <a href="${result.redirectUrl}">Открыть панель (10 мин)</a>`;
                 }
 
-                await ctx.reply(welcomeMsg, {
+                const sentMessage = await ctx.reply(welcomeMsg, {
                     parse_mode: 'HTML',
                     disable_web_page_preview: true
                 }).catch(() => {});
+                scheduleMessageDeletion(bot, ctx.chat?.id, sentMessage?.message_id);
 
                 console.log(`[TG-LOGIN] Success for telegram_id=${fromId}, chatId=${result.chatId}, isNew=${result.isNewUser || false}`);
             } else {

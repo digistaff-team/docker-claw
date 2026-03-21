@@ -8,9 +8,42 @@
  */
 
 const router = require('express').Router();
+const crypto = require('crypto');
 const manageStore = require('../manage/store');
 const sessionService = require('../services/session.service');
 const config = require('../config');
+
+const TELEGRAM_WEB_LOGIN_TTL_MS = 10 * 60 * 1000;
+const telegramWebLoginTokens = new Map();
+
+function cleanupExpiredTelegramWebLoginTokens() {
+    const now = Date.now();
+    for (const [token, entry] of telegramWebLoginTokens.entries()) {
+        if (!entry || entry.expiresAt <= now) {
+            telegramWebLoginTokens.delete(token);
+        }
+    }
+}
+
+function issueTelegramWebLoginToken(chatId, telegramId, username) {
+    cleanupExpiredTelegramWebLoginTokens();
+    const token = crypto.randomBytes(32).toString('hex');
+    telegramWebLoginTokens.set(token, {
+        chatId: String(chatId),
+        telegramId: String(telegramId),
+        username: username || null,
+        expiresAt: Date.now() + TELEGRAM_WEB_LOGIN_TTL_MS
+    });
+    return token;
+}
+
+function consumeTelegramWebLoginToken(token) {
+    cleanupExpiredTelegramWebLoginTokens();
+    const entry = telegramWebLoginTokens.get(token);
+    if (!entry) return null;
+    telegramWebLoginTokens.delete(token);
+    return entry;
+}
 
 /**
  * Проверка авторизации по Telegram ID
@@ -191,6 +224,38 @@ router.post('/create-session', async (req, res) => {
 });
 
 /**
+ * Обмен одноразового токена из Telegram-бота на веб-сессию
+ * GET /api/auth/telegram-web-login?token=...
+ */
+router.get('/telegram-web-login', async (req, res) => {
+    const token = String(req.query.token || '').trim();
+
+    if (!token) {
+        return res.status(400).json({ error: 'token is required' });
+    }
+
+    const loginData = consumeTelegramWebLoginToken(token);
+    if (!loginData) {
+        return res.status(401).json({ error: 'Invalid or expired login token' });
+    }
+
+    try {
+        await sessionService.getOrCreateSession(loginData.chatId);
+
+        return res.json({
+            success: true,
+            authorized: true,
+            chatId: loginData.chatId,
+            telegramId: loginData.telegramId,
+            username: loginData.username
+        });
+    } catch (e) {
+        console.error('[AUTH-TELEGRAM-WEB-LOGIN] Error:', e.message);
+        return res.status(500).json({ error: e.message });
+    }
+});
+
+/**
  * Авторизация через Telegram ID из Telegram-бота
  * POST /api/auth/telegram-login
  * Body: { telegram_id: "123456789", username: "@username" }
@@ -231,6 +296,7 @@ router.post('/telegram-login', async (req, res) => {
             }
             
             const appUrl = config.APP_URL;
+            const webLoginToken = issueTelegramWebLoginToken(telegramId, telegramId, directState.verifiedUsername || username);
             
             return res.json({
                 success: true,
@@ -240,7 +306,7 @@ router.post('/telegram-login', async (req, res) => {
                 hasBot: !!directState.token,
                 hasAI: !!(directState.aiAuthToken && directState.aiModel),
                 sessionActive: !!session,
-                redirectUrl: `${appUrl}/?chat_id=${telegramId}`,
+                redirectUrl: `${appUrl}/?tg_login_token=${webLoginToken}`,
                 message: 'Авторизация успешна'
             });
         } catch (e) {
@@ -267,6 +333,7 @@ router.post('/telegram-login', async (req, res) => {
             const session = await sessionService.getOrCreateSession(foundChatId);
             
             const appUrl = config.APP_URL;
+            const webLoginToken = issueTelegramWebLoginToken(foundChatId, telegramId, foundState.verifiedUsername || username);
             
             return res.json({
                 success: true,
@@ -276,7 +343,7 @@ router.post('/telegram-login', async (req, res) => {
                 hasBot: !!foundState.token,
                 hasAI: !!(foundState.aiAuthToken && foundState.aiModel),
                 sessionActive: !!session,
-                redirectUrl: `${appUrl}/?chat_id=${foundChatId}`,
+                redirectUrl: `${appUrl}/?tg_login_token=${webLoginToken}`,
                 message: 'Авторизация успешна'
             });
         } catch (e) {
@@ -296,6 +363,7 @@ router.post('/telegram-login', async (req, res) => {
         await manageStore.persist(telegramId);
         
         const appUrl = config.APP_URL;
+        const webLoginToken = issueTelegramWebLoginToken(telegramId, telegramId, username);
         
         res.json({
             success: true,
@@ -306,7 +374,7 @@ router.post('/telegram-login', async (req, res) => {
             hasAI: false,
             sessionActive: !!session,
             isNewUser: true,
-            redirectUrl: `${appUrl}/?chat_id=${telegramId}`,
+            redirectUrl: `${appUrl}/?tg_login_token=${webLoginToken}`,
             message: 'Аккаунт создан и авторизован'
         });
     } catch (e) {
@@ -345,6 +413,11 @@ router.post('/by-telegram-id', async (req, res) => {
             await sessionService.getOrCreateSession(telegramId);
             
             const appUrl = config.APP_URL;
+            const webLoginToken = issueTelegramWebLoginToken(
+                telegramId,
+                directState.verifiedTelegramId || telegramId,
+                directState.verifiedUsername || null
+            );
             
             return res.json({
                 success: true,
@@ -353,7 +426,7 @@ router.post('/by-telegram-id', async (req, res) => {
                 verified: !!directState.verifiedTelegramId,
                 hasBot: !!directState.token,
                 hasAI: !!(directState.aiAuthToken && directState.aiModel),
-                redirectUrl: `${appUrl}/?chat_id=${telegramId}`,
+                redirectUrl: `${appUrl}/?tg_login_token=${webLoginToken}`,
                 message: 'Вход выполнен'
             });
         } catch (e) {
@@ -379,6 +452,11 @@ router.post('/by-telegram-id', async (req, res) => {
             await sessionService.getOrCreateSession(foundChatId);
             
             const appUrl = config.APP_URL;
+            const webLoginToken = issueTelegramWebLoginToken(
+                foundChatId,
+                telegramId,
+                foundState.verifiedUsername || null
+            );
             
             return res.json({
                 success: true,
@@ -387,7 +465,7 @@ router.post('/by-telegram-id', async (req, res) => {
                 verified: true,
                 hasBot: !!foundState.token,
                 hasAI: !!(foundState.aiAuthToken && foundState.aiModel),
-                redirectUrl: `${appUrl}/?chat_id=${foundChatId}`,
+                redirectUrl: `${appUrl}/?tg_login_token=${webLoginToken}`,
                 message: 'Вход выполнен'
             });
         } catch (e) {

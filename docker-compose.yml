@@ -43,6 +43,12 @@ services:
   app:
     build: .
     container_name: bash-executor
+    volumes:
+      - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/sandbox-data:/var/sandbox-data
+      - /var/sandbox-backups:/var/sandbox-backups
+      - /var/sandbox-snapshots:/var/sandbox-snapshots
     environment:
       - NODE_ENV=production
       - PORT=3015
@@ -58,6 +64,7 @@ services:
     restart: unless-stopped
     networks:
       - app-network
+    privileged: true
 
 volumes:
   postgres_data:

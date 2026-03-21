@@ -11,6 +11,18 @@ const manageStore = require('../store');
 const config = require('../../config');
 
 let authBot = null;
+const LOGIN_LINK_MESSAGE_TTL_MS = 10 * 60 * 1000;
+
+function scheduleMessageDeletion(bot, chatId, messageId, delayMs = LOGIN_LINK_MESSAGE_TTL_MS) {
+    if (!bot || !chatId || !messageId) return;
+    setTimeout(async () => {
+        try {
+            await bot.telegram.deleteMessage(chatId, messageId);
+        } catch (e) {
+            // Сообщение уже удалено вручную или недоступно
+        }
+    }, delayMs);
+}
 
 /**
  * Запускает главный бот авторизации
@@ -21,7 +33,7 @@ function startAuthBot(token) {
         console.warn('[AUTH-BOT] No token provided, auth bot not started');
         return null;
     }
-    
+
     if (authBot) {
         try {
             authBot.stop();
@@ -138,18 +150,22 @@ function startAuthBot(token) {
             const result = await response.json();
             console.log(`[AUTH-BOT] Response:`, JSON.stringify(result));
             
-            // Убираем кнопку
+            // Удаляем стартовое сообщение с кнопкой после нажатия
             try {
-                await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
+                await ctx.deleteMessage();
             } catch (e) {
-                // Кнопка уже убрана или сообщение изменено
+                try {
+                    await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
+                } catch (_) {
+                    // ignore
+                }
             }
             
             if (result.success) {
                 // Формируем приветственное сообщение
                 let welcomeMsg;
                 const keyboard = Markup.inlineKeyboard([
-                    [Markup.button.url('🚀 Открыть панель управления', result.redirectUrl)]
+                    [Markup.button.url('🚀 Открыть панель · 10 мин', result.redirectUrl)]
                 ]);
                 
                 if (result.isNewUser) {
@@ -162,6 +178,7 @@ function startAuthBot(token) {
                     welcomeMsg += `• 📦 Node.js + npm\n`;
                     welcomeMsg += `• 🗄️ PostgreSQL база данных\n`;
                     welcomeMsg += `• 📁 Персональное рабочее пространство\n\n`;
+                    welcomeMsg += `⏱ Вход по кнопке ниже доступен 10 минут.\n\n`;
                     welcomeMsg += `<i>💡 Совет: подключите AI-ассистента в разделе "Каналы связи" для работы с кодом через чат.</i>`;
                 } else {
                     // Существующий пользователь
@@ -180,16 +197,19 @@ function startAuthBot(token) {
                         services.forEach(s => welcomeMsg += `• ${s}\n`);
                         welcomeMsg += `\n`;
                     }
+
+                    welcomeMsg += `⏱ Кнопка входа действует 10 минут.\n`;
                 }
                 
                 console.log(`[AUTH-BOT] Sending reply message to ${fromId}...`);
                 
                 try {
-                    await ctx.reply(welcomeMsg, { 
+                    const sentMessage = await ctx.reply(welcomeMsg, { 
                         parse_mode: 'HTML',
                         disable_web_page_preview: true,
                         ...keyboard
                     });
+                    scheduleMessageDeletion(bot, ctx.chat?.id, sentMessage?.message_id);
                     console.log(`[AUTH-BOT] Reply sent successfully`);
                 } catch (replyErr) {
                     console.error(`[AUTH-BOT] Reply error:`, replyErr);
@@ -242,24 +262,24 @@ function startAuthBot(token) {
     // Обработка текстовых сообщений (если пользователь просто пишет что-то)
     bot.on('text', async (ctx) => {
         const text = ctx.message?.text?.toLowerCase() || '';
-        
+
         // Если пользователь спрашивает про ID
         if (text.includes('id') || text.includes('айди') || text.includes('какой мой')) {
             const fromId = ctx.from?.id;
-            return ctx.reply(`🆔 Ваш Telegram ID: <code>${fromId}</code>\n\nНажмите /start для входа в аккаунт.`, { 
-                parse_mode: 'HTML' 
+            return ctx.reply(`🆔 Ваш Telegram ID: <code>${fromId}</code>\n\nНажмите /start для входа в аккаунт.`, {
+                parse_mode: 'HTML'
             });
         }
-        
+
         // Если пользователь хочет войти
         if (text.includes('войти') || text.includes('вход') || text.includes('логин') || text.includes('login')) {
-            return ctx.reply('🔐 Нажмите кнопку для входа:', 
+            return ctx.reply('🔐 Нажмите кнопку для входа:',
                 Markup.inlineKeyboard([
                     [Markup.button.callback('🔑 Войти в аккаунт', 'login_account')]
                 ])
             );
         }
-        
+
         // Default response
         await ctx.reply(
             '👋 Привет! Я помогу вам войти в аккаунт DigiStaff Team.\n\n' +
@@ -270,11 +290,47 @@ function startAuthBot(token) {
         );
     });
 
-    bot.launch().then(() => {
-        authBot = bot;
-        console.log('[AUTH-BOT] Auth bot @DigiStaff_Team_bot started successfully');
-    }).catch((err) => {
-        console.error('[AUTH-BOT] Failed to start auth bot:', err.message);
+    // Запускаем бота
+    // Приоритет: webhook (быстрее) > long polling (медленнее)
+    const webhookUrl = process.env.WEBHOOK_URL;
+    
+    if (webhookUrl && webhookUrl.includes(token)) {
+        // Режим webhook - мгновенная доставка сообщений
+        console.log('[AUTH-BOT] Starting in WEBHOOK mode for instant response...');
+        
+        bot.launch({
+            dropPendingUpdates: false,
+            allowedUpdates: ['message', 'callback_query', 'my_chat_member']
+        }).then(() => {
+            authBot = bot;
+            console.log('[AUTH-BOT] Auth bot @DigiStaff_Team_bot started successfully (webhook mode)');
+        }).catch((err) => {
+            console.error('[AUTH-BOT] Failed to start auth bot:', err.message);
+        });
+    } else {
+        // Режим long polling - задержка 1-3 секунды
+        console.log('[AUTH-BOT] Starting in LONG POLLING mode...');
+        console.log('[AUTH-BOT] TIP: Set WEBHOOK_URL in .env for instant message delivery');
+        
+        bot.launch({
+            dropPendingUpdates: false,
+            allowedUpdates: ['message', 'callback_query', 'my_chat_member'],
+            timeout: 30,
+            limit: 100
+        }).then(() => {
+            authBot = bot;
+            console.log('[AUTH-BOT] Auth bot @DigiStaff_Team_bot started successfully (polling mode)');
+        }).catch((err) => {
+            console.error('[AUTH-BOT] Failed to start auth bot:', err.message);
+        });
+    }
+
+    // Обработка ошибок запуска
+    process.once('SIGINT', () => {
+        bot.stop('SIGINT');
+    });
+    process.once('SIGTERM', () => {
+        bot.stop('SIGTERM');
     });
 
     return bot;

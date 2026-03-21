@@ -8,6 +8,7 @@ const { executeAgentLoop } = require('../manage/telegram/agentLoop');
 const { getSystemInstruction } = require('../manage/prompts');
 const { enqueue } = require('../manage/agentQueue');
 const { TOOLS_CHAT, TOOLS_WORKSPACE, TOOLS_TERMINAL } = require('../manage/telegram/tools');
+const authBot = require('../manage/telegram/authBot');
 
 // Хранилище async jobs (in-memory)
 const jobs = new Map(); // jobId -> { status, result, createdAt }
@@ -152,3 +153,30 @@ router.post('/:chatId/internal_cron', authWebhook, async (req, res) => {
 });
 
 module.exports = router;
+
+// ============================================
+// Telegram Webhook Handler
+// ============================================
+// POST /telegram/webhook/{bot_token} - обработчик webhook для Telegram ботов
+router.post('/telegram/webhook/:token', async (req, res) => {
+    const { token } = req.params;
+    const update = req.body;
+
+    console.log(`[TELEGRAM-WEBHOOK] Received update from Telegram (token: ${token.slice(0, 10)}...)`);
+
+    try {
+        // Получаем auth бота и обрабатываем обновление
+        const bot = authBot.getAuthBot();
+        if (bot) {
+            // Telegraf может обрабатывать webhook updates через handleUpdate
+            await bot.handleUpdate(update);
+        } else {
+            console.warn('[TELEGRAM-WEBHOOK] Auth bot not initialized');
+        }
+
+        res.status(200).send('OK');
+    } catch (err) {
+        console.error('[TELEGRAM-WEBHOOK] Error processing update:', err);
+        res.status(500).send('Error');
+    }
+});

@@ -153,6 +153,44 @@ function stopInitPolling() {
     }
 }
 
+async function completeWebLogin(chatId, telegramId) {
+    if (!chatId) return false;
+
+    currentChatId = chatId;
+    localStorage.setItem('chatId', chatId);
+    if (telegramId) {
+        localStorage.setItem('telegramId', telegramId);
+    }
+
+    const authSection = document.getElementById('authSection');
+    const mainContent = document.getElementById('mainContent');
+    const logoutBtn = document.getElementById('logoutButton');
+    const chatIdInput = document.getElementById('chatIdInput');
+
+    if (chatIdInput && telegramId) {
+        chatIdInput.value = telegramId;
+    }
+    if (authSection) authSection.style.display = 'none';
+    if (logoutBtn) logoutBtn.style.display = 'block';
+
+    const initRes = await fetch(`${API_URL}/session/init-status/${encodeURIComponent(chatId)}`);
+    const initData = initRes.ok ? await initRes.json() : { status: 'ready' };
+
+    if (initData.status === 'ready' || initData.status === 'unknown') {
+        if (mainContent) mainContent.style.display = 'block';
+        if (typeof onLoginSuccess === 'function') await onLoginSuccess();
+        return true;
+    }
+
+    showInitLoader(chatId);
+    updateInitLoader(initData.status, initData.step, initData.stepIndex, initData.total);
+    startInitPolling(chatId, async () => {
+        if (mainContent) mainContent.style.display = 'block';
+        if (typeof onLoginSuccess === 'function') await onLoginSuccess();
+    });
+    return true;
+}
+
 // ─── Авторизация через Telegram ID ───────────────────────────────────────────
 
 async function login() {
@@ -286,15 +324,12 @@ async function autoLoginByChatId(chatId) {
         const checkData = await checkRes.json();
         
         if (checkData.authorized) {
-            currentChatId = checkData.chatId;
-            localStorage.setItem('chatId', checkData.chatId);
-            localStorage.setItem('telegramId', chatId);
-            
             // Убираем chat_id из URL
             const url = new URL(window.location);
             url.searchParams.delete('chat_id');
             window.history.replaceState({}, '', url);
-            
+
+            await completeWebLogin(checkData.chatId, chatId);
             return true;
         }
     } catch (e) {
@@ -304,27 +339,58 @@ async function autoLoginByChatId(chatId) {
     return false;
 }
 
+async function autoLoginByTelegramToken(token) {
+    if (!token) return false;
+
+    console.log('[AUTH] Auto-login attempt with tg_login_token');
+
+    try {
+        const res = await fetch(`${API_URL}/auth/telegram-web-login?token=${encodeURIComponent(token)}`);
+        const data = await res.json();
+
+        if (res.ok && data.success && data.chatId) {
+            const url = new URL(window.location);
+            url.searchParams.delete('tg_login_token');
+            window.history.replaceState({}, '', url);
+
+            await completeWebLogin(data.chatId, data.telegramId || data.chatId);
+            return true;
+        }
+    } catch (e) {
+        console.error('[AUTH] Telegram token auto-login error:', e);
+    }
+
+    return false;
+}
+
 function initAuth() {
     const authSection = document.getElementById('authSection');
     const mainContent = document.getElementById('mainContent');
     const logoutBtn = document.getElementById('logoutButton');
     const chatIdInput = document.getElementById('chatIdInput');
 
-    // Проверяем chat_id в URL (редирект из Telegram-бота)
+    // Проверяем параметры URL для автовхода из Telegram-бота
     const urlParams = new URLSearchParams(window.location.search);
+    const tgLoginToken = urlParams.get('tg_login_token');
     const chatIdFromUrl = urlParams.get('chat_id');
     
     // Проверяем сохранённые данные
     const savedChatId = localStorage.getItem('chatId');
     const savedTelegramId = localStorage.getItem('telegramId');
 
-    // Приоритет: chat_id из URL > сохранённые данные
-    if (chatIdFromUrl) {
-        // Автовход по chat_id из URL (редирект из бота)
+    // Приоритет: одноразовый tg_login_token > старый chat_id > сохранённые данные
+    if (tgLoginToken) {
+        autoLoginByTelegramToken(tgLoginToken).then(success => {
+            if (!success) {
+                if (authSection) authSection.style.display = 'block';
+                if (mainContent) mainContent.style.display = 'none';
+                if (logoutBtn) logoutBtn.style.display = 'none';
+                showToast('Ссылка входа недействительна или устарела. Войдите повторно из Telegram.', 'error');
+            }
+        });
+    } else if (chatIdFromUrl) {
         autoLoginByChatId(chatIdFromUrl).then(success => {
             if (success) {
-                if (logoutBtn) logoutBtn.style.display = 'block';
-                login();
             } else {
                 // Ошибка автовхода — показываем форму
                 if (authSection) authSection.style.display = 'block';
