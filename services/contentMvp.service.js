@@ -522,14 +522,18 @@ ${materialsText || 'Материалы недоступны'}
 
 async function generatePostText(chatId, topic, materialsText, personaText = '') {
   const data = manageStore.getState(chatId);
-  if (!data || !data.aiAuthToken || !data.aiModel) {
+  // Проверка конфигурации AI:支持 OpenAI (aiCustomApiKey) и ProTalk (aiAuthToken)
+  const hasApiKey = data.aiCustomApiKey || data.aiAuthToken;
+  if (!data || !hasApiKey || !data.aiModel) {
     throw new Error('AI model is not configured for chat');
   }
   const messages = [
     { role: 'system', content: 'Ты маркетинговый редактор Telegram-канала. Пиши кратко, фактически и без выдумок.' },
     { role: 'user', content: buildTextPrompt(topic, materialsText, personaText) }
   ];
-  const call = () => aiRouterService.callAI(chatId, data.aiAuthToken, data.aiModel, messages, null, data.aiUserEmail);
+  // Передаём aiCustomApiKey для OpenAI или aiAuthToken для ProTalk
+  const authToken = data.aiCustomApiKey || data.aiAuthToken;
+  const call = () => aiRouterService.callAI(chatId, authToken, data.aiModel, messages, null, data.aiUserEmail);
   let resp;
   try {
     resp = await call();
@@ -545,37 +549,66 @@ async function generatePostText(chatId, topic, materialsText, personaText = '') 
   const content = resp?.choices?.[0]?.message?.content || '';
   return String(content).trim().slice(0, 4000);
 }
-
+// Генерация изображения с помощью сервиса Kie.ai
 async function generateImage(topic, text) {
   const apiKey = process.env.KIE_API_KEY;
   if (!apiKey) throw new Error('KIE_API_KEY is not set');
-  const prompt = `Сгенерируй изображение для поста Telegram. Тема: ${topic.topic}. Текст поста: ${text}. Стиль: чисто, коммерчески, без текста на изображении.`;
-  const resp = await fetch('https://api.kie.ai/v1/images/generations', {
+  const rawPrompt = `Image for Telegram post. Topic: ${topic.topic}. Style: clean, commercial, no text, no signs, no logos on image.`;
+  const prompt = rawPrompt.slice(0, 800);
+
+  // Шаг 1: создаём задачу
+  const createResp = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      prompt,
-      size: '1024x1024'
+      model: 'z-image',
+      input: {
+        prompt,
+        aspect_ratio: '1:1',
+        nsfw_checker: true
+      }
     }),
-    timeout: 45000
+    timeout: 30000
   });
-  if (!resp.ok) {
-    const err = await resp.text();
-    throw new Error(`Image API failed: ${resp.status} ${err.slice(0, 300)}`);
+  if (!createResp.ok) {
+    const err = await createResp.text();
+    throw new Error(`Image API createTask failed: ${createResp.status} ${err.slice(0, 300)}`);
   }
-  const data = await resp.json();
-  const item = data?.data?.[0];
-  if (!item) throw new Error('Empty image response');
-  if (item.b64_json) return Buffer.from(item.b64_json, 'base64');
-  if (item.url) {
-    const r = await fetch(item.url, { timeout: 30000 });
-    if (!r.ok) throw new Error(`Image download failed: ${r.status}`);
-    return await r.buffer();
+  const createData = await createResp.json();
+  if (createData.code !== 200) {
+    throw new Error(`Image API createTask error: ${createData.msg}`);
   }
-  throw new Error('Unsupported image response shape');
+  const taskId = createData?.data?.taskId;
+  if (!taskId) throw new Error('Image API: no taskId in response');
+
+  // Шаг 2: polling результата (max 90 секунд)
+  const pollUrl = `https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${taskId}`;
+  const pollHeaders = { Authorization: `Bearer ${apiKey}` };
+  const maxAttempts = 18;
+  const pollInterval = 5000;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await new Promise((r) => setTimeout(r, pollInterval));
+    const pollResp = await fetch(pollUrl, { headers: pollHeaders, timeout: 15000 });
+    if (!pollResp.ok) continue;
+    const pollData = await pollResp.json();
+    const state = pollData?.data?.state;
+    if (state === 'success') {
+      const resultJson = JSON.parse(pollData.data.resultJson || '{}');
+      const imageUrl = resultJson?.resultUrls?.[0];
+      if (!imageUrl) throw new Error('Image API: no result URL in response');
+      const imgResp = await fetch(imageUrl, { timeout: 30000 });
+      if (!imgResp.ok) throw new Error(`Image download failed: ${imgResp.status}`);
+      return await imgResp.buffer();
+    }
+    if (state === 'fail') {
+      throw new Error(`Image generation failed: ${pollData.data.failMsg || 'unknown error'}`);
+    }
+  }
+  throw new Error('Image generation timeout: task did not complete in 90 seconds');
 }
 
 async function saveImageToUserWorkspace(chatId, buffer, jobId) {
@@ -1184,34 +1217,40 @@ async function publishDraft(chatId, bot, draft, correlationId = null) {
       const postId = post.id;
       const publishStatus = String(post.publish_status || '').toLowerCase();
 
-      // Проверяем, не опубликован ли уже
-      const alreadyPublished = await repository.isPostPublished(chatId, postId);
+      // Проверяем, не опубликован ли уже (используем client чтобы избежать FK-дедлока)
+      const publishLogCheck = await client.query(
+        `SELECT id FROM publish_logs WHERE post_id = $1 AND status = $2 LIMIT 1`,
+        [postId, PUBLISH_LOG_STATUS.PUBLISHED]
+      );
+      const alreadyPublished = publishLogCheck.rowCount > 0;
       if (publishStatus === STATUS.PUBLISHED || alreadyPublished) {
-        await repository.addPublishLog(chatId, {
-          postId,
-          channelId: settings.channelId,
-          status: PUBLISH_LOG_STATUS.SKIPPED_DUPLICATE_PUBLISH,
-          errorText: 'already_published',
-          correlationId: corrId
-        });
+        // Используем client для INSERT в publish_logs (FK→content_posts держит блокировку)
+        await client.query(
+          `INSERT INTO publish_logs (post_id, channel_id, status, error_text, correlation_id) VALUES ($1, $2, $3, $4, $5)`,
+          [postId, settings.channelId, PUBLISH_LOG_STATUS.SKIPPED_DUPLICATE_PUBLISH, 'already_published', corrId]
+        );
         return;
       }
 
+      // Переход через approved (требует state machine: ready -> approved -> published)
+      await repository.updateJobStatus(chatId, draft.jobId, STATUS.APPROVED);
       await repository.updateJobStatus(chatId, draft.jobId, STATUS.PUBLISHED);
-      await repository.updatePost(chatId, postId, { publishStatus: STATUS.PUBLISHED });
-      
+      // Используем уже открытый client (держит блокировку строки) чтобы избежать дедлока
+      await client.query(
+        `UPDATE content_posts SET publish_status = $1, updated_at = NOW() WHERE id = $2`,
+        [STATUS.PUBLISHED, postId]
+      );
+
       // Для media group сохраняем все message_id
-      const messageIds = Array.isArray(sent) 
+      const messageIds = Array.isArray(sent)
         ? sent.map(s => String(s.message_id)).join(',')
         : String(sent.message_id);
-      
-      await repository.addPublishLog(chatId, {
-        postId,
-        channelId: settings.channelId,
-        telegramMessageId: messageIds,
-        status: PUBLISH_LOG_STATUS.PUBLISHED,
-        correlationId: corrId
-      });
+
+      // Используем client для INSERT в publish_logs (FK→content_posts держит блокировку)
+      await client.query(
+        `INSERT INTO publish_logs (post_id, channel_id, telegram_message_id, status, error_text, correlation_id) VALUES ($1, $2, $3, $4, $5, $6)`,
+        [postId, settings.channelId, messageIds, PUBLISH_LOG_STATUS.PUBLISHED, null, corrId]
+      );
     });
 
     await repository.updateTopicStatus(chatId, draft.topic.sheetRow, 'completed', STATUS.PUBLISHED);
@@ -1256,8 +1295,7 @@ async function publishVideo(chatId, bot, draft, session, channelId, caption, tem
     try {
       const sent = await bot.telegram.sendVideo(channelId, { source: tempPath }, {
         caption,
-        supports_streaming: true,
-        parse_mode: 'Markdown'
+        supports_streaming: true
       });
       console.log(`[CONTENT-MVP] Video published for job ${draft.jobId}`);
       return sent;
@@ -1295,8 +1333,7 @@ async function publishImage(chatId, bot, draft, session, channelId, caption, tem
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const sent = await bot.telegram.sendPhoto(channelId, { source: tempPath }, {
-        caption,
-        parse_mode: 'Markdown'
+        caption
       });
       console.log(`[CONTENT-MVP] Image published for job ${draft.jobId}`);
       return sent;
@@ -1350,8 +1387,7 @@ async function publishMediaGroup(chatId, bot, draft, session, channelId, caption
       type: mediaType,
       media: { source: tempPath },
       // Caption только для первого элемента
-      caption: i === 0 ? caption : undefined,
-      parse_mode: i === 0 ? 'Markdown' : undefined
+      caption: i === 0 ? caption : undefined
     });
   }
   

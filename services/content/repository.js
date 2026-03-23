@@ -850,9 +850,9 @@ async function updateTopicStatus(chatId, topicId, status, note = null) {
   return withClient(chatId, async (client) => {
     const result = await client.query(
       `UPDATE content_topics
-       SET status = $1,
+       SET status = $1::text,
            used_at = CASE
-             WHEN $1 = 'pending' THEN NULL
+             WHEN $1::text = 'pending' THEN NULL
              ELSE COALESCE(used_at, NOW())
            END
        WHERE id = $2

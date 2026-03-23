@@ -73,21 +73,33 @@ async function getContainerStatus(containerId) {
  */
 async function getAllUserContainers() {
     try {
-        const res = await execDocker(['ps', '-a', '--filter', 'name=sandbox-user-', '--format', '{{.ID}}|{{.Names}}|{{.Status}}|{{.Running}}']);
-        const lines = (res.stdout || '').trim().split('\n').filter(Boolean);
+        // Сначала получаем список ID контейнеров через -q (только ID, без format)
+        const psRes = await execDocker(['ps', '-a', '--filter', 'name=sandbox-user-', '-q']);
+        const containerIds = (psRes.stdout || '').trim().split('\n').filter(Boolean);
         
         const containers = [];
-        for (const line of lines) {
-            const [id, name, status, running] = line.split('|');
-            const chatId = name.replace('sandbox-user-', '');
-            containers.push({
-                containerId: id,
-                containerName: name,
-                chatId,
-                status: running === 'true' ? 'running' : 'stopped',
-                rawStatus: status,
-                uptime: running === 'true' ? status : null
-            });
+        for (const containerId of containerIds) {
+            if (!containerId) continue;
+            
+            // Получаем JSON информацию о контейнере
+            const inspectRes = await execDocker(['inspect', containerId]);
+            const inspectData = JSON.parse(inspectRes.stdout || '[]');
+            
+            if (inspectData && inspectData[0]) {
+                const data = inspectData[0];
+                const name = data.Name || '';
+                const state = data.State || {};
+                
+                const chatId = name.replace('/sandbox-user-', '');
+                containers.push({
+                    containerId: containerId,
+                    containerName: name.replace('/', ''),
+                    chatId,
+                    status: state.Running ? 'running' : 'stopped',
+                    rawStatus: state.Status,
+                    uptime: state.Running ? 'up' : null
+                });
+            }
         }
         return containers;
     } catch (e) {

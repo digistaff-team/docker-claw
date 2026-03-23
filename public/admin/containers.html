@@ -146,6 +146,16 @@
             background: #6c757d;
             color: white;
         }
+        .btn-enter {
+            background: #6f42c1;
+            color: white;
+            font-weight: 600;
+        }
+        .btn-auth {
+            background: #20c997;
+            color: white;
+            font-weight: 600;
+        }
         .empty-state {
             text-align: center;
             padding: 60px 20px;
@@ -183,12 +193,26 @@
     </div>
 
     <script>
-        // Check authentication
-        if (sessionStorage.getItem('isAdminAuthenticated') !== 'true') {
-            window.location.href = '/admin/login';
+        // Check authentication via API
+        async function checkAuth() {
+            try {
+                const res = await fetch('/admin/stats-api');
+                if (!res.ok) {
+                    window.location.href = '/admin/login';
+                    return false;
+                }
+                return true;
+            } catch (e) {
+                window.location.href = '/admin/login';
+                return false;
+            }
         }
 
         async function loadContainers() {
+            // First check auth
+            const isAuth = await checkAuth();
+            if (!isAuth) return;
+            
             try {
                 const [statsRes, containersRes] = await Promise.all([
                     fetch('/admin/stats-api'),
@@ -252,6 +276,8 @@
                                     <td><span class="status ${c.status}">${c.status}</span></td>
                                     <td>${c.uptime || 'N/A'}</td>
                                     <td class="actions">
+                                        <button class="btn btn-enter" onclick="enterContainer('${c.chatId}')">🚪 Enter</button>
+                                        <button class="btn btn-auth" onclick="authAsUser('${c.chatId}')">🔑 Auth</button>
                                         ${c.status === 'running' ? `
                                             <button class="btn btn-stop" onclick="stopContainer('${c.chatId}')">Stop</button>
                                             <button class="btn btn-restart" onclick="restartContainer('${c.chatId}')">Restart</button>
@@ -277,6 +303,36 @@
             if (!confirm(`Start container for user ${chatId}?`)) return;
             await fetch(`/admin/container/${chatId}/start`, { method: 'POST' });
             loadContainers();
+        }
+
+        function enterContainer(chatId) {
+            window.open(`/admin/container/${chatId}/manage`, '_blank');
+        }
+
+        async function authAsUser(chatId) {
+            if (!confirm(`Authorize as user ${chatId}? This will log you in as this user and give you full access to their workspace.`)) return;
+            
+            try {
+                const res = await fetch(`/admin/container/${chatId}/auth`, {
+                    method: 'POST'
+                });
+                
+                const data = await res.json();
+                
+                if (data.success && data.redirectUrl) {
+                    // Открываем в новой вкладке для авторизации
+                    const newWindow = window.open(data.redirectUrl, '_blank');
+                    if (newWindow) {
+                        setTimeout(() => {
+                            alert(`Authorization successful! You are now logged in as user ${chatId}. Check the new tab.`);
+                        }, 1000);
+                    }
+                } else {
+                    alert('Authorization failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('Authorization error: ' + err.message);
+            }
         }
 
         async function stopContainer(chatId) {

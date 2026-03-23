@@ -3,113 +3,302 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Персонализация - AI Агент</title>
-    <link rel="stylesheet" href="/css/main.css">
+    <title>Клиент Завод — AI-агент для рекламы в соцсетях</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        /* ── Шапка ── */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 48px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            font-size: 32px;
+            line-height: 1;
+        }
+
+        .logo-text {
+            color: white;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+        }
+
+        .btn-login {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.18);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.45);
+            border-radius: 10px;
+            padding: 10px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: background 0.2s, border-color 0.2s, transform 0.15s;
+            backdrop-filter: blur(4px);
+        }
+
+        .btn-login:hover {
+            background: rgba(255, 255, 255, 0.28);
+            border-color: rgba(255, 255, 255, 0.7);
+            transform: translateY(-1px);
+        }
+
+        /* ── Герой ── */
+        .hero {
+            text-align: center;
+            padding: 80px 24px 60px;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 100px;
+            padding: 6px 18px;
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 28px;
+            letter-spacing: 0.3px;
+        }
+
+        .hero h1 {
+            color: white;
+            font-size: clamp(36px, 6vw, 64px);
+            font-weight: 800;
+            line-height: 1.1;
+            letter-spacing: -1px;
+            margin-bottom: 20px;
+        }
+
+        .hero h1 span {
+            background: linear-gradient(90deg, #ffe066, #ffb347);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-sub {
+            color: rgba(255, 255, 255, 0.85);
+            font-size: clamp(16px, 2.5vw, 20px);
+            max-width: 560px;
+            margin: 0 auto 40px;
+            line-height: 1.6;
+        }
+
+        .btn-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: white;
+            color: #764ba2;
+            border-radius: 14px;
+            padding: 16px 40px;
+            font-size: 18px;
+            font-weight: 700;
+            text-decoration: none;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-cta:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 14px 40px rgba(0, 0, 0, 0.24);
+        }
+
+        /* ── Фичи ── */
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 20px;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 24px 80px;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.14);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 16px;
+            padding: 28px 24px;
+            backdrop-filter: blur(8px);
+            transition: background 0.2s, transform 0.2s;
+        }
+
+        .feature-card:hover {
+            background: rgba(255, 255, 255, 0.22);
+            transform: translateY(-2px);
+        }
+
+        .feature-icon {
+            font-size: 36px;
+            margin-bottom: 14px;
+        }
+
+        .feature-card h3 {
+            color: white;
+            font-size: 17px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .feature-card p {
+            color: rgba(255, 255, 255, 0.78);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* ── CTA-баннер ── */
+        .cta-banner {
+            text-align: center;
+            padding: 0 24px 80px;
+        }
+
+        .cta-banner-inner {
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 20px;
+            padding: 56px 32px;
+            max-width: 640px;
+            margin: 0 auto;
+            backdrop-filter: blur(8px);
+        }
+
+        .cta-banner h2 {
+            color: white;
+            font-size: clamp(24px, 4vw, 36px);
+            font-weight: 800;
+            margin-bottom: 14px;
+            letter-spacing: -0.5px;
+        }
+
+        .cta-banner p {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 16px;
+            margin-bottom: 32px;
+            line-height: 1.6;
+        }
+
+        /* ── Подвал ── */
+        footer {
+            text-align: center;
+            padding: 24px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 13px;
+        }
+
+        footer a {
+            color: rgba(255, 255, 255, 0.65);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            color: white;
+        }
+
+        @media (max-width: 600px) {
+            header {
+                padding: 16px 20px;
+            }
+
+            .logo-text {
+                font-size: 18px;
+            }
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <h1>🙋🏻‍♂️ Клиент Завод</h1>
-                    <p>Ваш личный ИИ агент по рекламе в соцсетях</p>
-                </div>
-                <div id="logoutButton" style="display: none;">
-                    <button class="btn btn-secondary" onclick="logout()" style="padding: 10px 20px; font-size: 14px;">🚪 Выйти</button>
-                </div>
-            </div>
+
+    <header>
+        <a class="logo" href="/">
+            <span class="logo-icon">🙋🏻‍♂️</span>
+            <span class="logo-text">Клиент Завод</span>
+        </a>
+        <a class="btn-login" href="/auth.html">Войти →</a>
+    </header>
+
+    <section class="hero">
+        <div class="hero-badge">✨ AI-агент для предпринимателей</div>
+        <h1>Больше клиентов.<br><span>Меньше бюджета.</span></h1>
+        <p class="hero-sub">
+            Хватит сливать деньги на рекламу вслепую. AI-агент сам ведёт ваши соцсети,
+            генерирует контент и привлекает клиентов — предсказуемо и без лишних затрат.
+        </p>
+        <a class="btn-cta" href="/auth.html">
+            Войти в кабинет
+        </a>
+    </section>
+
+    <section class="features">
+        <div class="feature-card">
+            <div class="feature-icon">💸</div>
+            <h3>Конец слива бюджета</h3>
+            <p>AI знает, что работает, а что нет. Никакой рекламы наугад — только действия, которые приносят реальных клиентов.</p>
         </div>
-
-        <div class="auth-section" id="authSection" style="display: none;">
-            <h2 style="margin-bottom: 20px;">🔐 Вход в систему</h2>
-            
-            <!-- Вариант 1: Через Telegram бота -->
-            <div style="background: #f0f7ff; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-                <h3 style="margin: 0 0 10px 0; font-size: 16px;">📱 Войти через Telegram</h3>
-                <p style="margin: 0 0 15px 0; color: #555; font-size: 14px;">
-                    Перейдите в бот и нажмите кнопку <strong>"Войти в аккаунт"</strong>
-                </p>
-                <a href="https://t.me/clientzavod_bot" target="_blank" style="display: inline-block; background: #0088cc; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">
-                    🤖 Открыть @clientzavod_bot
-                </a>
-            </div>
-            
-            <!-- Разделитель -->
-            <div style="display: flex; align-items: center; margin: 25px 0;">
-                <div style="flex: 1; height: 1px; background: #ddd;"></div>
-                <span style="padding: 0 15px; color: #999; font-size: 14px;">или</span>
-                <div style="flex: 1; height: 1px; background: #ddd;"></div>
-            </div>
-            
-            <!-- Вариант 2: По Telegram ID -->
-            <div>
-                <h3 style="margin: 0 0 10px 0; font-size: 16px;">🆔 Войти по Telegram ID</h3>
-                <p style="margin-bottom: 10px; color: #666; font-size: 14px;">
-                    Если вы знаете свой <strong>Telegram ID</strong>, введите его:
-                </p>
-                <input type="text" id="chatIdInput" placeholder="Например: 123456789" style="margin-bottom: 10px;" />
-                <p style="font-size: 12px; color: #999; margin-bottom: 15px;">
-                    💡 Узнать свой Telegram ID: напишите боту <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a>
-                </p>
-                <button onclick="login()">Войти по ID</button>
-            </div>
-            
-            <div id="authStatus" style="margin-top: 15px;"></div>
+        <div class="feature-card">
+            <div class="feature-icon">📈</div>
+            <h3>Контент, который продаёт</h3>
+            <p>Агент пишет посты, создаёт изображения и публикует по расписанию. Ваш SMM работает каждый день — даже когда вы заняты.</p>
         </div>
-
-        <div class="main-content" id="mainContent">
-            <nav class="nav-tabs" id="mainMenu"></nav>
-
-            <div class="panel full-width">
-                <h2>🎭 Настройка личности AI агента</h2>
-                <div class="template-hint">
-                    <strong>💡 Совет:</strong> Заполните файлы персонализации, чтобы AI агент лучше понимал вас и работал в нужном стиле. Эти файлы автоматически добавляются в контекст каждого запроса.
-                </div>
-
-                <div class="personalization-grid">
-                    <div class="person-card" id="card-IDENTITY.md" onclick="selectPersonFile('IDENTITY.md')">
-                        <h3>👤 IDENTITY.md</h3>
-                        <p>Имя, роль и основные данные AI агента</p>
-                        <span class="status empty" id="status-IDENTITY.md">Не заполнено</span>
-                    </div>
-                    <div class="person-card" id="card-SOUL.md" onclick="selectPersonFile('SOUL.md')">
-                        <h3>💫 SOUL.md</h3>
-                        <p>Характер, личность и стиль общения</p>
-                        <span class="status empty" id="status-SOUL.md">Не заполнено</span>
-                    </div>
-                    <div class="person-card" id="card-USER.md" onclick="selectPersonFile('USER.md')">
-                        <h3>🤝 USER.md</h3>
-                        <p>Информация о вас и контекст работы</p>
-                        <span class="status empty" id="status-USER.md">Не заполнено</span>
-                    </div>
-                    <div class="person-card" id="card-MEMORY.md" onclick="selectPersonFile('MEMORY.md')">
-                        <h3>🔐 MEMORY.md</h3>
-                        <p>Токены, пароли, важные регламенты</p>
-                        <span class="status empty" id="status-MEMORY.md">Не заполнено</span>
-                    </div>
-                </div>
-
-                <div class="editor-container" id="editorContainer" style="display: none;">
-                    <div class="editor-header">
-                        <h3 id="editorTitle">Редактор</h3>
-                        <div class="editor-actions">
-                            <button class="btn btn-success" onclick="savePersonFile()">💾 Сохранить</button>
-                            <button class="btn btn-secondary" onclick="closeEditor()">✕ Закрыть</button>
-                        </div>
-                    </div>
-                    <textarea class="editor" id="personEditor" placeholder="Введите содержимое файла..."></textarea>
-                    <div id="templateHelp" style="margin-top: 15px; color: #666; font-size: 14px;"></div>
-                </div>
-            </div>
+        <div class="feature-card">
+            <div class="feature-icon">🎯</div>
+            <h3>Предсказуемый результат</h3>
+            <p>Вы видите, что делает агент и почему. Прозрачная логика вместо «чёрного ящика» — контролируйте результат, а не процесс.</p>
         </div>
-    </div>
-    <script src="/js/common.js"></script>
-    <script src="/js/personalization.js"></script>
-    <script>
-        window.addEventListener('load', () => {
-            renderMenu('/');
-            initAuth();
-        });
-    </script>
+        <div class="feature-card">
+            <div class="feature-icon">⚡</div>
+            <h3>Запуск за 5 минут</h3>
+            <p>Подключите Telegram-бот, опишите свой бизнес, продукт, ЦА — и агент уже знает, что делать. Никаких долгих настроек.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🔄</div>
+            <h3>Работает без вас</h3>
+            <p>Агент пишет тексты, создаёт картинки и видео, выполняет задачи 24/7 — вы занимаетесь бизнесом, а не рутиной.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <h3>Ваш стиль, ваш голос</h3>
+            <p>Агент запоминает, как вы общаетесь с клиентами, и говорит так же. Никакого «машинного» текста — только живые продающие сообщения.</p>
+        </div>
+    </section>
+
+    <section class="cta-banner">
+        <div class="cta-banner-inner">
+            <h2>Хватит платить за рекламу, которая не работает</h2>
+            <p>Войдите в кабинет и получите AI-агента, который привлекает клиентов вместо вас — уже сегодня.</p>
+            <a class="btn-cta" href="/auth.html">
+                Войти
+            </a>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2025-2026 Клиент Завод </p>
+    </footer>
+
 </body>
 </html>

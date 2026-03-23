@@ -155,7 +155,7 @@ async function processJob(chatId, job, bot) {
       await queueRepo.markFailed(chatId, id, errorMsg, result.retry !== false);
     }
   } catch (e) {
-    console.error(`[CONTENT-WORKER] Job ${id} threw error:`, e.message);
+    console.error(`[CONTENT-WORKER] Job ${id} threw error:`, e.message, '\n', e.stack);
     await queueRepo.markFailed(chatId, id, e.message, true);
   }
 }

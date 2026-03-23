@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Персонализация - AI Агент</title>
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>🙋🏻‍♂️ Клиент Завод</h1>
+                    <p>Ваш личный ИИ агент по рекламе в соцсетях</p>
+                </div>
+                <div id="logoutButton" style="display: none;">
+                    <button class="btn btn-secondary" onclick="logout()" style="padding: 10px 20px; font-size: 14px;">🚪 Выйти</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="auth-section" id="authSection" style="display: none;">
+            <h2 style="margin-bottom: 20px;">🔐 Вход в систему</h2>
+            
+            <!-- Вариант 1: Через Telegram бота -->
+            <div style="background: #f0f7ff; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                <h3 style="margin: 0 0 10px 0; font-size: 16px;">📱 Войти через Telegram</h3>
+                <p style="margin: 0 0 15px 0; color: #555; font-size: 14px;">
+                    Перейдите в бот и нажмите кнопку <strong>"Войти в аккаунт"</strong>
+                </p>
+                <a href="https://t.me/clientzavod_bot" target="_blank" style="display: inline-block; background: #0088cc; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">
+                    🤖 Открыть @clientzavod_bot
+                </a>
+            </div>
+            
+            <!-- Разделитель -->
+            <div style="display: flex; align-items: center; margin: 25px 0;">
+                <div style="flex: 1; height: 1px; background: #ddd;"></div>
+                <span style="padding: 0 15px; color: #999; font-size: 14px;">или</span>
+                <div style="flex: 1; height: 1px; background: #ddd;"></div>
+            </div>
+            
+            <!-- Вариант 2: По Telegram ID -->
+            <div>
+                <h3 style="margin: 0 0 10px 0; font-size: 16px;">🆔 Войти по Telegram ID</h3>
+                <p style="margin-bottom: 10px; color: #666; font-size: 14px;">
+                    Если вы знаете свой <strong>Telegram ID</strong>, введите его:
+                </p>
+                <input type="text" id="chatIdInput" placeholder="Например: 123456789" style="margin-bottom: 10px;" />
+                <p style="font-size: 12px; color: #999; margin-bottom: 15px;">
+                    💡 Узнать свой Telegram ID: напишите боту <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a>
+                </p>
+                <button onclick="login()">Войти по ID</button>
+            </div>
+            
+            <div id="authStatus" style="margin-top: 15px;"></div>
+        </div>
+
+        <div class="main-content" id="mainContent">
+            <nav class="nav-tabs" id="mainMenu"></nav>
+
+            <div class="panel full-width">
+                <h2>🎭 Настройка личности AI агента</h2>
+                <div class="template-hint">
+                    <strong>💡 Совет:</strong> Заполните файлы персонализации, чтобы AI агент лучше понимал вас и работал в нужном стиле. Эти файлы автоматически добавляются в контекст каждого запроса.
+                </div>
+
+                <div class="personalization-grid">
+                    <div class="person-card" id="card-IDENTITY.md" onclick="selectPersonFile('IDENTITY.md')">
+                        <h3>👤 IDENTITY.md</h3>
+                        <p>Имя, роль и основные данные AI агента</p>
+                        <span class="status empty" id="status-IDENTITY.md">Не заполнено</span>
+                    </div>
+                    <div class="person-card" id="card-SOUL.md" onclick="selectPersonFile('SOUL.md')">
+                        <h3>💫 SOUL.md</h3>
+                        <p>Характер, личность и стиль общения</p>
+                        <span class="status empty" id="status-SOUL.md">Не заполнено</span>
+                    </div>
+                    <div class="person-card" id="card-USER.md" onclick="selectPersonFile('USER.md')">
+                        <h3>🤝 USER.md</h3>
+                        <p>Информация о вас и контекст работы</p>
+                        <span class="status empty" id="status-USER.md">Не заполнено</span>
+                    </div>
+                    <div class="person-card" id="card-MEMORY.md" onclick="selectPersonFile('MEMORY.md')">
+                        <h3>🔐 MEMORY.md</h3>
+                        <p>Токены, пароли, важные регламенты</p>
+                        <span class="status empty" id="status-MEMORY.md">Не заполнено</span>
+                    </div>
+                </div>
+
+                <div class="editor-container" id="editorContainer" style="display: none;">
+                    <div class="editor-header">
+                        <h3 id="editorTitle">Редактор</h3>
+                        <div class="editor-actions">
+                            <button class="btn btn-success" onclick="savePersonFile()">💾 Сохранить</button>
+                            <button class="btn btn-secondary" onclick="closeEditor()">✕ Закрыть</button>
+                        </div>
+                    </div>
+                    <textarea class="editor" id="personEditor" placeholder="Введите содержимое файла..."></textarea>
+                    <div id="templateHelp" style="margin-top: 15px; color: #666; font-size: 14px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/js/common.js"></script>
+    <script src="/js/personalization.js"></script>
+    <script>
+        window.addEventListener('load', () => {
+            renderMenu('/auth.html');
+            initAuth();
+        });
+    </script>
+</body>
+</html>

@@ -260,7 +260,7 @@ router.get('/telegram-web-login', async (req, res) => {
  * POST /api/auth/telegram-login
  * Body: { telegram_id: "123456789", username: "@username" }
  * 
- * Вызывается при нажатии кнопки "Войти в аккаунт" в боте @DigiStaff_Team_bot
+ * Вызывается при нажатии кнопки "Войти в аккаунт" в боте @clientzavod_bot
  */
 router.post('/telegram-login', async (req, res) => {
     const telegramId = String(req.body.telegram_id || '').trim();

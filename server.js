@@ -19,12 +19,51 @@ app.use(session({
     secret: process.env.SESSION_SECRET || 'docker-claw-admin-secret-key-change-in-production',
     resave: false,
     saveUninitialized: false,
-    cookie: { 
+    cookie: {
         secure: false, // Set to true if using HTTPS
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
+
+// Middleware для обработки admin_auth токена
+app.use(async (req, res, next) => {
+    const { admin_auth, chatId } = req.query;
+    
+    if (admin_auth && chatId) {
+        try {
+            const manageStore = require('./manage/store');
+            await manageStore.load();
+            
+            const state = manageStore.getState(chatId);
+            if (state && state.adminAuthToken === admin_auth && state.adminAuthExpires > Date.now()) {
+                // Токен валиден - устанавливаем сессию
+                const session = await sessionService.getOrCreateSession(chatId);
+                
+                // Устанавливаем chatId в сессию для последующего использования
+                if (req.session) {
+                    req.session.chatId = chatId;
+                    req.session.authorizedByAdmin = true;
+                }
+                
+                // Очищаем токен после использования
+                state.adminAuthToken = null;
+                state.adminAuthExpires = null;
+                
+                // Обновляем cache
+                const allStates = manageStore.getAllStates();
+                allStates[chatId] = state;
+                await manageStore.persist(chatId);
+                
+                // Редирект на главную
+                return res.redirect('/');
+            }
+        } catch (e) {
+            console.error('[ADMIN_AUTH] Error:', e.message);
+        }
+    }
+    next();
+});
 
 // Sandbox Routes (без префикса /api)
 const sandboxRoutes = require('./routes/sandbox.routes');
@@ -61,11 +100,11 @@ async function startServer() {
     // Сначала загружаем состояние
     await manageStore.load();
     
-    // Запуск главного бота авторизации @DigiStaff_Team_bot
+    // Запуск главного бота авторизации @clientzavod_bot
     const authBotToken = process.env.AUTH_BOT_TOKEN;
     if (authBotToken) {
         authBot.startAuthBot(authBotToken);
-        console.log('🤖 Auth bot: ✅ STARTED (@DigiStaff_Team_bot)');
+        console.log('🤖 Auth bot: ✅ STARTED (@clientzavod_bot)');
     } else {
         console.log('🤖 Auth bot: ⏸️  SKIPPED (AUTH_BOT_TOKEN not set)');
     }

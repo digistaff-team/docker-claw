@@ -133,7 +133,9 @@ async function checkNoSuccessPeriod(chatId) {
     );
 
     if (result.rows.length === 0) {
-      return { hours: Infinity, lastSuccessAt: null };
+      // Успешных публикаций никогда не было — возвращаем 0 часов
+      // (чтобы не триггерить алерт сразу, даём время на первую публикацию)
+      return { hours: 0, lastSuccessAt: null };
     }
 
     const lastSuccessAt = result.rows[0].created_at;

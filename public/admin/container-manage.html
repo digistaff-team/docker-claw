@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Container Management - Docker Claw Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+        }
+        .header {
+            background: #1a1a2e;
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            font-size: 20px;
+        }
+        .back-btn, .logout-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        .back-btn {
+            background: #6c757d;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 30px;
+        }
+        .info-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .info-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .info-item label {
+            font-size: 12px;
+            color: #666;
+            display: block;
+            margin-bottom: 5px;
+        }
+        .info-item .value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+        .terminal-panel {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .terminal-header {
+            background: #1a1a2e;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .terminal-body {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 0;
+        }
+        .terminal {
+            display: flex;
+            flex-direction: column;
+            height: 500px;
+        }
+        .terminal-output {
+            flex: 1;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .terminal-input-line {
+            display: flex;
+            border-top: 1px solid #333;
+            padding: 10px 15px;
+            background: #252526;
+        }
+        .terminal-input-line span {
+            color: #4ec9b0;
+            margin-right: 10px;
+        }
+        .terminal-input-line input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #d4d4d4;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            outline: none;
+        }
+        .actions-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+        .actions-panel h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .action-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: opacity 0.3s;
+        }
+        .action-btn:hover {
+            opacity: 0.8;
+        }
+        .action-btn.primary {
+            background: #4a90d9;
+            color: white;
+        }
+        .action-btn.success {
+            background: #28a745;
+            color: white;
+        }
+        .action-btn.warning {
+            background: #ffc107;
+            color: #333;
+        }
+        .action-btn.danger {
+            background: #dc3545;
+            color: white;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status.running {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.stopped {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🐳 Container Management: <span id="chatId"></span></h1>
+        <div>
+            <button class="back-btn" onclick="goBack()">← Back</button>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="info-panel">
+            <h2>Container Info</h2>
+            <div class="info-grid" id="infoGrid">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+
+        <div class="terminal-panel">
+            <div class="terminal-header">
+                <h3>📟 Terminal</h3>
+                <button class="action-btn warning" onclick="clearTerminal()">Clear</button>
+            </div>
+            <div class="terminal-body">
+                <div class="terminal">
+                    <div class="terminal-output" id="terminalOutput"></div>
+                    <div class="terminal-input-line">
+                        <span>root@container:~#</span>
+                        <input type="text" id="terminalInput" placeholder="Enter command..." autocomplete="off">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="actions-panel">
+            <h3>⚡ Quick Actions</h3>
+            <div class="action-buttons">
+                <button class="action-btn primary" onclick="runCommand('ls -la /workspace')">📁 List Workspace</button>
+                <button class="action-btn primary" onclick="runCommand('df -h')">💾 Disk Usage</button>
+                <button class="action-btn primary" onclick="runCommand('free -m')">🧠 Memory Usage</button>
+                <button class="action-btn primary" onclick="runCommand('ps aux')">📊 Processes</button>
+                <button class="action-btn success" onclick="runCommand('cd /workspace && npm install')">📦 NPM Install</button>
+                <button class="action-btn success" onclick="runCommand('cd /workspace && npm run build')">🔨 NPM Build</button>
+                <button class="action-btn warning" onclick="runCommand('pm2 list')">📋 PM2 List</button>
+                <button class="action-btn danger" onclick="runCommand('pm2 restart all')">🔄 PM2 Restart All</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatId = window.location.pathname.split('/')[3];
+        document.getElementById('chatId').textContent = chatId;
+
+        // Check authentication
+        async function checkAuth() {
+            try {
+                const res = await fetch('/admin/stats-api');
+                if (!res.ok) {
+                    window.location.href = '/admin/login';
+                    return false;
+                }
+                return true;
+            } catch (e) {
+                window.location.href = '/admin/login';
+                return false;
+            }
+        }
+
+        async function loadContainerInfo() {
+            const isAuth = await checkAuth();
+            if (!isAuth) return;
+
+            try {
+                const res = await fetch(`/admin/container/${chatId}/info`);
+                if (!res.ok) throw new Error('Failed to load container info');
+                
+                const info = await res.json();
+                
+                document.getElementById('infoGrid').innerHTML = `
+                    <div class="info-item">
+                        <label>Chat ID</label>
+                        <div class="value">${info.chatId}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Container Name</label>
+                        <div class="value">${info.containerName}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Container ID</label>
+                        <div class="value">${info.containerId ? info.containerId.substring(0, 12) : 'N/A'}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Status</label>
+                        <div class="value"><span class="status ${info.status}">${info.status}</span></div>
+                    </div>
+                    <div class="info-item">
+                        <label>Session Created</label>
+                        <div class="value">${info.session?.created ? new Date(info.session.created).toLocaleString() : 'N/A'}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Last Activity</label>
+                        <div class="value">${info.session?.lastActivity ? new Date(info.session.lastActivity).toLocaleString() : 'N/A'}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Commands Executed</label>
+                        <div class="value">${info.session?.commandCount || 0}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Python3</label>
+                        <div class="value">${info.session?.hasPython3 ? '✅' : '❌'}</div>
+                    </div>
+                `;
+            } catch (err) {
+                document.getElementById('infoGrid').innerHTML = `
+                    <div class="error">Error: ${err.message}</div>
+                `;
+            }
+        }
+
+        const terminalOutput = document.getElementById('terminalOutput');
+        const terminalInput = document.getElementById('terminalInput');
+
+        function appendToTerminal(text, isCommand = false) {
+            const lines = text.split('\n');
+            for (const line of lines) {
+                const div = document.createElement('div');
+                if (isCommand) {
+                    div.innerHTML = `<span style="color: #4ec9b0">root@container:~#</span> ${line}`;
+                } else {
+                    div.textContent = line;
+                }
+                terminalOutput.appendChild(div);
+            }
+            terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        }
+
+        function clearTerminal() {
+            terminalOutput.innerHTML = '';
+        }
+
+        async function runCommand(command) {
+            if (!command) return;
+            
+            appendToTerminal(command, true);
+            terminalInput.value = '';
+
+            try {
+                const res = await fetch(`/admin/container/${chatId}/exec`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command, timeout: 60 })
+                });
+                
+                const data = await res.json();
+                
+                if (data.stdout) appendToTerminal(data.stdout);
+                if (data.stderr) appendToTerminal('STDERR: ' + data.stderr);
+                if (data.exitCode !== 0 && data.exitCode !== undefined) {
+                    appendToTerminal(`[Exit code: ${data.exitCode}]`);
+                }
+            } catch (err) {
+                appendToTerminal('Error: ' + err.message);
+            }
+        }
+
+        terminalInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                runCommand(terminalInput.value);
+            }
+        });
+
+        function goBack() {
+            window.history.back();
+        }
+
+        async function logout() {
+            await fetch('/admin/logout', { method: 'POST' });
+            window.location.href = '/admin/login';
+        }
+
+        // Initial load
+        loadContainerInfo();
+        
+        // Focus on terminal input
+        terminalInput.focus();
+    </script>
+</body>
+</html>

@@ -50,7 +50,7 @@ async function callAI(chatId, authToken, model, messages, tools, userEmail) {
     // Получаем настройки провайдера из хранилища
     const manageStore = require('../manage/store');
     const state = manageStore.getState(chatId);
-    
+
     let providerConfig;
     if (state) {
         providerConfig = getProviderConfig(chatId, state);
@@ -64,9 +64,12 @@ async function callAI(chatId, authToken, model, messages, tools, userEmail) {
             userEmail: userEmail
         };
     }
-    
+
     const { provider, base_url, authToken: effectiveAuthToken, model: effectiveModel } = providerConfig;
-    
+
+    // DEBUG LOG
+    console.log(`[AI-ROUTER] Provider: ${provider}, Model: ${effectiveModel}, URL: ${base_url}`);
+
     const payload = {
         model: effectiveModel,
         messages: messages,
@@ -74,19 +77,20 @@ async function callAI(chatId, authToken, model, messages, tools, userEmail) {
         max_tokens: 4096,
         stream: false
     };
-    
+
     // Добавляем tools только для ProTalk и OpenRouter (поддерживают function calling)
     if (tools && tools.length > 0 && (provider === 'protalk' || provider === 'openrouter')) {
         payload.tools = tools;
         payload.tool_choice = "auto";
     }
-    
+
     const startTime = Date.now();
-    
+
     let response;
-    
+
     if (provider === 'openai') {
         // Прямой OpenAI API
+        console.log(`[AI-ROUTER] Calling OpenAI API: ${base_url}/chat/completions`);
         response = await fetch(`${base_url}/chat/completions`, {
             method: 'POST',
             headers: {
@@ -101,19 +105,21 @@ async function callAI(chatId, authToken, model, messages, tools, userEmail) {
             'Authorization': `Bearer ${effectiveAuthToken}`,
             'Content-Type': 'application/json'
         };
-        
+
         // Добавляем дополнительные заголовки для OpenRouter
         if (provider === 'openrouter') {
             headers['HTTP-Referer'] = 'https://docker-claw.pro-talk.ru';
             headers['X-Title'] = 'Docker-Claw';
         }
-        
+
         // Для ProTalk используем их API, для OpenRouter - напрямую
-        const apiUrl = provider === 'protalk' 
-            ? AI_ROUTER_URL 
+        const apiUrl = provider === 'protalk'
+            ? AI_ROUTER_URL
             : `${base_url}/chat/completions`;
-        
-        const requestPayload = provider === 'protalk' 
+
+        console.log(`[AI-ROUTER] Calling ${provider} API: ${apiUrl}`);
+
+        const requestPayload = provider === 'protalk'
             ? {
                 base_url: base_url,
                 platform: 'ProTalk',
@@ -122,7 +128,7 @@ async function callAI(chatId, authToken, model, messages, tools, userEmail) {
                 no_cost: true
             }
             : payload;
-        
+
         response = await fetch(apiUrl, {
             method: 'POST',
             headers: headers,

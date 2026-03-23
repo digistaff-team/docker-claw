@@ -109,9 +109,84 @@ router.get('/stats-api', requireAdminAuth, async (req, res) => {
     }
 });
 
+// GET /admin/container/:chatId/manage - страница управления контейнером
+router.get('/container/:chatId/manage', requireAdminAuth, (req, res) => {
+    res.sendFile(require('path').resolve(__dirname, '../public/admin/container-manage.html'));
+});
+
+// POST /admin/container/:chatId/auth - создать сессию авторизации для пользователя
+router.post('/container/:chatId/auth', requireAdminAuth, async (req, res) => {
+    const { chatId } = req.params;
+    
+    try {
+        // Получаем или создаём сессию для пользователя
+        const session = await sessionService.getOrCreateSession(chatId);
+        
+        // Генерируем токен для авторизации
+        const authToken = require('crypto').randomBytes(32).toString('hex');
+        
+        // Сохраняем токен в manage store для последующей проверки
+        const manageStore = require('../manage/store');
+        await manageStore.load();
+        
+        // Получаем текущее состояние из cache
+        const state = manageStore.getState(chatId) || {};
+        
+        // Добавляем admin auth данные
+        state.adminAuthToken = authToken;
+        state.adminAuthExpires = Date.now() + (24 * 60 * 60 * 1000); // 24 часа
+        
+        // Обновляем cache напрямую
+        const allStates = manageStore.getAllStates();
+        allStates[chatId] = state;
+        
+        // Сохраняем через persist
+        await manageStore.persist(chatId);
+        
+        res.json({
+            success: true,
+            chatId,
+            token: authToken,
+            redirectUrl: `/?admin_auth=${authToken}&chatId=${chatId}`
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /admin/container/:chatId/exec - выполнить команду в контейнере (API)
+router.post('/container/:chatId/exec', requireAdminAuth, async (req, res) => {
+    const { chatId } = req.params;
+    const { command, timeout = 30 } = req.body;
+
+    if (!command) {
+        return res.status(400).json({ error: 'Command is required' });
+    }
+
+    try {
+        const containerName = `sandbox-user-${chatId}`;
+        const containerId = await dockerService.getContainerIdByName(containerName);
+
+        if (!containerId) {
+            return res.status(404).json({ error: 'Container not found' });
+        }
+
+        const status = await dockerService.getContainerStatus(containerId);
+        if (status !== 'running') {
+            return res.status(409).json({ error: `Container is not running (status: ${status})` });
+        }
+
+        const result = await dockerService.executeInContainer(containerId, command, timeout);
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // GET /admin/container/:chatId/info - информация о контейнере
 router.get('/container/:chatId/info', requireAdminAuth, async (req, res) => {
     const { chatId } = req.params;
+
     
     try {
         const containerName = `sandbox-user-${chatId}`;

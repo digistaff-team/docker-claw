@@ -449,7 +449,7 @@ function renderMenu(currentPage) {
     if (!menuContainer) return;
 
     const menuItems = [
-        { href: '/', label: '🎭 Личность' },
+        { href: '/auth.html', label: '🎭 Личность' },
         { href: '/files.html', label: '📁 Файлы' },
         { href: '/channels.html', label: '📡 Каналы' },
         { href: '/content.html', label: '📝 Контент' },

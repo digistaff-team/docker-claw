@@ -959,11 +959,13 @@ function startBot(chatId, token) {
         await handleTextMessage(ctx, chatId);
     });
 
-    bot.launch().then(() => {
-        bots.set(chatId, { bot, token });
-        console.log('[MANAGE-TG] Bot started for chatId:', chatId);
-    }).catch((err) => {
-        console.error('[MANAGE-TG] Failed to start bot for', chatId, err.message);
+    // Add to map immediately so the content worker can use it
+    // bot.telegram is available without waiting for launch()
+    bots.set(chatId, { bot, token });
+    console.log('[MANAGE-TG] Bot registered for chatId:', chatId);
+
+    bot.launch().catch((err) => {
+        console.error('[MANAGE-TG] Failed to start bot polling for', chatId, err.message);
     });
 
     return bot;

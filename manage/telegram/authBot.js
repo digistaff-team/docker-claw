@@ -1,6 +1,6 @@
 /**
  * Главный Telegram-бот для авторизации новых пользователей
- * @DigiStaff_Team_bot
+ * @clientzavod_bot
  * 
  * Этот бот работает как "точка входа" - пользователь переходит по ссылке
  * и нажимает кнопку "Войти в аккаунт" для авторизации через Telegram ID.
@@ -26,7 +26,7 @@ function scheduleMessageDeletion(bot, chatId, messageId, delayMs = LOGIN_LINK_ME
 
 /**
  * Запускает главный бот авторизации
- * @param {string} token - Telegram Bot Token для @DigiStaff_Team_bot
+ * @param {string} token - Telegram Bot Token для @clientzavod_bot
  */
 function startAuthBot(token) {
     if (!token) {
@@ -303,7 +303,7 @@ function startAuthBot(token) {
             allowedUpdates: ['message', 'callback_query', 'my_chat_member']
         }).then(() => {
             authBot = bot;
-            console.log('[AUTH-BOT] Auth bot @DigiStaff_Team_bot started successfully (webhook mode)');
+            console.log('[AUTH-BOT] Auth bot @clientzavod_bot started successfully (webhook mode)');
         }).catch((err) => {
             console.error('[AUTH-BOT] Failed to start auth bot:', err.message);
         });
@@ -319,7 +319,7 @@ function startAuthBot(token) {
             limit: 100
         }).then(() => {
             authBot = bot;
-            console.log('[AUTH-BOT] Auth bot @DigiStaff_Team_bot started successfully (polling mode)');
+            console.log('[AUTH-BOT] Auth bot @clientzavod_bot started successfully (polling mode)');
         }).catch((err) => {
             console.error('[AUTH-BOT] Failed to start auth bot:', err.message);
         });

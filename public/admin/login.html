@@ -161,13 +161,10 @@
                 if (response.ok && data.success) {
                     successDiv.textContent = 'Authentication successful! Redirecting...';
                     successDiv.style.display = 'block';
-                    
-                    // Store auth state in session
-                    sessionStorage.setItem('isAdminAuthenticated', 'true');
-                    
+
                     setTimeout(() => {
                         window.location.href = '/admin/containers';
-                    }, 1000);
+                    }, 500);
                 } else {
                     showError(data.error || 'Authentication failed');
                 }
@@ -183,11 +180,6 @@
             errorDiv.textContent = message;
             errorDiv.style.display = 'block';
             passwordInput.focus();
-        }
-
-        // Check if already authenticated
-        if (sessionStorage.getItem('isAdminAuthenticated') === 'true') {
-            window.location.href = '/admin/containers';
         }
     </script>
 </body>
