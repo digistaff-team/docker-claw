@@ -460,7 +460,11 @@ router.post('/content/settings', async (req, res) => {
         moderator_user_id: moderatorUserId,
         schedule_time: scheduleTime,
         schedule_tz: scheduleTz,
-        daily_limit: dailyLimit
+        daily_limit: dailyLimit,
+        publish_interval_hours: publishIntervalHours,
+        allowed_weekdays: allowedWeekdays,
+        random_publish: randomPublish,
+        premoderation_enabled: premoderationEnabled
     } = req.body;
 
     if (!chatId) {
@@ -472,12 +476,254 @@ router.post('/content/settings', async (req, res) => {
             moderatorUserId,
             scheduleTime,
             scheduleTz,
-            dailyLimit
+            dailyLimit,
+            publishIntervalHours,
+            allowedWeekdays,
+            randomPublish,
+            premoderationEnabled
         });
         const settings = manageStore.getContentSettings(chatId) || {};
         res.json({ success: true, settings });
     } catch (e) {
         res.status(400).json({ error: e.message });
+    }
+});
+
+// === Pinterest Channel ===
+
+router.get('/channels/pinterest', (req, res) => {
+    const chatId = req.query.chat_id;
+    if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+    const config = manageStore.getPinterestConfig(chatId);
+    if (config && config.app_id) {
+        // Не отправляем секреты целиком
+        const safeConfig = { ...config };
+        if (safeConfig.app_secret) safeConfig.app_secret = safeConfig.app_secret.slice(0, 4) + '***';
+        res.json({ connected: true, config: safeConfig });
+    } else {
+        res.json({ connected: false, config: null });
+    }
+});
+
+router.post('/channels/pinterest', async (req, res) => {
+    const { chat_id: chatId, app_id, app_secret, board_id, board_name, website_url, is_active, auto_publish } = req.body;
+    if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+    try {
+        const patch = {};
+        if (app_id !== undefined) patch.app_id = app_id;
+        if (app_secret !== undefined) patch.app_secret = app_secret;
+        if (board_id !== undefined) patch.board_id = board_id;
+        if (board_name !== undefined) patch.board_name = board_name;
+        if (website_url !== undefined) patch.website_url = website_url;
+        if (is_active !== undefined) patch.is_active = is_active;
+        if (auto_publish !== undefined) patch.auto_publish = auto_publish;
+        await manageStore.setPinterestConfig(chatId, patch);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+router.delete('/channels/pinterest', async (req, res) => {
+    const chatId = req.query.chat_id;
+    if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+    try {
+        await manageStore.clearPinterestConfig(chatId);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+router.get('/channels/pinterest/boards', async (req, res) => {
+    const chatId = req.query.chat_id;
+    if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+    const config = manageStore.getPinterestConfig(chatId);
+    if (!config || !config.access_token) {
+        return res.status(400).json({ error: 'Pinterest не подключён или отсутствует access_token' });
+    }
+    try {
+        const pinterestService = require('../services/pinterest.service');
+        const boards = await pinterestService.getBoards(config.access_token);
+        res.json({ boards });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// === Instagram ===
+
+router.get('/channels/instagram', (req, res) => {
+    const chatId = req.query.chat_id;
+    if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+    const config = manageStore.getInstagramConfig(chatId);
+    if (!config) return res.json({ connected: false });
+    const safe = { ...config };
+    if (safe.app_secret) safe.app_secret = safe.app_secret.slice(0, 4) + '****';
+    if (safe.access_token) safe.access_token = safe.access_token.slice(0, 8) + '****';
+    res.json({ connected: true, config: safe });
+});
+
+router.post('/channels/instagram', async (req, res) => {
+    const chatId = req.body.chat_id;
+    if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+    try {
+        const patch = {};
+        const fields = [
+            'app_id', 'app_secret', 'access_token',
+            'fb_page_id', 'fb_page_name', 'ig_user_id', 'ig_username',
+            'default_alt_text', 'location_id',
+            'is_active', 'auto_publish', 'is_reel',
+            'daily_limit', 'posting_hours'
+        ];
+        for (const f of fields) {
+            if (req.body[f] !== undefined) patch[f] = req.body[f];
+        }
+        await manageStore.setInstagramConfig(chatId, patch);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+router.delete('/channels/instagram', async (req, res) => {
+    const chatId = req.query.chat_id;
+    if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+    try {
+        await manageStore.clearInstagramConfig(chatId);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+router.get('/channels/instagram/accounts', async (req, res) => {
+    const chatId = req.query.chat_id;
+    if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+    const config = manageStore.getInstagramConfig(chatId);
+    if (!config || !config.access_token) {
+        return res.status(400).json({ error: 'Instagram не подключён или отсутствует access_token. Подключите приложение через Facebook OAuth.' });
+    }
+    try {
+        // Запрос Facebook Pages с привязанными Instagram-аккаунтами
+        const fetch = require('node-fetch');
+        const fbRes = await fetch(
+            `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,instagram_business_account{id,username}&access_token=${encodeURIComponent(config.access_token)}`,
+            { timeout: 15000 }
+        );
+        if (!fbRes.ok) {
+            const err = await fbRes.text();
+            return res.status(fbRes.status).json({ error: `Facebook API error: ${err.slice(0, 300)}` });
+        }
+        const fbData = await fbRes.json();
+        const accounts = (fbData.data || [])
+            .filter(p => p.instagram_business_account)
+            .map(p => ({
+                fb_page_id: p.id,
+                page_name: p.name,
+                ig_user_id: p.instagram_business_account.id,
+                ig_username: p.instagram_business_account.username || ''
+            }));
+        res.json({ accounts });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// === VKontakte Channel ===
+
+router.get('/channels/vk', async (req, res) => {
+    try {
+        const chatId = req.query.chat_id;
+        if (!chatId) {
+            return res.status(400).json({ error: 'chat_id is required' });
+        }
+
+        const vkConfig = manageStore.getVkConfig(chatId);
+        const vkSettings = manageStore.getVkSettings(chatId);
+
+        res.json({
+            connected: !!vkConfig?.group_id,
+            config: vkConfig || {},
+            settings: vkSettings || {}
+        });
+    } catch (e) {
+        console.error('GET /api/manage/channels/vk', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.post('/channels/vk', async (req, res) => {
+    try {
+        const { chat_id, group_id, service_key } = req.body;
+        if (!chat_id || !group_id || !service_key) {
+            return res.status(400).json({ error: 'chat_id, group_id, and service_key are required' });
+        }
+
+        manageStore.setVkConfig(chat_id, {
+            group_id,
+            service_key,
+            is_active: true,
+            connected_at: new Date().toISOString()
+        });
+
+        res.json({ success: true });
+    } catch (e) {
+        console.error('POST /api/manage/channels/vk', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.delete('/channels/vk', async (req, res) => {
+    try {
+        const chatId = req.query.chat_id;
+        if (!chatId) {
+            return res.status(400).json({ error: 'chat_id is required' });
+        }
+
+        manageStore.setVkConfig(chatId, {});
+        manageStore.setVkSettings(chatId, {});
+
+        res.json({ success: true });
+    } catch (e) {
+        console.error('DELETE /api/manage/channels/vk', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.post('/channels/vk/settings', async (req, res) => {
+    try {
+        const {
+            chat_id,
+            schedule_time,
+            schedule_tz,
+            daily_limit,
+            publish_interval_hours,
+            random_publish,
+            premoderation_enabled,
+            post_type,
+            allowed_weekdays
+        } = req.body;
+
+        if (!chat_id) {
+            return res.status(400).json({ error: 'chat_id is required' });
+        }
+
+        manageStore.setVkSettings(chat_id, {
+            schedule_time,
+            schedule_tz,
+            daily_limit,
+            publish_interval_hours,
+            random_publish,
+            premoderation_enabled,
+            post_type,
+            allowed_weekdays
+        });
+
+        res.json({ success: true });
+    } catch (e) {
+        console.error('POST /api/manage/channels/vk/settings', e);
+        res.status(500).json({ error: e.message });
     }
 });
 

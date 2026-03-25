@@ -11,6 +11,7 @@ const { executeAgentLoop, classifyTask } = require('./agentLoop');
 const { getSystemInstruction } = require('../prompts');
 const { enqueue } = require('../agentQueue');
 const contentMvpService = require('../../services/contentMvp.service');
+const pinterestMvpService = require('../../services/pinterestMvp.service');
 
 const bots = new Map(); // chatId -> { bot, token }
 const LOGIN_LINK_MESSAGE_TTL_MS = 10 * 60 * 1000;
@@ -865,8 +866,12 @@ function startBot(chatId, token) {
     // Обработчик загрузки файлов
     bot.action(/^content:(\d+):(approve|regen_text|regen_image|regen_video|reject)$/, async (ctx) => {
         const fromId = String(ctx.from?.id || '');
-        const moderatorId = String(process.env.CONTENT_MVP_MODERATOR_USER_ID || '128247430');
-        if (fromId !== moderatorId) {
+        const settings = contentMvpService.getContentSettings
+            ? contentMvpService.getContentSettings(chatId)
+            : {};
+        const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
+        const allowedIds = new Set([String(chatId), moderatorId].filter(Boolean));
+        if (!allowedIds.has(fromId)) {
             await ctx.answerCbQuery('Недостаточно прав', { show_alert: true }).catch(() => {});
             return;
         }
@@ -885,6 +890,36 @@ function startBot(chatId, token) {
         } catch (e) {
             await ctx.answerCbQuery('Ошибка').catch(() => {});
             await ctx.reply(`Ошибка модерации: ${e.message}`);
+        }
+    });
+
+    // Pinterest moderation callbacks
+    bot.action(/^pin_mod:(\d+):(approve|reject|regen_text|regen_image)$/, async (ctx) => {
+        const fromId = String(ctx.from?.id || '');
+        const settings = contentMvpService.getContentSettings
+            ? contentMvpService.getContentSettings(chatId)
+            : {};
+        const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
+        const allowedIds = new Set([String(chatId), moderatorId].filter(Boolean));
+        if (!allowedIds.has(fromId)) {
+            await ctx.answerCbQuery('Недостаточно прав', { show_alert: true }).catch(() => {});
+            return;
+        }
+
+        const [, jobIdRaw, action] = ctx.match || [];
+        const jobId = Number(jobIdRaw);
+        if (!Number.isFinite(jobId)) {
+            await ctx.answerCbQuery('Некорректный ID').catch(() => {});
+            return;
+        }
+
+        try {
+            const result = await pinterestMvpService.handlePinModerationAction(chatId, { telegram: ctx.telegram }, jobId, action);
+            await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
+            await ctx.reply(result?.message || 'Операция выполнена.');
+        } catch (e) {
+            await ctx.answerCbQuery('Ошибка').catch(() => {});
+            await ctx.reply(`Ошибка модерации Pinterest: ${e.message}`);
         }
     });
 

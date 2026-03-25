@@ -129,7 +129,11 @@ async function startServer() {
     // Запуск Telegram-ботов
     telegramRunner.startAllBots();
     contentMvpService.startScheduler(() => telegramRunner.bots);
-    
+
+    // Запуск Pinterest-планировщика
+    const pinterestMvpService = require('./services/pinterestMvp.service');
+    pinterestMvpService.startScheduler(() => telegramRunner.bots);
+
     // Подключение Webhook API
     const webhookRoutes = require('./routes/webhook.routes');
     app.use('/', webhookRoutes);
@@ -203,6 +207,7 @@ async function gracefulShutdown() {
             emailProcessor.stopEmailCron();
         }
         contentMvpService.stopScheduler();
+        try { require('./services/pinterestMvp.service').stopScheduler(); } catch (_) {}
         await manageStore.persist();
     } catch (e) {
         // ignore

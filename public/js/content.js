@@ -305,46 +305,6 @@ function getImportPayload() {
     };
 }
 
-function renderSheetTopRows(data) {
-    const wrap = document.getElementById('sheetTopRowsWrap');
-    const head = document.getElementById('sheetTopRowsHead');
-    const body = document.getElementById('sheetTopRowsBody');
-    const meta = document.getElementById('sheetTopRowsMeta');
-    if (!wrap || !head || !body || !meta) return;
-
-    const topRows = (data.preview || []).slice(0, 5);
-    if (!topRows.length) {
-        wrap.style.display = 'none';
-        return;
-    }
-
-    wrap.style.display = 'block';
-    meta.textContent = `режим: ${data.mode}, показаны первые ${topRows.length} строк`;
-
-    if (data.mode === 'materials') {
-        head.innerHTML = '<tr><th>Row</th><th>Title</th><th>Source</th><th>Content</th></tr>';
-        body.innerHTML = topRows.map((item) => `
-            <tr>
-                <td>${item.row}</td>
-                <td>${escapeHtml(item.title || '-')}</td>
-                <td>${escapeHtml([item.source_type, item.source_url].filter(Boolean).join(' | ') || '-')}</td>
-                <td>${escapeHtml(shorten(item.content, 140))}</td>
-            </tr>
-        `).join('');
-        return;
-    }
-
-    head.innerHTML = '<tr><th>Row</th><th>Topic</th><th>Focus</th><th>Status</th></tr>';
-    body.innerHTML = topRows.map((item) => `
-        <tr>
-            <td>${item.row}</td>
-            <td>${escapeHtml(item.topic || '-')}</td>
-            <td>${escapeHtml(item.focus || '-')}</td>
-            <td>${escapeHtml(statusRu(item.status))}</td>
-        </tr>
-    `).join('');
-}
-
 function renderImportPreview(data) {
     const wrap = document.getElementById('importPreviewWrap');
     const head = document.getElementById('importPreviewHead');
@@ -378,8 +338,6 @@ function renderImportPreview(data) {
             </tr>
         `).join('') || '<tr><td colspan="5" class="content-empty-cell">Нет строк для импорта</td></tr>';
     }
-
-    renderSheetTopRows(data);
 }
 
 async function previewSheetImport() {

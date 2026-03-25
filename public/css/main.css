@@ -581,6 +581,41 @@ input[type="file"] {
     display: none;
 }
 
+/* Навигация каналов */
+.channel-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 20px;
+    padding: 8px;
+    background: #f1f3f5;
+    border-radius: 10px;
+}
+
+.channel-tab {
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    color: #555;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.channel-tab:hover {
+    background: #e0e0e0;
+    color: #333;
+}
+
+.channel-tab.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
 /* Каналы связи */
 .channels-grid {
     display: grid;

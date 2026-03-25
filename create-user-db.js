@@ -141,13 +141,12 @@ async function createDatabase() {
     // Создаём таблицу content_topics
     await dbClient.query(`
       CREATE TABLE IF NOT EXISTS content_topics (
-        id BIGSERIAL PRIMARY KEY,
-        chat_id TEXT NOT NULL,
-        topic TEXT NOT NULL,
-        focus TEXT,
-        secondary TEXT,
-        lsi TEXT,
-        status TEXT DEFAULT 'pending',
+        id SERIAL PRIMARY KEY,
+        topic VARCHAR(500) NOT NULL,
+        focus VARCHAR(255),
+        secondary VARCHAR(255),
+        lsi VARCHAR(255),
+        status VARCHAR(50) NOT NULL DEFAULT 'pending',
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         used_at TIMESTAMPTZ
       );
@@ -157,12 +156,11 @@ async function createDatabase() {
     // Создаём таблицу content_materials
     await dbClient.query(`
       CREATE TABLE IF NOT EXISTS content_materials (
-        id BIGSERIAL PRIMARY KEY,
-        chat_id TEXT NOT NULL,
-        title TEXT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
         content TEXT NOT NULL,
-        source_type TEXT,
-        source_url TEXT,
+        source_type VARCHAR(50),
+        source_url VARCHAR(500),
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);

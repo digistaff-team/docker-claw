@@ -1,7 +1,7 @@
 const path = require('path');
 const { execFile } = require('child_process');
 const config = require('../config');
-const postgresService = require('./postgres.service');
+const { createUserDatabase, getDatabaseInfo } = require('./postgres.service');
 const storageService = require('./storage.service');
 
 function execFileCommand(file, args, options) {
@@ -133,8 +133,8 @@ async function createUserContainer(chatId, options) {
 
     let dbInfo = null;
     try {
-        await postgresService.createUserDatabase(chatId);
-        dbInfo = await postgresService.getDatabaseInfo(chatId);
+        await createUserDatabase(chatId);
+        dbInfo = await getDatabaseInfo(chatId);
     } catch (e) {
         console.log('[DOCKER] DB creation failed:', e.message);
     }

@@ -226,7 +226,8 @@ class MockVideoProvider extends VideoProvider {
 
   async getStatus(generationId) {
     // Имитируем прогресс
-    const elapsed = Date.now() - parseInt(generationId.split('_')[1]);
+    const parts = generationId.split('_');
+    const elapsed = Date.now() - parseInt(parts[1] || '0');
     
     if (elapsed < 5000) {
       return { status: VIDEO_STATUS.PENDING, progress: 10 };

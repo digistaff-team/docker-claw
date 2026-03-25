@@ -38,7 +38,22 @@
                 <h2>📡 Каналы для публикаций</h2>
                 <p style="color: #666; margin-bottom: 20px;">Подключите каналы для публикаций контента</p>
 
-                <div class="channels-grid">
+                <nav class="channel-tabs" id="channelTabs">
+                    <button class="channel-tab active" data-channel="telegram">Telegram</button>
+                    <button class="channel-tab" data-channel="pinterest">Pinterest</button>
+                    <button class="channel-tab" data-channel="instagram">Instagram</button>
+                    <button class="channel-tab" data-channel="vk">VK</button>
+                    <button class="channel-tab" data-channel="youtube">YouTube</button>
+                    <button class="channel-tab" data-channel="blog">Blog/Website</button>
+                    <button class="channel-tab" data-channel="email">Email</button>
+                    <button class="channel-tab" data-channel="facebook">Facebook</button>
+                    <button class="channel-tab" data-channel="ok">Одноклассники</button>
+                    <button class="channel-tab" data-channel="dzen">Яндекс-Дзен</button>
+                    <button class="channel-tab" data-channel="tiktok">TikTok</button>
+                </nav>
+
+                <!-- Telegram -->
+                <div class="channel-panel" id="channelPanel-telegram">
                     <div class="channel-card">
                         <h3>📱 Телеграм Бот</h3>
                         <p>Токен из @BotFather. После сохранения отправьте боту любое сообщение — он пришлёт код. Введите код ниже и нажмите Подтвердить.</p>
@@ -160,12 +175,347 @@
                                     <label for="contentDailyLimit">Daily Limit</label>
                                     <input type="number" id="contentDailyLimit" min="1" placeholder="1" />
                                 </div>
+                                <div>
+                                    <label for="contentPublishInterval">Периодичность публикаций</label>
+                                    <select id="contentPublishInterval">
+                                        <option value="0.5">Каждые 30 мин.</option>
+                                        <option value="1">Каждый час</option>
+                                        <option value="3">Каждые 3 часа</option>
+                                        <option value="5">Каждые 5 часов</option>
+                                        <option value="12">Каждые 12 часов</option>
+                                        <option value="24" selected>Раз в сутки</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    <span style="font-size: 13px; font-weight: 600; color: #495057; position: relative; top: -4px;">Дни недели:</span>
+                                    <label><input type="checkbox" value="1" id="weekday1" checked> Пн</label>
+                                    <label><input type="checkbox" value="2" id="weekday2" checked> Вт</label>
+                                    <label><input type="checkbox" value="3" id="weekday3" checked> Ср</label>
+                                    <label><input type="checkbox" value="4" id="weekday4" checked> Чт</label>
+                                    <label><input type="checkbox" value="5" id="weekday5" checked> Пт</label>
+                                    <label><input type="checkbox" value="6" id="weekday6"> Сб</label>
+                                    <label><input type="checkbox" value="0" id="weekday0"> Вс</label>
+                                </div>
+                                <label style="cursor: pointer; white-space: nowrap;"><input type="checkbox" id="contentRandomPublish" style="margin-right: 4px;">Рандом</label>
+                            </div>
+                            <div style="margin-bottom: 12px;">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="contentPremoderation" checked />
+                                    <span>Включить премодерацию</span>
+                                </label>
+                                <p style="color: #666; font-size: 12px; margin-top: 4px;">Если включено — контент будет отправляться вам на согласование перед публикацией в канале.</p>
                             </div>
                             <button class="btn btn-success" onclick="saveContentSettings()">Сохранить настройки</button>
                             <div id="contentSettingsStatus" style="margin-top: 10px; font-size: 13px;"></div>
                         </div>
                     </div>
+                </div>
 
+                <!-- Pinterest -->
+                <div class="channel-panel" id="channelPanel-pinterest" style="display: none;">
+                    <div class="channel-card">
+                        <h3>📌 Pinterest</h3>
+                        <p>Публикация пинов на доски Pinterest. Подключение через OAuth или ручной ввод ключей API.</p>
+
+                        <div id="pinterestAuthBlock">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div>
+                                    <label for="pinterestAppId">App ID</label>
+                                    <input type="text" id="pinterestAppId" placeholder="Pinterest App ID" />
+                                </div>
+                                <div>
+                                    <label for="pinterestAppSecret">App Secret</label>
+                                    <input type="password" id="pinterestAppSecret" placeholder="Pinterest App Secret" autocomplete="off" />
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                                <button class="btn btn-primary" onclick="connectPinterest()">🔗 Подключить Pinterest</button>
+                                <button class="btn btn-secondary" id="disconnectPinterestBtn" style="display: none;" onclick="disconnectPinterest()">Отключить</button>
+                            </div>
+                        </div>
+                        <div id="pinterestStatus" class="channel-status" style="margin-top: 14px; font-size: 14px;"></div>
+
+                        <div id="pinterestSettingsBlock" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+                            <h3 style="margin-bottom: 12px;">Настройки доски</h3>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div>
+                                    <label for="pinterestBoardSelect">Доска</label>
+                                    <div style="display: flex; gap: 8px; align-items: flex-start;">
+                                        <select id="pinterestBoardSelect" style="flex: 1;" onchange="onPinterestBoardSelect()">
+                                            <option value="">— выберите доску —</option>
+                                        </select>
+                                        <button class="btn btn-secondary" onclick="loadPinterestBoards()" style="white-space: nowrap; padding: 12px 14px;">🔄</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label for="pinterestBoardId">Board ID</label>
+                                    <input type="text" id="pinterestBoardId" placeholder="Заполнится автоматически" readonly style="background: #f1f3f5;" />
+                                </div>
+                            </div>
+                            <div style="margin-bottom: 10px;">
+                                <label for="pinterestWebsiteUrl">Website URL (ссылка для пинов)</label>
+                                <input type="text" id="pinterestWebsiteUrl" placeholder="https://example.com" />
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 12px;">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="pinterestIsActive" checked />
+                                    <span>Канал активен</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="pinterestAutoPublish" />
+                                    <span>Автопубликация</span>
+                                </label>
+                            </div>
+                            <p style="color: #666; font-size: 12px; margin-bottom: 12px;">Если автопубликация выключена — пины будут отправляться в Telegram-бот на модерацию перед публикацией.</p>
+                            <button class="btn btn-success" onclick="savePinterestConfig()">💾 Сохранить настройки</button>
+                            <div id="pinterestSettingsStatus" style="margin-top: 10px; font-size: 13px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Instagram -->
+                <div class="channel-panel" id="channelPanel-instagram" style="display: none;">
+                    <div class="channel-card">
+                        <h3>📸 Instagram</h3>
+                        <p>Публикация постов, сторис и reels через Instagram Graph API. Требуется бизнес-аккаунт, привязанный к Facebook Page.</p>
+
+                        <div id="instagramAuthBlock">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div>
+                                    <label for="instagramAppId">Facebook App ID</label>
+                                    <input type="text" id="instagramAppId" placeholder="Facebook App ID" />
+                                </div>
+                                <div>
+                                    <label for="instagramAppSecret">Facebook App Secret</label>
+                                    <input type="password" id="instagramAppSecret" placeholder="Facebook App Secret" autocomplete="off" />
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                                <button class="btn btn-primary" onclick="connectInstagram()">🔗 Подключить через Facebook</button>
+                                <button class="btn btn-secondary" id="disconnectInstagramBtn" style="display: none;" onclick="disconnectInstagram()">Отключить</button>
+                            </div>
+                        </div>
+                        <div id="instagramStatus" class="channel-status" style="margin-top: 14px; font-size: 14px;"></div>
+
+                        <div id="instagramSettingsBlock" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+                            <h3 style="margin-bottom: 12px;">Выбор аккаунта</h3>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div>
+                                    <label for="instagramPageSelect">Facebook Page</label>
+                                    <div style="display: flex; gap: 8px; align-items: flex-start;">
+                                        <select id="instagramPageSelect" style="flex: 1;" onchange="onInstagramPageSelect()">
+                                            <option value="">— выберите страницу —</option>
+                                        </select>
+                                        <button class="btn btn-secondary" onclick="loadInstagramAccounts()" style="white-space: nowrap; padding: 12px 14px;">🔄</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label for="instagramAccountId">Instagram Account ID</label>
+                                    <input type="text" id="instagramAccountId" placeholder="Заполнится автоматически" readonly style="background: #f1f3f5;" />
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div>
+                                    <label for="instagramFbPageId">Facebook Page ID</label>
+                                    <input type="text" id="instagramFbPageId" placeholder="Заполнится автоматически" readonly style="background: #f1f3f5;" />
+                                </div>
+                                <div>
+                                    <label for="instagramUsername">Instagram Username</label>
+                                    <input type="text" id="instagramUsername" placeholder="" readonly style="background: #f1f3f5;" />
+                                </div>
+                            </div>
+
+                            <h3 style="margin-top: 20px; margin-bottom: 12px;">Настройки публикации</h3>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div>
+                                    <label for="instagramDefaultAltText">Alt Text по умолчанию</label>
+                                    <input type="text" id="instagramDefaultAltText" placeholder="Описание для доступности" />
+                                </div>
+                                <div>
+                                    <label for="instagramLocationId">Location ID (опционально)</label>
+                                    <input type="text" id="instagramLocationId" placeholder="Facebook Location ID" />
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 12px;">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="instagramIsActive" checked />
+                                    <span>Канал активен</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="instagramAutoPublish" />
+                                    <span>Автопубликация</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="instagramIsReel" />
+                                    <span>Reels по умолчанию</span>
+                                </label>
+                            </div>
+
+                            <h3 style="margin-top: 20px; margin-bottom: 12px;">Лимиты и расписание</h3>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div>
+                                    <label for="instagramDailyLimit">Лимит публикаций в день</label>
+                                    <input type="number" id="instagramDailyLimit" min="1" max="25" value="5" />
+                                </div>
+                                <div>
+                                    <label for="instagramPostingHours">Часы публикации (через запятую)</label>
+                                    <input type="text" id="instagramPostingHours" placeholder="9,12,15,18,21" />
+                                </div>
+                            </div>
+                            <p style="color: #666; font-size: 12px; margin-bottom: 12px;">Instagram Graph API лимит: 25 публикаций в сутки. Требуется бизнес-аккаунт и одобрение приложения в Meta.</p>
+                            <button class="btn btn-success" onclick="saveInstagramConfig()">💾 Сохранить настройки</button>
+                            <div id="instagramSettingsStatus" style="margin-top: 10px; font-size: 13px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VK -->
+                <div class="channel-panel" id="channelPanel-vk" style="display: none;">
+                    <div class="channel-card">
+                        <h3>🔵 VK</h3>
+                        <p>Публикация в сообщества и на стену. Подключение через VK API.</p>
+
+                        <!-- Авторизация -->
+                        <div id="vkAuthBlock">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div>
+                                    <label for="vkGroupId">Group ID</label>
+                                    <input type="text" id="vkGroupId" placeholder="123456789" />
+                                </div>
+                                <div>
+                                    <label for="vkServiceKey">Service Key</label>
+                                    <input type="password" id="vkServiceKey" placeholder="VK Service Key" autocomplete="off" />
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                                <button class="btn btn-primary" onclick="saveVkToken()">💾 Сохранить токен</button>
+                                <button class="btn btn-secondary" id="disconnectVkBtn" style="display: none;" onclick="disconnectVk()">Отключить</button>
+                            </div>
+                        </div>
+                        <div id="vkStatus" class="channel-status" style="margin-top: 14px; font-size: 14px;"></div>
+
+                        <!-- Настройки публикации -->
+                        <div id="vkSettingsBlock" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+                            <h3 style="margin-bottom: 12px;">Настройки публикации</h3>
+                            <p style="color: #666; margin-bottom: 16px; font-size: 13px;">Настройки публикации контента в VK: расписание, лимиты, дни недели.</p>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                                <div>
+                                    <label for="vkScheduleTime">Schedule Time (HH:MM)</label>
+                                    <div style="display: flex; gap: 8px; align-items: center;">
+                                        <select id="vkScheduleHour" style="width: 80px; margin-bottom: 0;" onchange="updateVkScheduleTime()">
+                                            <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
+                                            <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
+                                            <option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option>
+                                            <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                                            <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
+                                            <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                                        </select>
+                                        <span style="font-size: 18px; font-weight: 600;">:</span>
+                                        <input type="text" id="vkScheduleMinute" placeholder="00" style="width: 70px; margin-bottom: 0; text-align: center;" maxlength="2" onchange="validateVkMinutes()" oninput="validateVkMinutes()" />
+                                        <input type="hidden" id="vkScheduleTime" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label for="vkScheduleTz">Schedule TZ</label>
+                                    <select id="vkScheduleTz" onchange="updateVkScheduleTz()">
+                                        <option value="UTC">UTC (Coordinated Universal Time)</option>
+                                        <option value="Europe/Moscow" selected>Europe/Moscow (UTC+3)</option>
+                                        <option value="Europe/Kiev">Europe/Kiev (UTC+2)</option>
+                                        <option value="Europe/Minsk">Europe/Minsk (UTC+3)</option>
+                                        <option value="Europe/London">Europe/London (UTC+0)</option>
+                                        <option value="Europe/Berlin">Europe/Berlin (UTC+1)</option>
+                                        <option value="Europe/Paris">Europe/Paris (UTC+1)</option>
+                                        <option value="Asia/Almaty">Asia/Almaty (UTC+5)</option>
+                                        <option value="Asia/Tashkent">Asia/Tashkent (UTC+5)</option>
+                                        <option value="Asia/Yekaterinburg">Asia/Yekaterinburg (UTC+5)</option>
+                                        <option value="Asia/Novosibirsk">Asia/Novosibirsk (UTC+7)</option>
+                                        <option value="Asia/Vladivostok">Asia/Vladivostok (UTC+10)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="vkDailyLimit">Daily Limit</label>
+                                    <input type="number" id="vkDailyLimit" min="1" placeholder="5" />
+                                </div>
+                                <div>
+                                    <label for="vkPublishInterval">Периодичность публикаций</label>
+                                    <select id="vkPublishInterval">
+                                        <option value="0.5">Каждые 30 мин.</option>
+                                        <option value="1">Каждый час</option>
+                                        <option value="3">Каждые 3 часа</option>
+                                        <option value="5">Каждые 5 часов</option>
+                                        <option value="12">Каждые 12 часов</option>
+                                        <option value="24" selected>Раз в сутки</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    <span style="font-size: 13px; font-weight: 600; color: #495057; position: relative; top: -4px;">Дни недели:</span>
+                                    <label><input type="checkbox" value="1" id="vkWeekday1" checked> Пн</label>
+                                    <label><input type="checkbox" value="2" id="vkWeekday2" checked> Вт</label>
+                                    <label><input type="checkbox" value="3" id="vkWeekday3" checked> Ср</label>
+                                    <label><input type="checkbox" value="4" id="vkWeekday4" checked> Чт</label>
+                                    <label><input type="checkbox" value="5" id="vkWeekday5" checked> Пт</label>
+                                    <label><input type="checkbox" value="6" id="vkWeekday6"> Сб</label>
+                                    <label><input type="checkbox" value="0" id="vkWeekday0"> Вс</label>
+                                </div>
+                                <label style="cursor: pointer; white-space: nowrap;">
+                                    <input type="checkbox" id="vkRandomPublish" style="margin-right: 4px;">Рандом
+                                </label>
+                            </div>
+
+                            <div style="margin-bottom: 12px;">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="vkPremoderation" checked />
+                                    <span>Включить премодерацию</span>
+                                </label>
+                                <p style="color: #666; font-size: 12px; margin-top: 4px;">Если включено — контент будет отправляться в Telegram-бот на согласование перед публикацией.</p>
+                            </div>
+
+                            <div style="margin-bottom: 12px;">
+                                <label for="vkPostType">Тип поста по умолчанию</label>
+                                <select id="vkPostType">
+                                    <option value="post">Пост</option>
+                                    <option value="article">Статья (лонгрид)</option>
+                                    <option value="video">Видео</option>
+                                </select>
+                                <p style="color: #666; font-size: 12px; margin-top: 4px;">
+                                    <strong>Пост</strong> — обычная запись на стене.<br>
+                                    <strong>Статья</strong> — лонгрид с форматированием (аналог Telegraph).<br>
+                                    <strong>Видео</strong> — загрузка видео в раздел Видео.
+                                </p>
+                            </div>
+
+                            <button class="btn btn-success" onclick="saveVkSettings()">Сохранить настройки</button>
+                            <div id="vkSettingsStatus" style="margin-top: 10px; font-size: 13px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- YouTube -->
+                <div class="channel-panel" id="channelPanel-youtube" style="display: none;">
+                    <div class="channel-card">
+                        <h3>▶️ YouTube</h3>
+                        <p>Загрузка видео, shorts и управление каналом. Подключение через YouTube Data API.</p>
+                        <p style="color: #999; font-style: italic;">Скоро будет доступно. Канал находится в разработке.</p>
+                    </div>
+                </div>
+
+                <!-- Blog/Website -->
+                <div class="channel-panel" id="channelPanel-blog" style="display: none;">
+                    <div class="channel-card">
+                        <h3>🌐 Blog/Website</h3>
+                        <p>Публикация статей на сайт или блог. Поддержка WordPress, Ghost и других CMS.</p>
+                        <p style="color: #999; font-style: italic;">Скоро будет доступно. Канал находится в разработке.</p>
+                    </div>
+                </div>
+
+                <!-- Email -->
+                <div class="channel-panel" id="channelPanel-email" style="display: none;">
                     <div class="channel-card">
                         <h3>📧 Email</h3>
                         <p>Настройки IMAP (входящие письма как команды) и SMTP (ответы от ИИ). Каждое непрочитанное письмо в INBOX обрабатывается ИИ-агентом, ответ отправляется на почту.</p>
@@ -176,7 +526,7 @@
                             </div>
                             <div>
                                 <label for="emailImapPort">IMAP Port</label>
-                                <input type="text" id="emailImapPort" type="number" value="993" style="width: 80px;" />
+                                <input type="number" id="emailImapPort" value="993" style="width: 80px;" />
                             </div>
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
@@ -196,7 +546,7 @@
                             </div>
                             <div>
                                 <label for="emailSmtpPort">SMTP Port</label>
-                                <input type="text" id="emailSmtpPort" type="number" value="587" style="width: 80px;" />
+                                <input type="number" id="emailSmtpPort" value="587" style="width: 80px;" />
                             </div>
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
@@ -226,8 +576,44 @@
                         </div>
                         <div id="emailStatus" class="channel-status" style="margin-top: 14px; font-size: 14px;"></div>
                     </div>
-
                 </div>
+
+                <!-- Facebook -->
+                <div class="channel-panel" id="channelPanel-facebook" style="display: none;">
+                    <div class="channel-card">
+                        <h3>📘 Facebook</h3>
+                        <p>Публикация постов на страницы и в группы. Подключение через Facebook Graph API.</p>
+                        <p style="color: #999; font-style: italic;">Скоро будет доступно. Канал находится в разработке.</p>
+                    </div>
+                </div>
+
+                <!-- Одноклассники -->
+                <div class="channel-panel" id="channelPanel-ok" style="display: none;">
+                    <div class="channel-card">
+                        <h3>🟠 Одноклассники</h3>
+                        <p>Публикация в группы и на стену. Подключение через OK API.</p>
+                        <p style="color: #999; font-style: italic;">Скоро будет доступно. Канал находится в разработке.</p>
+                    </div>
+                </div>
+
+                <!-- Яндекс-Дзен -->
+                <div class="channel-panel" id="channelPanel-dzen" style="display: none;">
+                    <div class="channel-card">
+                        <h3>🟡 Яндекс-Дзен</h3>
+                        <p>Публикация статей и постов на Дзен. Подключение через Дзен API.</p>
+                        <p style="color: #999; font-style: italic;">Скоро будет доступно. Канал находится в разработке.</p>
+                    </div>
+                </div>
+
+                <!-- TikTok -->
+                <div class="channel-panel" id="channelPanel-tiktok" style="display: none;">
+                    <div class="channel-card">
+                        <h3>🎵 TikTok</h3>
+                        <p>Загрузка видео и управление аккаунтом. Подключение через TikTok API.</p>
+                        <p style="color: #999; font-style: italic;">Скоро будет доступно. Канал находится в разработке.</p>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
@@ -238,6 +624,7 @@
         // Доступна без авторизации - для подключения бота
         window.addEventListener('load', () => {
             renderMenu('/channels.html');
+            initChannelTabs();
             initChannelsAuth();
         });
     </script>

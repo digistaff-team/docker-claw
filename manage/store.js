@@ -493,7 +493,203 @@ function setContentSettings(chatId, patch = {}) {
         }
     }
 
+    if (patch.randomPublish !== undefined) {
+        next.randomPublish = !!patch.randomPublish;
+    }
+    if (patch.premoderationEnabled !== undefined) {
+        next.premoderationEnabled = !!patch.premoderationEnabled;
+    }
+    if (patch.publishIntervalHours !== undefined) {
+        const allowed = [0.5, 1, 3, 5, 12, 24];
+        const val = parseFloat(patch.publishIntervalHours);
+        if (!allowed.includes(val)) {
+            throw new Error('publishIntervalHours must be one of: ' + allowed.join(', '));
+        }
+        next.publishIntervalHours = val;
+    }
+    if (patch.allowedWeekdays !== undefined) {
+        if (!Array.isArray(patch.allowedWeekdays)) {
+            throw new Error('allowedWeekdays must be an array');
+        }
+        const days = patch.allowedWeekdays
+            .map(d => parseInt(d, 10))
+            .filter(d => Number.isFinite(d) && d >= 0 && d <= 6);
+        next.allowedWeekdays = [...new Set(days)].sort();
+    }
+
     statesCache[chatId].contentSettings = next;
+    return persist(chatId);
+}
+
+// === Pinterest Config ===
+
+function getPinterestConfig(chatId) {
+    const data = statesCache[chatId];
+    return data?.pinterestConfig || null;
+}
+
+function setPinterestConfig(chatId, patch = {}) {
+    if (!statesCache[chatId]) statesCache[chatId] = {};
+    const current = statesCache[chatId].pinterestConfig || {};
+    const next = { ...current };
+
+    if (patch.app_id !== undefined) next.app_id = String(patch.app_id || '').trim() || null;
+    if (patch.app_secret !== undefined) next.app_secret = String(patch.app_secret || '').trim() || null;
+    if (patch.access_token !== undefined) next.access_token = patch.access_token || null;
+    if (patch.refresh_token !== undefined) next.refresh_token = patch.refresh_token || null;
+    if (patch.access_token_expires !== undefined) next.access_token_expires = patch.access_token_expires || null;
+    if (patch.board_id !== undefined) next.board_id = String(patch.board_id || '').trim() || null;
+    if (patch.board_name !== undefined) next.board_name = String(patch.board_name || '').trim() || null;
+    if (patch.website_url !== undefined) next.website_url = String(patch.website_url || '').trim() || null;
+    if (patch.is_active !== undefined) next.is_active = !!patch.is_active;
+    if (patch.auto_publish !== undefined) next.auto_publish = !!patch.auto_publish;
+    if (patch.boards !== undefined && Array.isArray(patch.boards)) next.boards = patch.boards;
+    if (patch.board_rotation !== undefined) next.board_rotation = patch.board_rotation || 'random';
+    if (patch.last_board_index !== undefined) next.last_board_index = parseInt(patch.last_board_index, 10) || 0;
+    if (patch.stats !== undefined) next.stats = { ...(next.stats || {}), ...patch.stats };
+
+    statesCache[chatId].pinterestConfig = next;
+    return persist(chatId);
+}
+
+function clearPinterestConfig(chatId) {
+    if (statesCache[chatId]) {
+        delete statesCache[chatId].pinterestConfig;
+        return persist(chatId);
+    }
+}
+
+function getInstagramConfig(chatId) {
+    const data = statesCache[chatId];
+    return data?.instagramConfig || null;
+}
+
+function setInstagramConfig(chatId, patch = {}) {
+    if (!statesCache[chatId]) statesCache[chatId] = {};
+    const current = statesCache[chatId].instagramConfig || {};
+    const next = { ...current };
+
+    if (patch.app_id !== undefined) next.app_id = String(patch.app_id || '').trim() || null;
+    if (patch.app_secret !== undefined) next.app_secret = String(patch.app_secret || '').trim() || null;
+    if (patch.access_token !== undefined) next.access_token = patch.access_token || null;
+    if (patch.fb_page_id !== undefined) next.fb_page_id = String(patch.fb_page_id || '').trim() || null;
+    if (patch.fb_page_name !== undefined) next.fb_page_name = String(patch.fb_page_name || '').trim() || null;
+    if (patch.ig_user_id !== undefined) next.ig_user_id = String(patch.ig_user_id || '').trim() || null;
+    if (patch.ig_username !== undefined) next.ig_username = String(patch.ig_username || '').trim() || null;
+    if (patch.default_alt_text !== undefined) next.default_alt_text = String(patch.default_alt_text || '').trim() || null;
+    if (patch.location_id !== undefined) next.location_id = String(patch.location_id || '').trim() || null;
+    if (patch.is_active !== undefined) next.is_active = !!patch.is_active;
+    if (patch.auto_publish !== undefined) next.auto_publish = !!patch.auto_publish;
+    if (patch.is_reel !== undefined) next.is_reel = !!patch.is_reel;
+    if (patch.daily_limit !== undefined) next.daily_limit = Math.min(Math.max(parseInt(patch.daily_limit, 10) || 5, 1), 25);
+    if (patch.posting_hours !== undefined && Array.isArray(patch.posting_hours)) next.posting_hours = patch.posting_hours;
+    if (patch.stats !== undefined) next.stats = { ...(next.stats || {}), ...patch.stats };
+
+    statesCache[chatId].instagramConfig = next;
+    return persist(chatId);
+}
+
+function clearInstagramConfig(chatId) {
+    if (statesCache[chatId]) {
+        delete statesCache[chatId].instagramConfig;
+        return persist(chatId);
+    }
+}
+
+// === VK Config ===
+
+function getVkConfig(chatId) {
+    const data = statesCache[chatId];
+    return data?.vkConfig || null;
+}
+
+function setVkConfig(chatId, patch = {}) {
+    if (!statesCache[chatId]) statesCache[chatId] = {};
+    const current = statesCache[chatId].vkConfig || {};
+    const next = { ...current };
+
+    if (patch.group_id !== undefined) next.group_id = String(patch.group_id || '').trim() || null;
+    if (patch.service_key !== undefined) next.service_key = patch.service_key || null;
+    if (patch.is_active !== undefined) next.is_active = !!patch.is_active;
+    if (patch.connected_at !== undefined) next.connected_at = patch.connected_at;
+
+    statesCache[chatId].vkConfig = next;
+    return persist(chatId);
+}
+
+// === VK Settings ===
+
+function getVkSettings(chatId) {
+    const data = statesCache[chatId];
+    return data?.vkSettings || null;
+}
+
+function setVkSettings(chatId, patch = {}) {
+    if (!statesCache[chatId]) statesCache[chatId] = {};
+    const current = statesCache[chatId].vkSettings || {};
+    const next = { ...current };
+
+    if (patch.schedule_time !== undefined) {
+        const scheduleTime = String(patch.schedule_time || '').trim();
+        if (scheduleTime && !/^\d{2}:\d{2}$/.test(scheduleTime)) {
+            throw new Error('schedule_time must be in HH:MM format');
+        }
+        next.schedule_time = scheduleTime || null;
+    }
+
+    if (patch.schedule_tz !== undefined) {
+        next.schedule_tz = String(patch.schedule_tz || '').trim() || null;
+    }
+
+    if (patch.daily_limit !== undefined) {
+        if (patch.daily_limit === null || patch.daily_limit === '') {
+            next.daily_limit = null;
+        } else {
+            const parsedLimit = parseInt(patch.daily_limit, 10);
+            if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) {
+                throw new Error('daily_limit must be a positive integer');
+            }
+            next.daily_limit = parsedLimit;
+        }
+    }
+
+    if (patch.random_publish !== undefined) {
+        next.random_publish = !!patch.random_publish;
+    }
+
+    if (patch.premoderation_enabled !== undefined) {
+        next.premoderation_enabled = !!patch.premoderation_enabled;
+    }
+
+    if (patch.publish_interval_hours !== undefined) {
+        const allowed = [0.5, 1, 3, 5, 12, 24];
+        const val = parseFloat(patch.publish_interval_hours);
+        if (!allowed.includes(val)) {
+            throw new Error('publish_interval_hours must be one of: ' + allowed.join(', '));
+        }
+        next.publish_interval_hours = val;
+    }
+
+    if (patch.allowed_weekdays !== undefined) {
+        if (!Array.isArray(patch.allowed_weekdays)) {
+            throw new Error('allowed_weekdays must be an array');
+        }
+        const days = patch.allowed_weekdays
+            .map(d => parseInt(d, 10))
+            .filter(d => Number.isFinite(d) && d >= 0 && d <= 6);
+        next.allowed_weekdays = [...new Set(days)].sort();
+    }
+
+    if (patch.post_type !== undefined) {
+        const allowedTypes = ['post', 'article', 'video'];
+        const postType = String(patch.post_type || '').trim().toLowerCase();
+        if (!allowedTypes.includes(postType)) {
+            throw new Error('post_type must be one of: ' + allowedTypes.join(', '));
+        }
+        next.post_type = postType;
+    }
+
+    statesCache[chatId].vkSettings = next;
     return persist(chatId);
 }
 
@@ -758,6 +954,16 @@ module.exports = {
     getConfigPath,
     getContentSettings,
     setContentSettings,
+    getPinterestConfig,
+    setPinterestConfig,
+    clearPinterestConfig,
+    getInstagramConfig,
+    setInstagramConfig,
+    clearInstagramConfig,
+    getVkConfig,
+    setVkConfig,
+    getVkSettings,
+    setVkSettings,
     getContextSettings,
     setContextSettings,
     addAIMessage,

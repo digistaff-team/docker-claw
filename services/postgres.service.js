@@ -62,7 +62,8 @@ function getDbName(chatId) {
 async function createUserDatabase(chatId) {
     const dbName = getDbName(chatId);
 
-    const createdDbName = await runWithAdminClient('postgres', async (client) => {
+    // Проверяем и создаём БД без использования contentRepository (циклическая зависимость)
+    await runWithAdminClient('postgres', async (client) => {
         const checkResult = await client.query(
             'SELECT 1 FROM pg_database WHERE datname = $1',
             [dbName]
@@ -72,10 +73,10 @@ async function createUserDatabase(chatId) {
             await client.query(`CREATE DATABASE ${dbName}`);
             console.log(`[DB] Created database: ${dbName}`);
         }
-
-        return dbName;
     });
 
+    // Создаём схему контента (циклической зависимости больше нет,
+    // т.к. repository.js не импортирует postgres.service.js)
     try {
         await contentRepository.ensureSchema(chatId);
     } catch (error) {
@@ -83,7 +84,7 @@ async function createUserDatabase(chatId) {
         throw error;
     }
 
-    return createdDbName;
+    return dbName;
 }
 
 async function deleteUserDatabase(chatId) {

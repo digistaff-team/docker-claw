@@ -1,6 +1,6 @@
 const config = require('../config');
 const dockerService = require('./docker.service');
-const postgresService = require('./postgres.service');
+const { databaseExists, createUserDatabase, getDatabaseInfo, deleteUserDatabase } = require('./postgres.service');
 const storageService = require('./storage.service');
 
 // Хранилище сессий в памяти
@@ -26,9 +26,9 @@ async function verifyContainerDeps(chatId) {
     
     // Создаём БД пользователя для контента
     try {
-        const dbExists = await postgresService.databaseExists(chatId);
+        const dbExists = await databaseExists(chatId);
         if (!dbExists) {
-            await postgresService.createUserDatabase(chatId);
+            await createUserDatabase(chatId);
             console.log(`[SESSION] База данных создана для chatId: ${chatId}`);
         }
     } catch (err) {
@@ -121,7 +121,7 @@ async function recoverSession(chatId) {
         }
     }
     
-    const dbInfo = await postgresService.getDatabaseInfo(chatId);
+    const dbInfo = await getDatabaseInfo(chatId);
     const dataDir = storageService.getDataDir(chatId);
     
     const session = {
@@ -199,7 +199,7 @@ async function destroySession(chatId) {
     
     if (session) {
         await dockerService.removeContainer(session.containerId);
-        await postgresService.deleteUserDatabase(chatId);
+        await deleteUserDatabase(chatId);
         sessions.delete(chatId);
         console.log(`[SESSION] Destroyed: ${chatId}`);
     }

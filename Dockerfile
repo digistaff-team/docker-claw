@@ -1,19 +1,14 @@
-FROM node:18-alpine
-
-# Устанавливаем bash и другие утилиты
-RUN apk add --no-cache bash docker curl
-
+# Stage 1: сборка зависимостей
+FROM node:18-slim AS builder
 WORKDIR /app
-
-# Копируем package.json и устанавливаем зависимости
 COPY package*.json ./
-RUN npm ci --only=production
-
-# Копируем исходный код
+RUN npm ci --include=optional
 COPY . .
 
-# Порт приложения (измените, если у вас другой)
-EXPOSE 3000
-
-# Запуск сервера
+# Stage 2: финальный минимальный образ
+FROM node:18-slim
+RUN apt-get update && apt-get install -y --no-install-recommends libvips && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app .
 CMD ["node", "server.js"]

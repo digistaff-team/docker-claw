@@ -4,10 +4,11 @@
 const { Client } = require('pg');
 const config = require('../../config');
 const { JOB_STATUS, POST_STATUS, PUBLISH_LOG_STATUS, validateJobStatusTransition } = require('./status');
-const postgresService = require('../postgres.service');
 
-// Используем единую функцию getDbName из postgres.service
-const { getDbName, databaseExists, createUserDatabase } = postgresService;
+// Функция для генерации имени БД (дублируем здесь, чтобы избежать циклической зависимости)
+function getDbName(chatId) {
+  return `db_${String(chatId).replace(/[^a-z0-9_]/gi, '_').toLowerCase()}`;
+}
 
 function getDbClient(chatId) {
   return new Client({
@@ -22,11 +23,8 @@ function getDbClient(chatId) {
 }
 
 async function withClient(chatId, fn) {
-  // Проверяем и создаём БД если не существует
-  const dbExists = await postgresService.databaseExists(chatId);
-  if (!dbExists) {
-    await postgresService.createUserDatabase(chatId);
-  }
+  // База данных создаётся автоматически при создании сессии в session.service.js
+  // Здесь только подключаемся к уже существующей БД
   
   const client = getDbClient(chatId);
   await client.connect();
@@ -177,6 +175,46 @@ async function ensureSchema(chatId) {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_content_topics_status_created_at
       ON content_topics(status, created_at, id);
+    `);
+
+    // Pinterest tables
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pinterest_jobs (
+        id BIGSERIAL PRIMARY KEY,
+        chat_id TEXT NOT NULL,
+        topic TEXT NOT NULL,
+        board_id TEXT,
+        board_name TEXT,
+        pin_title TEXT,
+        pin_description TEXT,
+        seo_keywords TEXT,
+        image_prompt TEXT,
+        image_path TEXT,
+        link TEXT,
+        status TEXT NOT NULL DEFAULT 'draft',
+        error_text TEXT,
+        image_attempts INT NOT NULL DEFAULT 0,
+        rejected_count INT NOT NULL DEFAULT 0,
+        correlation_id TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pinterest_publish_logs (
+        id BIGSERIAL PRIMARY KEY,
+        job_id BIGINT REFERENCES pinterest_jobs(id) ON DELETE SET NULL,
+        board_id TEXT NOT NULL,
+        pin_id TEXT,
+        status TEXT NOT NULL,
+        error_text TEXT,
+        correlation_id TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_pinterest_jobs_status
+      ON pinterest_jobs(status, created_at);
     `);
   });
 }
