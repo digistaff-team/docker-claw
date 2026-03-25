@@ -298,7 +298,7 @@ router.post('/telegram-login', async (req, res) => {
             
             const appUrl = config.APP_URL;
             const webLoginToken = issueTelegramWebLoginToken(telegramId, telegramId, directState.verifiedUsername || username);
-            
+
             return res.json({
                 success: true,
                 chatId: telegramId,
@@ -307,7 +307,7 @@ router.post('/telegram-login', async (req, res) => {
                 hasBot: !!directState.token,
                 hasAI: !!(directState.aiAuthToken && directState.aiModel),
                 sessionActive: !!session,
-                redirectUrl: `${appUrl}/?tg_login_token=${webLoginToken}`,
+                redirectUrl: `${appUrl}/console.html?tg_login_token=${webLoginToken}`,
                 message: 'Авторизация успешна'
             });
         } catch (e) {
@@ -335,7 +335,7 @@ router.post('/telegram-login', async (req, res) => {
             
             const appUrl = config.APP_URL;
             const webLoginToken = issueTelegramWebLoginToken(foundChatId, telegramId, foundState.verifiedUsername || username);
-            
+
             return res.json({
                 success: true,
                 chatId: foundChatId,
@@ -344,7 +344,7 @@ router.post('/telegram-login', async (req, res) => {
                 hasBot: !!foundState.token,
                 hasAI: !!(foundState.aiAuthToken && foundState.aiModel),
                 sessionActive: !!session,
-                redirectUrl: `${appUrl}/?tg_login_token=${webLoginToken}`,
+                redirectUrl: `${appUrl}/console.html?tg_login_token=${webLoginToken}`,
                 message: 'Авторизация успешна'
             });
         } catch (e) {
@@ -365,7 +365,7 @@ router.post('/telegram-login', async (req, res) => {
         
         const appUrl = config.APP_URL;
         const webLoginToken = issueTelegramWebLoginToken(telegramId, telegramId, username);
-        
+
         res.json({
             success: true,
             chatId: telegramId,
@@ -375,7 +375,7 @@ router.post('/telegram-login', async (req, res) => {
             hasAI: false,
             sessionActive: !!session,
             isNewUser: true,
-            redirectUrl: `${appUrl}/?tg_login_token=${webLoginToken}`,
+            redirectUrl: `${appUrl}/console.html?tg_login_token=${webLoginToken}`,
             message: 'Аккаунт создан и авторизован'
         });
     } catch (e) {
@@ -419,7 +419,7 @@ router.post('/by-telegram-id', async (req, res) => {
                 directState.verifiedTelegramId || telegramId,
                 directState.verifiedUsername || null
             );
-            
+
             return res.json({
                 success: true,
                 chatId: telegramId,
@@ -427,7 +427,7 @@ router.post('/by-telegram-id', async (req, res) => {
                 verified: !!directState.verifiedTelegramId,
                 hasBot: !!directState.token,
                 hasAI: !!(directState.aiAuthToken && directState.aiModel),
-                redirectUrl: `${appUrl}/?tg_login_token=${webLoginToken}`,
+                redirectUrl: `${appUrl}/console.html?tg_login_token=${webLoginToken}`,
                 message: 'Вход выполнен'
             });
         } catch (e) {
@@ -458,7 +458,7 @@ router.post('/by-telegram-id', async (req, res) => {
                 telegramId,
                 foundState.verifiedUsername || null
             );
-            
+
             return res.json({
                 success: true,
                 chatId: foundChatId,
@@ -466,7 +466,7 @@ router.post('/by-telegram-id', async (req, res) => {
                 verified: true,
                 hasBot: !!foundState.token,
                 hasAI: !!(foundState.aiAuthToken && foundState.aiModel),
-                redirectUrl: `${appUrl}/?tg_login_token=${webLoginToken}`,
+                redirectUrl: `${appUrl}/console.html?tg_login_token=${webLoginToken}`,
                 message: 'Вход выполнен'
             });
         } catch (e) {
