@@ -490,7 +490,10 @@
                                 </p>
                             </div>
 
-                            <button class="btn btn-success" onclick="saveVkSettings()">Сохранить настройки</button>
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                                <button class="btn btn-success" onclick="saveVkSettings()">Сохранить настройки</button>
+                                <button class="btn btn-primary" id="vkRunNowBtn" onclick="runVkNow()">▶️ Сгенерировать сейчас</button>
+                            </div>
                             <div id="vkSettingsStatus" style="margin-top: 10px; font-size: 13px;"></div>
                         </div>
                     </div>

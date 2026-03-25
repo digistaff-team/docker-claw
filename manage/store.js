@@ -183,6 +183,12 @@ function setToken(chatId, token) {
     return persist(chatId);
 }
 
+function setBotUsername(chatId, botUsername) {
+    if (!statesCache[chatId]) statesCache[chatId] = {};
+    statesCache[chatId].botUsername = botUsername;
+    return persist(chatId);
+}
+
 function setPending(chatId, code, fromId, username) {
     if (!statesCache[chatId]) statesCache[chatId] = { token: '' };
     statesCache[chatId].pending = {
@@ -987,5 +993,6 @@ module.exports = {
     addAIRouterLog,
     getAIRouterLogs,
     clearAIRouterLogs,
-    getAIRouterStats
+    getAIRouterStats,
+    setBotUsername
 };

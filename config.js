@@ -53,4 +53,10 @@ module.exports = {
     PROJECT_CACHE_MAX_FILES: parseInt(process.env.PROJECT_CACHE_MAX_FILES) || 5000, // макс. файлов в дереве
     PROJECT_CACHE_MAX_SUMMARY_SIZE: parseInt(process.env.PROJECT_CACHE_MAX_SUMMARY_SIZE) || 50000, // макс. размер summary
     PROJECT_CACHE_TTL_DAYS: parseInt(process.env.PROJECT_CACHE_TTL_DAYS) || 30, // время жизни кэша
+
+    // VK Integration
+    VK_API_VERSION: process.env.VK_API_VERSION || '5.199',
+    VK_DEFAULT_GROUP_ID: process.env.VK_DEFAULT_GROUP_ID || '',
+    VK_DAILY_LIMIT: parseInt(process.env.VK_DAILY_LIMIT) || 5,
+    VK_MODERATION_TIMEOUT_HOURS: parseInt(process.env.VK_MODERATION_TIMEOUT_HOURS) || 24,
 };

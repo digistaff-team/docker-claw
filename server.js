@@ -134,6 +134,10 @@ async function startServer() {
     const pinterestMvpService = require('./services/pinterestMvp.service');
     pinterestMvpService.startScheduler(() => telegramRunner.bots);
 
+    // Запуск VK-планировщика
+    const vkMvpService = require('./services/vkMvp.service');
+    vkMvpService.startScheduler(() => telegramRunner.bots);
+
     // Подключение Webhook API
     const webhookRoutes = require('./routes/webhook.routes');
     app.use('/', webhookRoutes);

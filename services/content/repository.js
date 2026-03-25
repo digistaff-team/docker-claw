@@ -216,6 +216,47 @@ async function ensureSchema(chatId) {
       CREATE INDEX IF NOT EXISTS idx_pinterest_jobs_status
       ON pinterest_jobs(status, created_at);
     `);
+
+    // VK tables
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS vk_jobs (
+        id BIGSERIAL PRIMARY KEY,
+        chat_id TEXT NOT NULL,
+        topic TEXT NOT NULL,
+        group_id TEXT,
+        post_text TEXT,
+        hook_text TEXT,
+        image_prompt TEXT,
+        image_path TEXT,
+        video_path TEXT,
+        vk_content_type TEXT NOT NULL DEFAULT 'photo' CHECK (vk_content_type IN ('photo', 'video', 'story')),
+        link TEXT,
+        status TEXT NOT NULL DEFAULT 'draft',
+        error_text TEXT,
+        image_attempts INT NOT NULL DEFAULT 0,
+        rejected_count INT NOT NULL DEFAULT 0,
+        vk_post_id TEXT,
+        correlation_id TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS vk_publish_logs (
+        id BIGSERIAL PRIMARY KEY,
+        job_id BIGINT REFERENCES vk_jobs(id) ON DELETE SET NULL,
+        group_id TEXT NOT NULL,
+        vk_post_id TEXT,
+        status TEXT NOT NULL,
+        error_text TEXT,
+        correlation_id TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_vk_jobs_status
+      ON vk_jobs(status, created_at);
+    `);
   });
 }
 
@@ -857,9 +898,9 @@ async function updateTopic(chatId, topicId, data) {
       values.push(data.lsi);
     }
     if (data.status !== undefined) {
-      fields.push(`status = $${paramIndex++}`);
+      fields.push(`status = $${paramIndex++}::text`);
       values.push(data.status);
-      fields.push(`used_at = CASE WHEN $${paramIndex - 1} = 'pending' THEN NULL ELSE COALESCE(used_at, NOW()) END`);
+      fields.push(`used_at = CASE WHEN $${paramIndex - 1}::text = 'pending' THEN NULL ELSE COALESCE(used_at, NOW()) END`);
     }
 
     if (!fields.length) {

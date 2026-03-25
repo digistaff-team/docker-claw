@@ -16,6 +16,20 @@ router.post('/telegram', async (req, res) => {
     try {
         await manageStore.setToken(chatId, trimmed);
         telegramRunner.startBot(chatId, trimmed);
+        
+        // Получаем имя бота через getMe
+        try {
+            const { Telegraf } = require('telegraf');
+            const tempBot = new Telegraf(trimmed);
+            const botInfo = await tempBot.telegram.getMe();
+            if (botInfo && botInfo.username) {
+                await manageStore.setBotUsername(chatId, botInfo.username);
+            }
+            tempBot.stop();
+        } catch (botErr) {
+            console.error('[TELEGRAM-ROUTE] Could not fetch bot username:', botErr.message);
+        }
+        
         res.json({ success: true, message: 'Токен сохранён, бот запущен' });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -45,6 +59,7 @@ router.get('/telegram/status', (req, res) => {
     const verified = !!(data && data.verifiedTelegramId);
     const username = data && data.verifiedUsername ? data.verifiedUsername : null;
     const pending = !!(data && data.pending);
+    const botUsername = data && data.botUsername ? data.botUsername : null;
 
     // Возвращаем полный токен (пользователь авторизован по Chat ID)
     const fullToken = hasToken && data.token ? data.token : null;
@@ -54,6 +69,7 @@ router.get('/telegram/status', (req, res) => {
         verified,
         username,
         pending,
+        botUsername,
         token: fullToken, // Полный токен для отображения в форме
         telegramId: data && data.verifiedTelegramId ? data.verifiedTelegramId : null,
         firstName: data && data.verifiedFirstName ? data.verifiedFirstName : null,

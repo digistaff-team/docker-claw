@@ -1765,13 +1765,13 @@ async function updateTopic(chatId, topicId, data = {}) {
 
   const updated = await repository.updateTopic(chatId, topicId, {
     topic,
-    focus: data.focus ? String(data.focus).trim() : null,
+    focus: data.focus ? String(data.focus).trim() : undefined,
     secondary: Array.isArray(data.secondary)
       ? JSON.stringify(data.secondary)
-      : (data.secondary ? String(data.secondary).trim() : null),
+      : (data.secondary ? String(data.secondary).trim() : undefined),
     lsi: Array.isArray(data.lsi)
       ? JSON.stringify(data.lsi)
-      : (data.lsi ? String(data.lsi).trim() : null),
+      : (data.lsi ? String(data.lsi).trim() : undefined),
     status
   });
 

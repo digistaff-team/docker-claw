@@ -12,6 +12,7 @@ const { getSystemInstruction } = require('../prompts');
 const { enqueue } = require('../agentQueue');
 const contentMvpService = require('../../services/contentMvp.service');
 const pinterestMvpService = require('../../services/pinterestMvp.service');
+const vkMvpService = require('../../services/vkMvp.service');
 
 const bots = new Map(); // chatId -> { bot, token }
 const LOGIN_LINK_MESSAGE_TTL_MS = 10 * 60 * 1000;
@@ -665,28 +666,14 @@ async function handleTextMessage(ctx, chatId) {
             }
         }); // конец setImmediate
     } else {
-        // Direct command mode
-        try {
-            const result = await sessionService.executeCommand(chatId, text, 60);
-            manageStore.addCommand(
-                chatId,
-                text,
-                result.stdout,
-                result.stderr,
-                result.exitCode != null ? result.exitCode : 0
-            );
-            let reply = '';
-            if (result.stdout) reply += result.stdout.slice(0, 3500);
-            if (result.stderr) reply += (reply ? '\n\n' : '') + 'stderr:\n' + result.stderr.slice(0, 1500);
-            if (!reply) reply = '(пустой вывод)';
-            if (result.exitCode !== undefined && result.exitCode !== 0) {
-                reply += `\n\n[exit ${result.exitCode}]`;
-            }
-            await ctx.reply(reply.slice(0, 4096));
-        } catch (err) {
-            manageStore.addCommand(chatId, text, '', err.message, -1);
-            await ctx.reply('Ошибка выполнения: ' + err.message);
-        }
+        // AI не настроен — отвечаем информативным сообщением
+        await ctx.reply(
+            '🤖 ИИ ассистент не настроен.\n\n' +
+            'Чтобы я мог отвечать на сообщения, настройте ИИ модель в панели управления:\n' +
+            '1. Откройте панель → раздел «ИИ Ассистент»\n' +
+            '2. Укажите API-ключ и выберите модель\n\n' +
+            'После настройки я смогу обрабатывать ваши запросы.'
+        );
     }
 }
 
@@ -923,6 +910,36 @@ function startBot(chatId, token) {
         }
     });
 
+    // VK moderation callbacks
+    bot.action(/^vk_mod:(\d+):(approve|reject|regen_text|regen_image)$/, async (ctx) => {
+        const fromId = String(ctx.from?.id || '');
+        const settings = contentMvpService.getContentSettings
+            ? contentMvpService.getContentSettings(chatId)
+            : {};
+        const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
+        const allowedIds = new Set([String(chatId), moderatorId].filter(Boolean));
+        if (!allowedIds.has(fromId)) {
+            await ctx.answerCbQuery('Недостаточно прав', { show_alert: true }).catch(() => {});
+            return;
+        }
+
+        const [, jobIdRaw, action] = ctx.match || [];
+        const jobId = Number(jobIdRaw);
+        if (!Number.isFinite(jobId)) {
+            await ctx.answerCbQuery('Некорректный ID').catch(() => {});
+            return;
+        }
+
+        try {
+            const result = await vkMvpService.handleVkModerationAction(chatId, { telegram: ctx.telegram }, jobId, action);
+            await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
+            await ctx.reply(result?.message || 'Операция выполнена.');
+        } catch (e) {
+            await ctx.answerCbQuery('Ошибка').catch(() => {});
+            await ctx.reply(`Ошибка модерации VK: ${e.message}`);
+        }
+    });
+
     bot.on('document', async (ctx) => {
         const fromId = ctx.from?.id;
         const username = ctx.from?.username ? `@${ctx.from.username}` : null;
@@ -992,7 +1009,12 @@ function startBot(chatId, token) {
     });
 
     bot.on('text', async (ctx) => {
-        await handleTextMessage(ctx, chatId);
+        try {
+            await handleTextMessage(ctx, chatId);
+        } catch (err) {
+            console.error('[TG-TEXT-ERROR]', chatId, err.message);
+            await ctx.reply('❌ Произошла ошибка. Попробуйте позже.').catch(() => {});
+        }
     });
 
     // Add to map immediately so the content worker can use it
@@ -1000,7 +1022,11 @@ function startBot(chatId, token) {
     bots.set(chatId, { bot, token });
     console.log('[MANAGE-TG] Bot registered for chatId:', chatId);
 
-    bot.launch().catch((err) => {
+    bot.launch().then(() => {
+        if (bot.botInfo && bot.botInfo.username) {
+            manageStore.setBotUsername(chatId, bot.botInfo.username);
+        }
+    }).catch((err) => {
         console.error('[MANAGE-TG] Failed to start bot polling for', chatId, err.message);
     });
 

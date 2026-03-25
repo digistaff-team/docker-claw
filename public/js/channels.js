@@ -1,4 +1,5 @@
 const API_MANAGE = `${window.location.origin}/api/manage`;
+const API_CONTENT = `${window.location.origin}/api/content`;
 
 // === Переключение табов каналов ===
 function initChannelTabs() {
@@ -107,6 +108,7 @@ async function loadTelegramStatus() {
     try {
         const res = await fetch(`${API_MANAGE}/telegram/status?chat_id=${encodeURIComponent(chatId)}`);
         const data = await res.json();
+        console.log('[loadTelegramStatus] API response:', data);
         const statusEl = document.getElementById('telegramStatus');
         const verifyBlock = document.getElementById('telegramVerifyBlock');
         const disconnectBtn = document.getElementById('disconnectTelegramBtn');
@@ -114,7 +116,10 @@ async function loadTelegramStatus() {
         if (!statusEl) return;
 
         if (data.verified) {
-            statusEl.innerHTML = '<span style="color: #0a0;">✅ Подтверждён как ' + (data.username || 'пользователь') + '. Можно управлять окружением из Telegram (команды выполняются в вашем контейнере).</span>';
+            // Показываем имя бота, если оно сохранено
+            const botUsername = data.botUsername ? '@' + data.botUsername : '';
+            console.log('[loadTelegramStatus] botUsername:', botUsername);
+            statusEl.innerHTML = '<span style="color: #0a0;">✅ Подтверждён как ' + botUsername + '.</span>';
             verifyBlock.style.display = 'none';
             if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
             // Показываем полный токен
@@ -1038,5 +1043,29 @@ async function saveVkSettings() {
         }
     } catch (e) {
         showToast('Ошибка сети', 'error');
+    }
+}
+
+async function runVkNow() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    const btn = document.getElementById('vkRunNowBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Генерация...'; }
+    try {
+        const res = await fetch(`${API_CONTENT}/vk/run-now`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, reason: 'ui_manual' })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+            showToast(data.message || 'VK-пост сгенерирован', 'success');
+        } else {
+            showToast(data.error || data.message || 'Ошибка генерации', 'error');
+        }
+    } catch (e) {
+        showToast('Ошибка сети', 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '▶️ Сгенерировать сейчас'; }
     }
 }
