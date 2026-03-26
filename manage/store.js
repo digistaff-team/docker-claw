@@ -189,6 +189,12 @@ function setBotUsername(chatId, botUsername) {
     return persist(chatId);
 }
 
+function setOnboardingComplete(chatId, complete) {
+    if (!statesCache[chatId]) statesCache[chatId] = {};
+    statesCache[chatId].onboardingComplete = !!complete;
+    return persist(chatId);
+}
+
 function setPending(chatId, code, fromId, username) {
     if (!statesCache[chatId]) statesCache[chatId] = { token: '' };
     statesCache[chatId].pending = {
@@ -1108,5 +1114,6 @@ module.exports = {
     getAIRouterLogs,
     clearAIRouterLogs,
     getAIRouterStats,
-    setBotUsername
+    setBotUsername,
+    setOnboardingComplete
 };

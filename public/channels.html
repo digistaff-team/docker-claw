@@ -39,28 +39,45 @@
                 <p style="color: #666; margin-bottom: 20px;">Подключите каналы для публикаций контента</p>
 
                 <nav class="channel-tabs" id="channelTabs">
-                    <button class="channel-tab active" data-channel="telegram">Telegram</button>
-                    <button class="channel-tab" data-channel="pinterest">Pinterest</button>
-                    <button class="channel-tab" data-channel="instagram">Instagram</button>
-                    <button class="channel-tab" data-channel="vk">VK</button>
-                    <button class="channel-tab" data-channel="youtube">YouTube</button>
-                    <button class="channel-tab" data-channel="blog">Blog/Website</button>
-                    <button class="channel-tab" data-channel="email">Email</button>
-                    <button class="channel-tab" data-channel="facebook">Facebook</button>
-                    <button class="channel-tab" data-channel="ok">Одноклассники</button>
-                    <button class="channel-tab" data-channel="dzen">Яндекс-Дзен</button>
-                    <button class="channel-tab" data-channel="tiktok">TikTok</button>
+                    <button class="channel-tab" data-channel="telegram" style="display: none;">Telegram</button>
+                    <button class="channel-tab" data-channel="pinterest" style="display: none;">Pinterest</button>
+                    <button class="channel-tab" data-channel="instagram" style="display: none;">Instagram</button>
+                    <button class="channel-tab" data-channel="vk" style="display: none;">VK</button>
+                    <button class="channel-tab" data-channel="youtube" style="display: none;">YouTube</button>
+                    <button class="channel-tab" data-channel="blog" style="display: none;">Blog/Website</button>
+                    <button class="channel-tab" data-channel="email" style="display: none;">Email</button>
+                    <button class="channel-tab" data-channel="facebook" style="display: none;">Facebook</button>
+                    <button class="channel-tab" data-channel="ok" style="display: none;">Одноклассники</button>
+                    <button class="channel-tab" data-channel="dzen" style="display: none;">Яндекс-Дзен</button>
+                    <button class="channel-tab" data-channel="tiktok" style="display: none;">TikTok</button>
+                    <button class="channel-tab channel-tab-add" id="addChannelBtn" title="Добавить канал">+</button>
                 </nav>
 
+                <!-- Попап выбора каналов -->
+                <div id="channelPickerOverlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 1000;">
+                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; padding: 24px; min-width: 320px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+                        <h3 style="margin: 0 0 16px 0;">Управление каналами</h3>
+                        <div id="channelPickerList" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px;"></div>
+                        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                            <button class="btn btn-secondary" onclick="closeChannelPicker()">Отмена</button>
+                            <button class="btn btn-primary" onclick="saveChannelPicker()">Сохранить</button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Telegram -->
-                <div class="channel-panel" id="channelPanel-telegram">
+                <div class="channel-panel" id="channelPanel-telegram" style="display: none;">
                     <div class="channel-card">
                         <h3>📱 Телеграм Бот</h3>
-                        <p>Токен из @BotFather. После сохранения отправьте боту любое сообщение — он пришлёт код. Введите код ниже и нажмите Подтвердить.</p>
-                        <label for="telegramBotToken">Токен бота</label>
-                        <input type="password" id="telegramBotToken" placeholder="123456789:AAH..." autocomplete="off" />
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-                            <button class="btn btn-primary" onclick="saveTelegramToken()">💾 Сохранить токен</button>
+                        <div id="telegramTokenBlock">
+                            <p>Токен из @BotFather. После сохранения отправьте боту любое сообщение — он пришлёт код. Введите код ниже и нажмите Подтвердить.</p>
+                            <label for="telegramBotToken">Токен бота</label>
+                            <input type="password" id="telegramBotToken" placeholder="123456789:AAH..." autocomplete="off" />
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                                <button class="btn btn-primary" onclick="saveTelegramToken()">💾 Сохранить токен</button>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 10px;">
                             <button class="btn btn-secondary" id="disconnectTelegramBtn" style="display: none;" onclick="disconnectTelegram()">Отключить бота</button>
                         </div>
                         <div id="telegramStatus" class="channel-status" style="margin-top: 14px; font-size: 14px;"></div>

@@ -616,6 +616,22 @@ input[type="file"] {
     box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
+.channel-tab-add {
+    background: transparent;
+    color: #999;
+    font-size: 18px;
+    font-weight: 300;
+    padding: 6px 14px;
+    border: 1px dashed #ccc;
+    border-radius: 8px;
+}
+
+.channel-tab-add:hover {
+    background: #e8e8e8;
+    color: #333;
+    border-color: #999;
+}
+
 /* Каналы связи */
 .channels-grid {
     display: grid;

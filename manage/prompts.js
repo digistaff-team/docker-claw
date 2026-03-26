@@ -1,4 +1,4 @@
-function getSystemInstruction(mode, structuredContext, channel = 'telegram') {
+function getSystemInstruction(mode, structuredContext, channel = 'telegram', enabledChannels = []) {
     let systemPrompt = '';
 
     // ══════════════════════════════════════════════════════════════
@@ -349,8 +349,109 @@ function getSystemInstruction(mode, structuredContext, channel = 'telegram') {
         systemPrompt += `URL: https://claw.pro-talk.ru/hook/${structuredContext.chatId}/<путь>\n\n`;
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // БЛОК: ДОСТУПНЫЕ НАВЫКИ КОПИРАЙТЕРА
+    // ══════════════════════════════════════════════════════════════
+    if (enabledChannels && Array.isArray(enabledChannels) && enabledChannels.length > 0) {
+        systemPrompt += `\n=== ДОСТУПНЫЕ НАВЫКИ КОПИРАЙТЕРА ===\n`;
+
+        // Telegram (всегда доступен)
+        systemPrompt += `\n📱 Навык "Копирайтер для Telegram":\n`;
+        systemPrompt += `  • HTML-теги: разрешены только <b>, <i>, <code>, <pre>\n`;
+        systemPrompt += `  • Эмодзи уместны, структура с заголовками приветствуется\n`;
+        systemPrompt += `  • Длина: свободная\n`;
+        systemPrompt += `  • Перенос строк: обычный \\n\n`;
+
+        // VK
+        if (enabledChannels.includes('vk')) {
+            systemPrompt += `📘 Навык "Копирайтер для ВКонтакте":\n`;
+            systemPrompt += `  • Живой разговорный стиль, обращение к аудитории\n`;
+            systemPrompt += `  • Длина: 300–800 символов\n`;
+            systemPrompt += `  • Хэштеги: 3–7 в конце (с #)\n`;
+            systemPrompt += `  • Эмодзи: умеренно (2–5)\n`;
+            systemPrompt += `  • Форматирование: обычный текст, БЕЗ HTML-тегов\n\n`;
+        }
+
+        // OK
+        if (enabledChannels.includes('ok')) {
+            systemPrompt += `🟡 Навык "Копирайтер для Одноклассников":\n`;
+            systemPrompt += `  • Тёплый, общительный тон, тематика близкая аудитории 35+\n`;
+            systemPrompt += `  • Длина: 400–600 символов\n`;
+            systemPrompt += `  • Хэштеги: 2–4 (с #)\n`;
+            systemPrompt += `  • Эмодзи: не более 3\n`;
+            systemPrompt += `  • Форматирование: обычный текст, БЕЗ HTML-тегов\n\n`;
+        }
+
+        // Pinterest
+        if (enabledChannels.includes('pinterest')) {
+            systemPrompt += `📌 Навык "Копирайтер для Pinterest":\n`;
+            systemPrompt += `  • SEO-ориентированные описания, ключевые слова в первых 2-х предложениях\n`;
+            systemPrompt += `  • Длина: 100–300 символов\n`;
+            systemPrompt += `  • Хэштеги: 5–10 релевантных тегов (с #)\n`;
+            systemPrompt += `  • Фокус на визуальном описании и призыве к действию\n\n`;
+        }
+
+        // Instagram
+        if (enabledChannels.includes('instagram')) {
+            systemPrompt += `📷 Навык "Копирайтер для Instagram":\n`;
+            systemPrompt += `  • Яркий, визуальный, эмоциональный стиль\n`;
+            systemPrompt += `  • Длина: 100–200 символов (основной текст)\n`;
+            systemPrompt += `  • Хэштеги: 5–15 популярных тегов (с #)\n`;
+            systemPrompt += `  • Эмодзи: активно (5–10)\n`;
+            systemPrompt += `  • Мотиватор и призыв к действию в конце\n\n`;
+        }
+
+        // Email
+        if (enabledChannels.includes('email')) {
+            systemPrompt += `✉️ Навык "Копирайтер для Email":\n`;
+            systemPrompt += `  • Профессиональный, персональный тон\n`;
+            systemPrompt += `  • Структура: тема письма (50–60 символов) + тело (200–500 символов)\n`;
+            systemPrompt += `  • Призыв к действию в конце\n`;
+            systemPrompt += `  • Форматирование: обычный текст с абзацами\n\n`;
+        }
+
+        // YouTube
+        if (enabledChannels.includes('youtube')) {
+            systemPrompt += `▶️ Навык "Копирайтер для YouTube":\n`;
+            systemPrompt += `  • Структура: название видео + описание + теги\n`;
+            systemPrompt += `  • Название: 50–60 символов, с ключевыми словами\n`;
+            systemPrompt += `  • Описание: 200–300 символов, призыв к подписке в конце\n`;
+            systemPrompt += `  • Теги: 5–10 релевантных\n\n`;
+        }
+
+        // Facebook
+        if (enabledChannels.includes('facebook')) {
+            systemPrompt += `👥 Навык "Копирайтер для Facebook":\n`;
+            systemPrompt += `  • Диалоговый, дружеский стиль\n`;
+            systemPrompt += `  • Длина: 150–500 символов\n`;
+            systemPrompt += `  • Вопросы в конце для активации комментариев\n`;
+            systemPrompt += `  • Эмодзи: 3–8\n\n`;
+        }
+
+        // Яндекс Дзен
+        if (enabledChannels.includes('dzen')) {
+            systemPrompt += `🎨 Навык "Копирайтер для Яндекс Дзен":\n`;
+            systemPrompt += `  • Структура: заголовок (60–70 символов) + описание + тело статьи\n`;
+            systemPrompt += `  • Заголовок: интригующий, с числами или вопросами\n`;
+            systemPrompt += `  • Описание: 150–200 символов, завлекающий анонс\n`;
+            systemPrompt += `  • SEO-оптимизированное содержание\n\n`;
+        }
+
+        // TikTok
+        if (enabledChannels.includes('tiktok')) {
+            systemPrompt += `🎵 Навык "Копирайтер для TikTok":\n`;
+            systemPrompt += `  • Короткий, динамичный, провокационный стиль\n`;
+            systemPrompt += `  • Длина: 50–150 символов\n`;
+            systemPrompt += `  • Хэштеги: 3–5 (с #)\n`;
+            systemPrompt += `  • Призыв к действию: лайк, комментарий, поделиться\n`;
+            systemPrompt += `  • Эмодзи: активно\n\n`;
+        }
+
+        systemPrompt += `ВЫБИРАЙ подходящий навык в зависимости от того, какой контент генерируешь.\n\n`;
+    }
+
     // Контекст окружения (дерево файлов, кэш)
-    systemPrompt += `\n=== КОНТЕКСТ ОКРУЖЕНИЯ ===\n`;
+    systemPrompt += `=== КОНТЕКСТ ОКРУЖЕНИЯ ===\n`;
     systemPrompt += structuredContext.environmentContext;
 
     return systemPrompt;

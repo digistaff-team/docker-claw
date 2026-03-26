@@ -14,6 +14,7 @@ const contentMvpService = require('../../services/contentMvp.service');
 const pinterestMvpService = require('../../services/pinterestMvp.service');
 const vkMvpService = require('../../services/vkMvp.service');
 const okMvpService = require('../../services/okMvp.service');
+const { getEnabledChannels } = require('../../services/content/repository');
 
 const bots = new Map(); // chatId -> { bot, token }
 const LOGIN_LINK_MESSAGE_TTL_MS = 10 * 60 * 1000;
@@ -304,7 +305,9 @@ async function handleTextMessage(ctx, chatId) {
             
             const structuredContext = await contextHelper.buildFullContextStructured(chatId);
             const currentMode = manageStore.getAgentMode(chatId) || 'TERMINAL';
-            const systemPrompt = getSystemInstruction(currentMode, structuredContext);
+            let enabledChannels = [];
+            try { enabledChannels = await getEnabledChannels(chatId); } catch (_) {}
+            const systemPrompt = getSystemInstruction(currentMode, structuredContext, 'telegram', enabledChannels);
             
             const aiMessages = manageStore.getAIMessages(chatId, 'telegram', 50);
             
@@ -436,7 +439,9 @@ async function handleTextMessage(ctx, chatId) {
                 let effectiveMode = currentMode;
 
                 const structuredContext = await contextHelper.buildFullContextStructured(chatId);
-                const systemPrompt = getSystemInstruction(effectiveMode, structuredContext, 'telegram');
+                let enabledChannels = [];
+                try { enabledChannels = await getEnabledChannels(chatId); } catch (_) {}
+                const systemPrompt = getSystemInstruction(effectiveMode, structuredContext, 'telegram', enabledChannels);
 
                 const historyMessages = manageStore.getAIMessages(chatId, 'telegram', 30);
 

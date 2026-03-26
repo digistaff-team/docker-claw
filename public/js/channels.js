@@ -18,7 +18,124 @@ function initChannelTabs() {
     });
 }
 
+// === Все доступные каналы для попапа ===
+const ALL_CHANNELS = [
+    { id: 'telegram', name: 'Telegram', required: true },
+    { id: 'vk', name: 'ВКонтакте' },
+    { id: 'ok', name: 'Одноклассники' },
+    { id: 'pinterest', name: 'Pinterest' },
+    { id: 'instagram', name: 'Instagram' },
+    { id: 'email', name: 'Email' },
+    { id: 'youtube', name: 'YouTube' },
+    { id: 'facebook', name: 'Facebook' },
+    { id: 'dzen', name: 'Яндекс Дзен' },
+    { id: 'tiktok', name: 'TikTok' }
+];
+
+// Текущие включённые каналы (обновляется при загрузке)
+let _currentEnabledChannels = ['telegram'];
+
+function openChannelPicker() {
+    const listEl = document.getElementById('channelPickerList');
+    if (!listEl) return;
+
+    listEl.innerHTML = ALL_CHANNELS.map(ch => {
+        const checked = _currentEnabledChannels.includes(ch.id) ? 'checked' : '';
+        const disabled = ch.required ? 'disabled' : '';
+        return `<label style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid #eee; border-radius: 6px; cursor: pointer;">
+            <input type="checkbox" value="${ch.id}" ${checked} ${disabled} />
+            <span>${ch.name}</span>
+        </label>`;
+    }).join('');
+
+    document.getElementById('channelPickerOverlay').style.display = 'block';
+}
+
+function closeChannelPicker() {
+    document.getElementById('channelPickerOverlay').style.display = 'none';
+}
+
+async function saveChannelPicker() {
+    const listEl = document.getElementById('channelPickerList');
+    const selected = [];
+    listEl.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+        selected.push(cb.value);
+    });
+
+    // Telegram всегда включён
+    if (!selected.includes('telegram')) selected.unshift('telegram');
+
+    try {
+        const res = await fetch(`${API_MANAGE}/enabled-channels`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: currentChatId, channels: selected })
+        });
+        if (!res.ok) throw new Error('Ошибка сохранения');
+
+        _currentEnabledChannels = selected;
+        closeChannelPicker();
+
+        // Обновляем видимость табов
+        document.querySelectorAll('.channel-tab[data-channel]').forEach(tab => {
+            tab.style.display = selected.includes(tab.dataset.channel) ? '' : 'none';
+        });
+
+        // Если текущий активный таб скрыт — переключаемся на первый видимый
+        const activeTab = document.querySelector('.channel-tab.active');
+        if (activeTab && activeTab.style.display === 'none') {
+            const firstVisible = document.querySelector(`.channel-tab[data-channel="${selected[0]}"]`);
+            if (firstVisible) firstVisible.click();
+        }
+
+        if (typeof showToast === 'function') showToast('Каналы обновлены', 'success');
+    } catch (e) {
+        console.error('saveChannelPicker', e);
+        if (typeof showToast === 'function') showToast('Ошибка сохранения', 'error');
+    }
+}
+
 async function onLoginSuccess() {
+    // Загружаем список включённых каналов и фильтруем меню
+    let enabledChannels = ['telegram']; // fallback — всегда показываем Telegram
+    try {
+        const res = await fetch(`${API_MANAGE}/enabled-channels?chat_id=${encodeURIComponent(currentChatId)}`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.channels && Array.isArray(data.channels) && data.channels.length > 0) {
+                enabledChannels = data.channels;
+            }
+        }
+    } catch (e) {
+        console.error('Error loading enabled channels:', e);
+    }
+
+    // Сохраняем для попапа
+    _currentEnabledChannels = enabledChannels;
+
+    // Показываем только включённые табы
+    enabledChannels.forEach(ch => {
+        const tab = document.querySelector(`.channel-tab[data-channel="${ch}"]`);
+        if (tab) tab.style.display = '';
+    });
+
+    // Привязываем кнопку "+"
+    const addBtn = document.getElementById('addChannelBtn');
+    if (addBtn) addBtn.addEventListener('click', openChannelPicker);
+
+    // Закрытие попапа по клику на оверлей
+    const overlay = document.getElementById('channelPickerOverlay');
+    if (overlay) overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeChannelPicker();
+    });
+
+    // Активируем первый таб
+    const firstTab = document.querySelector(`.channel-tab[data-channel="${enabledChannels[0]}"]`);
+    if (firstTab) {
+        firstTab.click();
+    }
+
+    // Загружаем статус всех каналов
     await loadTelegramStatus();
     await loadEmailStatus();
     await loadContentSettings();
@@ -119,26 +236,28 @@ async function loadTelegramStatus() {
         const statusEl = document.getElementById('telegramStatus');
         const verifyBlock = document.getElementById('telegramVerifyBlock');
         const disconnectBtn = document.getElementById('disconnectTelegramBtn');
+        const tokenBlock = document.getElementById('telegramTokenBlock');
         const tokenInput = document.getElementById('telegramBotToken');
         if (!statusEl) return;
 
         if (data.verified) {
-            // Показываем имя бота, если оно сохранено
+            // Бот подключён и верифицирован — скрываем форму токена
             const botUsername = data.botUsername ? '@' + data.botUsername : '';
-            console.log('[loadTelegramStatus] botUsername:', botUsername);
-            statusEl.innerHTML = '<span style="color: #0a0;">✅ Подтверждён как ' + botUsername + '.</span>';
+            statusEl.innerHTML = '<span style="color: #0a0;">✅ Бот подключён: ' + botUsername + '</span>';
+            if (tokenBlock) tokenBlock.style.display = 'none';
             verifyBlock.style.display = 'none';
             if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
-            // Показываем полный токен
-            if (tokenInput && data.token) tokenInput.value = data.token;
         } else if (data.hasToken) {
-            statusEl.textContent = 'Токен сохранён. Отправьте боту в Telegram любое сообщение — он пришлёт код. Введите код ниже.';
+            // Токен сохранён (через setup или вручную), нужна верификация — скрываем форму токена
+            const botUsername = data.botUsername ? ' (@' + data.botUsername + ')' : '';
+            statusEl.textContent = '🤖 Бот запущен' + botUsername + '. Отправьте боту в Telegram любое сообщение — он пришлёт код подтверждения. Введите код ниже.';
+            if (tokenBlock) tokenBlock.style.display = 'none';
             verifyBlock.style.display = 'block';
             if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
-            // Показываем полный токен
-            if (tokenInput && data.token) tokenInput.value = data.token;
         } else {
+            // Токена нет — показываем форму ввода
             statusEl.textContent = '';
+            if (tokenBlock) tokenBlock.style.display = 'block';
             verifyBlock.style.display = 'none';
             if (disconnectBtn) disconnectBtn.style.display = 'none';
             if (tokenInput) tokenInput.value = '';

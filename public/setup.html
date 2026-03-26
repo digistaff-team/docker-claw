@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Настройка аккаунта</title>
+    <link rel="stylesheet" href="/css/main.css">
+    <style>
+        #authSection {
+            display: none;
+        }
+
+        #setupContent {
+            display: none;
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        .setup-card {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .setup-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 30px;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #0084ff;
+            box-shadow: 0 0 0 3px rgba(0,132,255,0.1);
+        }
+
+        .form-hint {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .channels-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 15px;
+        }
+
+        .channel-checkbox {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .channel-checkbox:hover {
+            border-color: #0084ff;
+            background-color: #f5f5f5;
+        }
+
+        .channel-checkbox input {
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        .channel-checkbox label {
+            cursor: pointer;
+            flex: 1;
+            margin: 0;
+            font-size: 14px;
+        }
+
+        .channel-checkbox input:checked + label {
+            font-weight: 600;
+        }
+
+        .channel-checkbox input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .channel-checkbox input:disabled + label {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background-color: #0084ff;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #0073e6;
+        }
+
+        .btn-primary:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background-color: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background-color: #e0e0e0;
+        }
+
+        .error-message {
+            color: #d32f2f;
+            margin-bottom: 15px;
+            padding: 12px;
+            background-color: #ffebee;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .success-message {
+            color: #388e3c;
+            margin-bottom: 15px;
+            padding: 12px;
+            background-color: #e8f5e9;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #0084ff;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Auth Form (нужна для initAuth) -->
+    <div id="authSection">
+        <div class="auth-container">
+            <h2>Вход в систему</h2>
+            <form id="loginForm">
+                <input type="text" id="usernameInput" placeholder="Username" required />
+                <input type="password" id="passwordInput" placeholder="Password" required />
+                <button type="submit">Вход</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Setup Content -->
+    <div id="mainContent">
+        <div class="setup-card">
+            <div class="setup-title">Настройка аккаунта</div>
+
+            <div id="errorMessage" class="error-message"></div>
+            <div id="successMessage" class="success-message"></div>
+            <div id="loadingDiv" class="loading">
+                <div class="spinner"></div>
+            </div>
+
+            <!-- Блок 1: Телеграм-бот -->
+            <div class="form-group">
+                <label class="form-label">🤖 Токен Telegram-бота (для модерации)</label>
+                <input
+                    type="password"
+                    id="botTokenInput"
+                    class="form-input"
+                    placeholder="1234567890:ABCDEFGHIJKLMNOPQRSTUVWxyz-_"
+                    required
+                />
+                <div class="form-hint">Создайте бота через @BotFather и вставьте его токен</div>
+                <button type="button" id="verifyBotBtn" class="btn btn-secondary" style="margin-top: 10px; width: auto;">
+                    Проверить токен
+                </button>
+                <div id="botStatusDiv" style="margin-top: 10px; font-size: 12px;"></div>
+            </div>
+
+            <!-- Блок 2: Выбор каналов -->
+            <div class="form-group">
+                <label class="form-label">📱 Выберите каналы для публикации</label>
+                <div class="channels-grid">
+                    <!-- Row 1 -->
+                    <div class="channel-checkbox">
+                        <input type="checkbox" id="ch-telegram" value="telegram" checked disabled />
+                        <label for="ch-telegram">Telegram</label>
+                    </div>
+                    <div class="channel-checkbox">
+                        <input type="checkbox" id="ch-vk" value="vk" />
+                        <label for="ch-vk">ВКонтакте</label>
+                    </div>
+                    <!-- Row 2 -->
+                    <div class="channel-checkbox">
+                        <input type="checkbox" id="ch-ok" value="ok" />
+                        <label for="ch-ok">Одноклассники</label>
+                    </div>
+                    <div class="channel-checkbox">
+                        <input type="checkbox" id="ch-pinterest" value="pinterest" />
+                        <label for="ch-pinterest">Pinterest</label>
+                    </div>
+                    <!-- Row 3 -->
+                    <div class="channel-checkbox">
+                        <input type="checkbox" id="ch-instagram" value="instagram" />
+                        <label for="ch-instagram">Instagram</label>
+                    </div>
+                    <div class="channel-checkbox">
+                        <input type="checkbox" id="ch-email" value="email" />
+                        <label for="ch-email">Email</label>
+                    </div>
+                    <!-- Row 4 -->
+                    <div class="channel-checkbox">
+                        <input type="checkbox" id="ch-youtube" value="youtube" />
+                        <label for="ch-youtube">YouTube</label>
+                    </div>
+                    <div class="channel-checkbox">
+                        <input type="checkbox" id="ch-facebook" value="facebook" />
+                        <label for="ch-facebook">Facebook</label>
+                    </div>
+                    <!-- Row 5 -->
+                    <div class="channel-checkbox">
+                        <input type="checkbox" id="ch-dzen" value="dzen" />
+                        <label for="ch-dzen">Яндекс Дзен</label>
+                    </div>
+                    <div class="channel-checkbox">
+                        <input type="checkbox" id="ch-tiktok" value="tiktok" />
+                        <label for="ch-tiktok">TikTok</label>
+                    </div>
+                </div>
+                <div class="form-hint" style="margin-top: 10px;">
+                    Telegram выбран по умолчанию. Вы можете добавить другие каналы и подключить их позже.
+                </div>
+            </div>
+
+            <!-- Кнопки действия -->
+            <div class="button-group">
+                <button type="button" id="saveBtn" class="btn btn-primary" disabled>
+                    Сохранить и продолжить
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/setup.js"></script>
+</body>
+</html>

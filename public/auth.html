@@ -106,6 +106,32 @@
     <script src="/js/common.js"></script>
     <script src="/js/personalization.js"></script>
     <script>
+        // Сохраняем оригинальный onLoginSuccess из personalization.js
+        const _originalOnLoginSuccess = window.onLoginSuccess;
+
+        // Переопределяем: сначала проверяем онбординг, потом вызываем оригинал
+        window.onLoginSuccess = async function() {
+            // currentChatId уже установлен к моменту вызова onLoginSuccess
+            if (currentChatId) {
+                try {
+                    const res = await fetch(`/api/manage/setup?chat_id=${encodeURIComponent(currentChatId)}`);
+                    if (res.ok) {
+                        const setup = await res.json();
+                        if (!setup.onboardingComplete) {
+                            window.location.href = '/setup.html';
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error checking onboarding status:', e);
+                }
+            }
+            // Онбординг пройден — загружаем страницу как обычно
+            if (typeof _originalOnLoginSuccess === 'function') {
+                await _originalOnLoginSuccess();
+            }
+        };
+
         window.addEventListener('load', () => {
             renderMenu('/auth.html');
             initAuth();

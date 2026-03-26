@@ -1118,6 +1118,187 @@ async function loadMaterials(chatId, limit = 12) {
   });
 }
 
+// ============================================
+// Channel Management
+// ============================================
+
+/**
+ * Получить значение из content_config
+ */
+async function getConfig(chatId, key) {
+  return withClient(chatId, async (client) => {
+    const result = await client.query(
+      `SELECT value FROM content_config WHERE key = $1`,
+      [key]
+    );
+    return result.rows[0]?.value || null;
+  });
+}
+
+/**
+ * Сохранить значение в content_config
+ */
+async function setConfig(chatId, key, value) {
+  return withClient(chatId, async (client) => {
+    await client.query(
+      `INSERT INTO content_config (key, value, updated_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET
+         value = EXCLUDED.value,
+         updated_at = NOW()`,
+      [key, value]
+    );
+  });
+}
+
+/**
+ * Получить список включённых каналов
+ * @returns {Promise<string[]>} ['telegram', 'vk', ...]
+ */
+async function getEnabledChannels(chatId) {
+  const json = await getConfig(chatId, 'enabled_channels');
+  if (!json) return [];
+  try {
+    return JSON.parse(json);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Сохранить список включённых каналов
+ */
+async function setEnabledChannels(chatId, channels) {
+  await setConfig(chatId, 'enabled_channels', JSON.stringify(channels || []));
+}
+
+/**
+ * Создать таблицы для конкретного канала
+ */
+async function ensureChannelSchema(chatId, channelName) {
+  return withClient(chatId, async (client) => {
+    if (channelName === 'vk') {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS vk_jobs (
+          id BIGSERIAL PRIMARY KEY,
+          chat_id TEXT NOT NULL,
+          topic TEXT NOT NULL,
+          group_id TEXT,
+          post_text TEXT,
+          hook_text TEXT,
+          image_prompt TEXT,
+          image_path TEXT,
+          video_path TEXT,
+          vk_content_type TEXT NOT NULL DEFAULT 'photo'
+            CHECK (vk_content_type IN ('photo', 'video', 'story')),
+          link TEXT,
+          status TEXT NOT NULL DEFAULT 'draft',
+          error_text TEXT,
+          image_attempts INT NOT NULL DEFAULT 0,
+          rejected_count INT NOT NULL DEFAULT 0,
+          vk_post_id TEXT,
+          correlation_id TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS vk_publish_logs (
+          id BIGSERIAL PRIMARY KEY,
+          job_id BIGINT REFERENCES vk_jobs(id) ON DELETE SET NULL,
+          group_id TEXT NOT NULL,
+          vk_post_id TEXT,
+          status TEXT NOT NULL,
+          error_text TEXT,
+          correlation_id TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_vk_jobs_status ON vk_jobs(status, created_at)`);
+    } else if (channelName === 'ok') {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS ok_jobs (
+          id BIGSERIAL PRIMARY KEY,
+          chat_id TEXT NOT NULL,
+          topic TEXT NOT NULL,
+          community_id TEXT,
+          post_text TEXT,
+          hook_text TEXT,
+          image_prompt TEXT,
+          image_path TEXT,
+          video_path TEXT,
+          ok_content_type TEXT NOT NULL DEFAULT 'photo'
+            CHECK (ok_content_type IN ('photo', 'video')),
+          link TEXT,
+          status TEXT NOT NULL DEFAULT 'draft',
+          error_text TEXT,
+          image_attempts INT NOT NULL DEFAULT 0,
+          rejected_count INT NOT NULL DEFAULT 0,
+          ok_post_id TEXT,
+          correlation_id TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS ok_publish_logs (
+          id BIGSERIAL PRIMARY KEY,
+          job_id BIGINT REFERENCES ok_jobs(id) ON DELETE SET NULL,
+          community_id TEXT NOT NULL,
+          ok_post_id TEXT,
+          status TEXT NOT NULL,
+          error_text TEXT,
+          correlation_id TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_ok_jobs_status ON ok_jobs(status, created_at)`);
+    } else if (channelName === 'pinterest') {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS pinterest_jobs (
+          id BIGSERIAL PRIMARY KEY,
+          chat_id TEXT NOT NULL,
+          topic TEXT NOT NULL,
+          board_id TEXT,
+          board_name TEXT,
+          pin_title TEXT,
+          pin_description TEXT,
+          seo_keywords TEXT,
+          image_prompt TEXT,
+          image_path TEXT,
+          link TEXT,
+          status TEXT NOT NULL DEFAULT 'draft',
+          error_text TEXT,
+          image_attempts INT NOT NULL DEFAULT 0,
+          rejected_count INT NOT NULL DEFAULT 0,
+          correlation_id TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS pinterest_publish_logs (
+          id BIGSERIAL PRIMARY KEY,
+          job_id BIGINT REFERENCES pinterest_jobs(id) ON DELETE SET NULL,
+          board_id TEXT NOT NULL,
+          pin_id TEXT,
+          status TEXT NOT NULL,
+          error_text TEXT,
+          correlation_id TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_pinterest_jobs_status ON pinterest_jobs(status, created_at)`);
+    } else if (channelName === 'instagram') {
+      // Stub: таблицы ещё не определены
+    } else if (channelName === 'youtube') {
+      // Stub: таблицы ещё не определены
+    } else if (channelName === 'email') {
+      // Stub: таблицы ещё не определены
+    }
+  });
+}
+
 module.exports = {
   withClient,
   ensureSchema,
@@ -1154,5 +1335,11 @@ module.exports = {
   getMaterialById,
   updateMaterial,
   deleteMaterial,
-  loadMaterials
+  loadMaterials,
+  // Channel management
+  getConfig,
+  setConfig,
+  getEnabledChannels,
+  setEnabledChannels,
+  ensureChannelSchema
 };

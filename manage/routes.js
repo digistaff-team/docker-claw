@@ -3,6 +3,7 @@ const router = express.Router();
 const manageStore = require('./store');
 const telegramRunner = require('./telegram/runner');
 const balanceService = require('../services/balance.service');
+const { getEnabledChannels, setEnabledChannels, ensureChannelSchema, ensureSchema } = require('../services/content/repository');
 
 router.post('/telegram', async (req, res) => {
     const { chat_id: chatId, token } = req.body;
@@ -532,6 +533,10 @@ router.post('/channels/pinterest', async (req, res) => {
         if (is_active !== undefined) patch.is_active = is_active;
         if (auto_publish !== undefined) patch.auto_publish = auto_publish;
         await manageStore.setPinterestConfig(chatId, patch);
+
+        // Создаём таблицы для Pinterest
+        await ensureChannelSchema(chatId, 'pinterest');
+
         res.json({ success: true });
     } catch (e) {
         res.status(400).json({ error: e.message });
@@ -681,6 +686,9 @@ router.post('/channels/vk', async (req, res) => {
             connected_at: new Date().toISOString()
         });
 
+        // Создаём таблицы для VK
+        await ensureChannelSchema(chat_id, 'vk');
+
         res.json({ success: true });
     } catch (e) {
         console.error('POST /api/manage/channels/vk', e);
@@ -780,6 +788,9 @@ router.post('/channels/ok', async (req, res) => {
             connected_at: new Date().toISOString()
         });
 
+        // Создаём таблицы для OK
+        await ensureChannelSchema(chat_id, 'ok');
+
         res.json({ success: true });
     } catch (e) {
         console.error('POST /api/manage/channels/ok', e);
@@ -865,6 +876,131 @@ router.delete('/ai/router-logs', (req, res) => {
     }
     manageStore.clearAIRouterLogs(chatId);
     res.json({ success: true, message: 'Логи AI Router очищены' });
+});
+
+// === Setup / Onboarding ===
+
+/**
+ * GET /api/manage/setup - Получить статус онбординга
+ */
+router.get('/setup', async (req, res) => {
+    try {
+        const chatId = req.query.chat_id;
+        if (!chatId) {
+            return res.status(400).json({ error: 'chat_id is required' });
+        }
+
+        const state = manageStore.getState(chatId);
+        const hasBotToken = !!(state && state.token);
+        const onboardingComplete = !!(state && state.onboardingComplete);
+
+        let enabledChannels = [];
+        if (onboardingComplete) {
+            try {
+                enabledChannels = await getEnabledChannels(chatId);
+            } catch (dbErr) {
+                console.error('GET /api/manage/setup - getEnabledChannels error:', dbErr.message);
+            }
+        }
+
+        res.json({
+            onboardingComplete,
+            hasBotToken,
+            enabledChannels: enabledChannels || []
+        });
+    } catch (e) {
+        console.error('GET /api/manage/setup', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * POST /api/manage/setup - Сохранить токен бота и выбранные каналы
+ */
+router.post('/setup', async (req, res) => {
+    try {
+        const { chat_id: chatId, token, channels } = req.body;
+        if (!chatId || !token) {
+            return res.status(400).json({ error: 'chat_id and token are required' });
+        }
+
+        // Сохраняем токен бота
+        const trimmedToken = String(token).trim();
+        await manageStore.setToken(chatId, trimmedToken);
+        telegramRunner.startBot(chatId, trimmedToken);
+
+        // Получаем информацию о боте
+        try {
+            const { Telegraf } = require('telegraf');
+            const tempBot = new Telegraf(trimmedToken);
+            const botInfo = await tempBot.telegram.getMe();
+            if (botInfo && botInfo.username) {
+                await manageStore.setBotUsername(chatId, botInfo.username);
+            }
+            tempBot.stop();
+        } catch (botErr) {
+            console.error('[SETUP-ROUTE] Could not fetch bot username:', botErr.message);
+        }
+
+        // Гарантируем что схема БД пользователя создана
+        await ensureSchema(chatId);
+
+        // Сохраняем выбранные каналы (всегда включаем telegram)
+        const selectedChannels = Array.isArray(channels) ? channels : [];
+        if (!selectedChannels.includes('telegram')) {
+            selectedChannels.push('telegram');
+        }
+        await setEnabledChannels(chatId, selectedChannels);
+
+        // Ставим флаг завершения онбординга (в manageStore, чтобы GET /setup читал оттуда же)
+        manageStore.setOnboardingComplete(chatId, true);
+
+        res.json({ success: true, message: 'Настройка завершена' });
+    } catch (e) {
+        console.error('POST /api/manage/setup', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * GET /api/manage/enabled-channels - Получить список включённых каналов
+ */
+router.get('/enabled-channels', async (req, res) => {
+    try {
+        const chatId = req.query.chat_id;
+        if (!chatId) {
+            return res.status(400).json({ error: 'chat_id is required' });
+        }
+
+        const channels = await getEnabledChannels(chatId);
+        res.json({ channels: channels || [] });
+    } catch (e) {
+        console.error('GET /api/manage/enabled-channels', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * POST /api/manage/enabled-channels - Обновить список включённых каналов
+ */
+router.post('/enabled-channels', async (req, res) => {
+    try {
+        const { chat_id: chatId, channels } = req.body;
+        if (!chatId) {
+            return res.status(400).json({ error: 'chat_id is required' });
+        }
+
+        const selectedChannels = Array.isArray(channels) ? channels : [];
+        if (!selectedChannels.includes('telegram')) {
+            selectedChannels.unshift('telegram');
+        }
+
+        await setEnabledChannels(chatId, selectedChannels);
+        res.json({ success: true, channels: selectedChannels });
+    } catch (e) {
+        console.error('POST /api/manage/enabled-channels', e);
+        res.status(500).json({ error: e.message });
+    }
 });
 
 module.exports = router;

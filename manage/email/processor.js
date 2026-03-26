@@ -14,6 +14,7 @@ const { executeAgentLoop } = require('../telegram/agentLoop');
 const { TOOLS_TERMINAL } = require('../telegram/tools');
 const { getSystemInstruction } = require('../prompts');
 const { enqueue } = require('../agentQueue');
+const { getEnabledChannels } = require('../../services/content/repository');
 
 let emailCronInterval = null;
 
@@ -125,8 +126,10 @@ async function processEmail(chatId, parsed) {
         try {
             const agentCtx = createEmailAgentCtx(chatId, data.email, parsed);
             const structuredContext = await contextHelper.buildFullContextStructured(chatId);
-            
-            const systemPrompt = getSystemInstruction('TERMINAL', structuredContext, 'email');
+            let enabledChannels = [];
+            try { enabledChannels = await getEnabledChannels(chatId); } catch (_) {}
+
+            const systemPrompt = getSystemInstruction('TERMINAL', structuredContext, 'email', enabledChannels);
 
             const historyMessages = manageStore.getAIMessages(chatId, 'email', 20);
             const messages = [
