@@ -395,12 +395,14 @@ function getSystemInstruction(mode, structuredContext, channel = 'telegram', ena
 
         // Instagram
         if (enabledChannels.includes('instagram')) {
-            systemPrompt += `📷 Навык "Копирайтер для Instagram":\n`;
-            systemPrompt += `  • Яркий, визуальный, эмоциональный стиль\n`;
-            systemPrompt += `  • Длина: 100–200 символов (основной текст)\n`;
-            systemPrompt += `  • Хэштеги: 5–15 популярных тегов (с #)\n`;
-            systemPrompt += `  • Эмодзи: активно (5–10)\n`;
-            systemPrompt += `  • Мотиватор и призыв к действию в конце\n\n`;
+            systemPrompt += `\n📷 Навык "Копирайтер для Instagram":\n`;
+            systemPrompt += `  • Первая строка = хук (интрига, вопрос, цепляющее утверждение)\n`;
+            systemPrompt += `  • Длина: 300–500 симв. (оптимально), макс 2200 симв.\n`;
+            systemPrompt += `  • Хэштеги: 5–15 в конце (микс популярных и нишевых)\n`;
+            systemPrompt += `  • Эмодзи: как маркеры абзацев (2–4 на пост)\n`;
+            systemPrompt += `  • CTA в конце: лайк, коммент, сохрани, подпишись\n`;
+            systemPrompt += `  • Стиль: живой, разговорный, обращение на «ты»\n`;
+            systemPrompt += `  • Для Reels: динамика, тренды; для фото: визуал, атмосфера\n\n`;
         }
 
         // Email

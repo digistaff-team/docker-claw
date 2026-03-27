@@ -539,4 +539,112 @@ router.get('/ok/settings', async (req, res) => {
   }
 });
 
+// =============================================
+// Instagram Endpoints
+// =============================================
+
+const instagramMvpService = require('../services/instagramMvp.service');
+
+// POST /api/content/instagram/run-now — генерация Instagram-поста
+router.post('/instagram/run-now', async (req, res) => {
+  const chatId = normalizeChatId(req.body.chat_id);
+  const reason = String(req.body.reason || 'api').trim() || 'api';
+  if (!chatId) {
+    return res.status(400).json({ error: 'chat_id is required' });
+  }
+  const bot = resolveBotFacade(chatId);
+  if (!bot) {
+    return res.status(409).json({ error: 'Telegram bot is not running for chat_id' });
+  }
+  try {
+    const result = await instagramMvpService.runNow(chatId, bot, reason);
+    return res.json(result);
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/content/instagram/jobs — список Instagram-задач
+router.get('/instagram/jobs', async (req, res) => {
+  const chatId = normalizeChatId(req.query.chat_id);
+  if (!chatId) {
+    return res.status(400).json({ error: 'chat_id is required' });
+  }
+  const status = req.query.status ? String(req.query.status).trim().toLowerCase() : null;
+  const limit = Math.min(toPositiveInt(req.query.limit, 50), 200);
+  const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+
+  try {
+    const result = await instagramMvpService.listJobs(chatId, { status, limit, offset });
+    return res.json(result);
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/content/instagram/jobs/:id — Instagram-задача по ID
+router.get('/instagram/jobs/:id', async (req, res) => {
+  const chatId = normalizeChatId(req.query.chat_id);
+  const jobId = parseInt(req.params.id, 10);
+  if (!chatId) {
+    return res.status(400).json({ error: 'chat_id is required' });
+  }
+  if (!Number.isFinite(jobId) || jobId <= 0) {
+    return res.status(400).json({ error: 'invalid job id' });
+  }
+
+  try {
+    const result = await instagramMvpService.getJobById(chatId, jobId);
+    if (!result) return res.status(404).json({ error: 'job not found' });
+    return res.json({ job: result });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/content/instagram/jobs/:id/:action — модерация Instagram-поста
+router.post('/instagram/jobs/:id/:action', async (req, res) => {
+  const chatId = normalizeChatId(req.body.chat_id || req.query.chat_id);
+  const jobId = parseInt(req.params.id, 10);
+  const actionRaw = String(req.params.action || '').trim().toLowerCase();
+  const action = actionRaw.replace(/-/g, '_');
+  const allowed = new Set(['approve', 'reject', 'regen_text', 'regen_image']);
+
+  if (!chatId) {
+    return res.status(400).json({ error: 'chat_id is required' });
+  }
+  if (!Number.isFinite(jobId) || jobId <= 0) {
+    return res.status(400).json({ error: 'invalid job id' });
+  }
+  if (!allowed.has(action)) {
+    return res.status(400).json({ error: 'invalid action' });
+  }
+
+  const bot = resolveBotFacade(chatId);
+  if (!bot) {
+    return res.status(409).json({ error: 'Telegram bot is not running for chat_id' });
+  }
+
+  try {
+    const result = await instagramMvpService.handleInstagramModerationAction(chatId, bot, jobId, action);
+    return res.json(result);
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/content/instagram/settings — настройки Instagram
+router.get('/instagram/settings', async (req, res) => {
+  const chatId = normalizeChatId(req.query.chat_id);
+  if (!chatId) {
+    return res.status(400).json({ error: 'chat_id is required' });
+  }
+  try {
+    const settings = instagramMvpService.getIgSettings(chatId);
+    return res.json(settings);
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;

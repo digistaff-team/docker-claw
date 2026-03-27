@@ -167,6 +167,10 @@ async function startServer() {
     const okMvpService = require('./services/okMvp.service');
     okMvpService.startScheduler(() => telegramRunner.bots);
 
+    // Запуск Instagram-планировщика
+    const instagramMvpService = require('./services/instagramMvp.service');
+    instagramMvpService.startScheduler(() => telegramRunner.bots);
+
     // Подключение Webhook API
     const webhookRoutes = require('./routes/webhook.routes');
     app.use('/', webhookRoutes);

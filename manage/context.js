@@ -103,6 +103,33 @@ async function getAutoVkCopywriterSkill() {
 }
 
 /**
+ * Проверяет, подключён ли канал Instagram
+ * @param {string} chatId - ID чата
+ * @returns {boolean}
+ */
+function isInstagramChannelActive(chatId) {
+    const igConfig = manageStore.getInstagramConfig(chatId);
+    return !!(igConfig?.is_active && igConfig?.ig_user_id && igConfig?.access_token);
+}
+
+/**
+ * Получает навык "Копирайтер для Instagram" автоматически
+ * @returns {Promise<Object|null>}
+ */
+async function getAutoInstagramCopywriterSkill() {
+    try {
+        const skill = await mysqlService.getSkillBySlug('instagram-copywriter');
+        if (skill) {
+            console.log('[AUTO-SKILL-IG] Found Instagram copywriter skill:', skill.name);
+        }
+        return skill || null;
+    } catch (e) {
+        console.error('[AUTO-SKILL-IG] Error:', e.message);
+        return null;
+    }
+}
+
+/**
  * Собирает контекст окружения для ответа бота: последние команды, структура файлов, персона.
  */
 async function buildContext(chatId) {
@@ -317,6 +344,15 @@ async function buildFullContextStructured(chatId) {
         if (vkSkill && !skills.find(s => s.slug === 'vk-copywriter')) {
             skills.push(vkSkill);
             console.log('[AUTO-SKILL-VK] Added VK copywriter skill for chat:', chatId);
+        }
+    }
+
+    // === АВТОМАТИЧЕСКОЕ ДОБАВЛЕНИЕ НАВЫКА ПРИ АКТИВНОМ КАНАЛЕ INSTAGRAM ===
+    if (isInstagramChannelActive(chatId)) {
+        const igSkill = await getAutoInstagramCopywriterSkill();
+        if (igSkill && !skills.find(s => s.slug === 'instagram-copywriter')) {
+            skills.push(igSkill);
+            console.log('[AUTO-SKILL-IG] Added Instagram copywriter skill for chat:', chatId);
         }
     }
 

@@ -14,6 +14,7 @@ const contentMvpService = require('../../services/contentMvp.service');
 const pinterestMvpService = require('../../services/pinterestMvp.service');
 const vkMvpService = require('../../services/vkMvp.service');
 const okMvpService = require('../../services/okMvp.service');
+const instagramMvpService = require('../../services/instagramMvp.service');
 const { getEnabledChannels } = require('../../services/content/repository');
 
 const bots = new Map(); // chatId -> { bot, token }
@@ -987,6 +988,40 @@ function startBot(chatId, token) {
         } catch (e) {
             await ctx.answerCbQuery('Ошибка').catch(() => {});
             await ctx.reply(`Ошибка модерации ОК: ${e.message}`);
+        }
+    });
+
+    // Instagram moderation callbacks
+    bot.action(/^ig_mod:(\d+):(approve|reject|regen_text|regen_image)$/, async (ctx) => {
+        const fromId = String(ctx.from?.id || '');
+        const tgChatId = String(ctx.chat?.id || '');
+        const settings = contentMvpService.getContentSettings
+            ? contentMvpService.getContentSettings(chatId)
+            : {};
+        const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
+        const data = manageStore.getState(chatId);
+        const verifiedTgId = data?.verifiedTelegramId ? String(data.verifiedTelegramId) : null;
+        const allowedIds = new Set([String(chatId), moderatorId, tgChatId, verifiedTgId].filter(Boolean));
+        if (!allowedIds.has(fromId)) {
+            console.log(`[IG-MOD] Access denied: fromId=${fromId}, chatId=${chatId}, moderatorId=${moderatorId}, tgChatId=${tgChatId}, verifiedTgId=${verifiedTgId}`);
+            await ctx.answerCbQuery('Недостаточно прав', { show_alert: true }).catch(() => {});
+            return;
+        }
+
+        const [, jobIdRaw, action] = ctx.match || [];
+        const jobId = Number(jobIdRaw);
+        if (!Number.isFinite(jobId)) {
+            await ctx.answerCbQuery('Некорректный ID').catch(() => {});
+            return;
+        }
+
+        try {
+            const result = await instagramMvpService.handleInstagramModerationAction(chatId, { telegram: ctx.telegram }, jobId, action);
+            await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
+            await ctx.reply(result?.message || 'Операция выполнена.');
+        } catch (e) {
+            await ctx.answerCbQuery('Ошибка').catch(() => {});
+            await ctx.reply(`Ошибка модерации Instagram: ${e.message}`);
         }
     });
 

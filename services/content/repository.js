@@ -1290,7 +1290,8 @@ async function ensureChannelSchema(chatId, channelName) {
       `);
       await client.query(`CREATE INDEX IF NOT EXISTS idx_pinterest_jobs_status ON pinterest_jobs(status, created_at)`);
     } else if (channelName === 'instagram') {
-      // Stub: таблицы ещё не определены
+      const igRepo = require('./instagram.repository');
+      await igRepo.ensureSchema(chatId);
     } else if (channelName === 'youtube') {
       // Stub: таблицы ещё не определены
     } else if (channelName === 'email') {
