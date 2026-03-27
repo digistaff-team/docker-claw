@@ -2,153 +2,447 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+---
+
 ## Project Overview
 
-Docker-Claw (Клиент Завод) v3.0.0 — AI-powered platform that manages isolated Docker containers per user, enables task execution through Telegram/Email, and provides automated content generation and publishing to Telegram channels.
+**Docker-Claw (Клиент Завод) v3.0.0** — AI-платформа для управления изолированными Docker-контейнерами. Каждый пользователь получает персональный контейнер (Node.js-среда), персональную PostgreSQL БД и Telegram-бота. Система автоматически генерирует и публикует контент в Telegram, ВКонтакте, Одноклассники, Pinterest.
 
-**Stack:** Node.js 18 + Express.js, PostgreSQL 15, Docker, Telegraf (Telegram), nodemailer/imap-simple (Email). Frontend is static HTML/CSS/JS (no framework).
+**Стек:** Node.js 18 + Express.js, PostgreSQL 15, MySQL 8 (навыки), Docker, Telegraf (Telegram Bot API), nodemailer/imap-simple (Email). Фронтенд — статические HTML/CSS/JS файлы (без фреймворка).
+
+---
 
 ## Commands
 
 ```bash
-npm install          # Install dependencies
-npm run dev          # Development with nodemon auto-reload
+npm install          # Установить зависимости
+npm run dev          # Development: nodemon + auto-reload
 npm start            # Production: node server.js
-npm test             # Run tests (Node.js assert, no test runner)
+
+# Тесты
+node tests/content.status.test.js       # Тест машины состояний
+node tests/validators.extended.test.js  # Тест валидации контента
 
 # Docker
-docker-compose up -d           # Start all services (postgres, nginx, app)
-docker-compose logs -f app     # View app logs
-docker-compose down            # Stop all
+docker-compose up -d           # Запустить все сервисы (postgres, nginx, app)
+docker-compose logs -f app     # Логи приложения
+docker-compose down            # Остановить все
 ```
 
-Server runs on port 3015 by default. Config loaded from `.env` + `.env.local` (override).
+Сервер работает на порту `3015` по умолчанию. Конфигурация загружается из `.env` + `.env.local` (`.env.local` переопределяет `.env`).
+
+---
 
 ## Architecture
 
-### Core Flow
+### Общий поток данных
 
-1. User authenticates via Telegram auth bot → creates session → Docker container spawned (`sandbox-user-{chatId}`)
-2. Per-user PostgreSQL database auto-provisioned
-3. Commands executed inside isolated container via `/api/execute`
-4. AI agent loop processes messages through LLM with tool-calling pattern
+```
+Telegram auth bot → one-time token → /auth.html → сессия создана
+    ↓
+Docker container spawned (sandbox-user-{chatId})
+    ↓
+Per-user PostgreSQL DB auto-provisioned (db_{chatId})
+    ↓
+Пользователь управляет контейнером через Telegram-бота
+    ↓
+AI агент (agentLoop) обрабатывает сообщения через LLM с tool-calling
+    ↓
+Контент генерируется и публикуется в Telegram/VK/OK/Pinterest по расписанию
+```
 
-### Key Subsystems
+---
 
-**Session & Container Management:**
-- `services/session.service.js` — in-memory session Map, lifecycle management
-- `services/docker.service.js` — container CRUD, resource limits, command execution
-- `services/storage.service.js` — backups, file persistence at `/var/sandbox-data`
+## Key Subsystems
 
-**Telegram Bot (two-bot system):**
-- `manage/telegram/authBot.js` — central auth bot (one global instance); sends one-time login token via `POST /api/auth/telegram-login`
-- `routes/auth.routes.js` — auth endpoints; issues 10-minute one-time tokens for Telegram web login; redirects to `/auth.html?tg_login_token=<hex>`
-- `manage/telegram/runner.js` (51KB) — per-user bot lifecycle, message routing
-- `manage/telegram/agentLoop.js` (47KB) — AI reasoning loop with tool-call pattern
-- `manage/telegram/toolHandlers.js` (77KB) — tool implementations (executeCommand, readFile, writeFile, etc.)
-- `manage/telegram/tools.js` (24KB) — tool definitions sent to LLM
+### 1. Session & Container Management
 
-**Content MVP (automated publishing):**
-- `services/content/` — modular subsystem with status machine, validators, queue, worker, video support
-- `services/contentMvp.service.js` (70KB) — orchestrator: generation, scheduling, publishing; runs scheduler every 60s for per-user tasks
-- Status flow: `draft → ready → approved → published` (with error/failed paths)
-- Schema in `content_schema.sql`
-- **Alerts disabled** — `checkAndAlert()` removed from scheduler; no automatic error notifications sent
+**`services/session.service.js`** — центральный менеджер сессий. Хранит in-memory Map `sessions` (chatId → объект сессии). Каждая сессия содержит `containerId`, `dataDir`, объект PostgreSQL-подключения, счётчик команд, время создания и последней активности. Ключевые функции:
+- `createSession(chatId)` — создаёт Docker-контейнер, инициализирует PostgreSQL БД, монтирует `/var/sandbox-data/{chatId}/` как `/workspace` внутри контейнера. Инициализация рабочих директорий (yarn, pnpm, nodemon, TypeScript) происходит асинхронно в фоне.
+- `getOrCreateSession(chatId)` — атомарная операция: вернуть существующую или создать новую.
+- `destroySession(chatId)` — останавливает и удаляет контейнер, делает DROP DATABASE, удаляет из памяти.
+- `removeSession(chatId)` — только убирает из памяти, не трогая контейнер и БД (используется в мягком Delete в admin).
+- `recoverAllSessions()` — вызывается при старте сервера, восстанавливает сессии из работающих контейнеров.
+- `cleanupIdleSessions()` — удаляет сессии неактивные дольше `SESSION_MAX_IDLE_MS` (24 часа).
 
-**AI Integration:**
-- `services/ai_router_service.js` — LLM routing
-- `manage/prompts.js` — system prompts for AI agent
-- `manage/context.js` — context builder for LLM calls
+**`services/docker.service.js`** — прямое взаимодействие с Docker CLI через `child_process.spawn`. Ключевые функции:
+- `createUserContainer(chatId, options)` — создаёт контейнер с именем `sandbox-user-{chatId}`. Параметры: образ `node:20-bookworm`, память 256m, CPU 2.0, bind-mount данных, tmpfs на /tmp. Передаёт переменные окружения: PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD, DATABASE_URL.
+- `executeInContainer(containerId, command, timeout)` — выполняет bash-команду через `docker exec`. Блокирует опасные команды (`rm -rf /`, `dd if=`, `mkfs` и т.п.).
+- `initializeWorkspaceStructure(containerId, onStep)` — устанавливает yarn/pnpm, nodemon/pm2, TypeScript/ESLint/Prettier, Vite. Создаёт директории `/workspace/{input,output,work,log,apps,tmp}`.
+- `getAllUserContainers()` — возвращает список всех контейнеров с именем `sandbox-user-*`.
+- `resetContainerWorkspace(containerId)` — очищает `/workspace` и переинициализирует.
 
-### Route Structure
+**`services/storage.service.js`** — работа с файловой системой пользователей. `getDataDir(chatId)` возвращает `DATA_ROOT/{sanitized_chatId}`, где sanitization убирает все символы кроме `[a-z0-9_-]`. `backupUserData(chatId)` копирует директорию в `BACKUP_ROOT/{chatId}_{timestamp}`. `cleanOldBackups()` удаляет бэкапы старше 7 дней.
 
-All API routes registered in `routes/index.js`. Key endpoints:
-- `/api/session/*` — container lifecycle
-- `/api/execute` — bash execution in container
-- `/api/files/*` — file upload/download/manage
-- `/api/content/*` — content CRUD and publishing
-- `/api/manage/*` — Telegram/Email/AI settings
-- `/admin/*` — admin panel (password-protected)
-- `/sandbox/*` — proxy to container endpoints
+**`services/postgres.service.js`** — управление PostgreSQL. `createUserDatabase(chatId)` создаёт БД `db_{chatId}` и вызывает `contentRepository.ensureSchema()` для инициализации таблиц. `deleteUserDatabase(chatId)` терминирует все активные подключения к БД (`pg_terminate_backend`) и выполняет `DROP DATABASE IF EXISTS`.
 
-### Configuration
+---
 
-All env vars centralized in `config.js`. Critical ones: `PORT`, `PG_*`, `DOCKER_IMAGE`, `AUTH_BOT_TOKEN`, `BOT_TOKEN`, `CHANNEL_ID`, `OPENAI_API_KEY`, `KIE_API_KEY`, `ADMIN_PASSWORD`.
+### 2. Хранилище состояния пользователей
 
-### Frontend
+**`manage/store.js`** — персистентное in-memory хранилище. В памяти: `statesCache` (chatId → объект). На диске: `{DATA_ROOT}/manage-state-{chatId}.json` (+ `.bak` бэкап). Запись атомарна через `.tmp` файл с последующим `rename`. Загружается при старте сервера через `load()`.
 
-Static files in `public/`. Each page is a standalone HTML file with corresponding JS in `public/js/`. Shared utilities in `public/js/common.js` (handles `initAuth()`, one-time token redemption). Styling in `public/css/main.css`.
+Структура объекта состояния пользователя (ключевые поля):
+```javascript
+{
+  token: "TG_BOT_TOKEN",           // Токен Telegram-бота пользователя
+  botUsername: "czcw_bot",         // Username бота (из getMe())
+  verifiedUsername: "@user",       // Telegram username после верификации кодом
+  verifiedTelegramId: 12345678,    // Telegram user ID после верификации
+  onboardingComplete: true,
 
-**Key Pages:**
-- `index.html` — landing/marketing page (no auth required)
-- `auth.html` — entry point after Telegram login; calls `initAuth()` to process `tg_login_token` from bot; shows login form if not authenticated
-- `console.html`, `ai.html`, `files.html`, etc. — authenticated pages with user interface
+  // AI провайдер
+  aiProvider: "protalk",           // "protalk" | "openai" | "openrouter"
+  aiModel: "google/gemini-2.5-pro-preview",
+  aiAuthToken: "...",              // Токен для ProTalk
+  aiCustomApiKey: "...",           // Ключ для OpenAI/OpenRouter
+  aiUserEmail: "user@example.com", // Email для ProTalk
+
+  // Контент Telegram
+  contentSettings: {
+    channelId: "-100XXXXXXXXXX",
+    moderatorUserId: "128247430",
+    scheduleTime: "09:00",
+    scheduleTz: "Europe/Moscow",
+    dailyLimit: 1,
+    contentType: "text+image",     // "text+image" | "text+video"
+    publishIntervalHours: 24,
+    allowedWeekdays: [1,2,3,4,5],
+    premoderationEnabled: true
+  },
+
+  // ВКонтакте
+  vkConfig: {
+    is_active: true,
+    group_id: "123456",
+    access_token: "vk1.a...",
+    schedule_time: "10:00"
+  },
+
+  // Одноклассники
+  okConfig: {
+    is_active: true,
+    group_id: "789",
+    access_token: "...",
+    schedule_time: "11:00"
+  },
+
+  // Pinterest
+  pinterestConfig: {
+    is_active: true,
+    access_token: "...",
+    board_ids: ["board1"]
+  },
+
+  // Контекстные настройки AI
+  contextSettings: {
+    maxCommands: 5, maxFiles: 80, maxDepth: 3,
+    maxFileLines: 30, includeStdout: true, includeStderr: true,
+    stdoutMaxChars: 200, stderrMaxChars: 200
+  },
+
+  lastCommands: [...],    // Max 50 последних bash-команд
+  aiMessages: [...],      // Max 100 сообщений в диалоге с AI
+  aiRouterLogs: [...]     // Max 200 записей вызовов AI Router
+}
+```
+
+Ключевые функции `clearToken(chatId)` — удаляет из `statesCache` и удаляет оба файла (`.json` + `.bak`).
+
+---
+
+### 3. Telegram Bot (двух-бот система)
+
+**`manage/telegram/authBot.js`** — центральный бот аутентификации (`AUTH_BOT_TOKEN`), один на всю систему. Принимает `/start` от пользователей, через `POST /api/auth/telegram-login` выдаёт одноразовый login-токен (hex, TTL 10 минут) и редиректит на `/auth.html?tg_login_token=<hex>`. Является авторитетным источником для получения `username` пользователя по его `chatId` (все пользователи системы проходят через него).
+
+**`manage/telegram/runner.js`** (57 KB) — per-user бот. Запускается через `startBot(chatId, token)`, хранит все запущенные боты в Map `bots`. Обрабатывает:
+- Команды: `/start`, `/mode` (CHAT/WORKSPACE/TERMINAL), `/help`, `/skills`, `/channels`, `/content`, `/settings`
+- Текстовые сообщения → передаёт в `agentLoop`
+- Callback query (inline кнопки) — переключение режима, выбор навыков, модерация контента
+- Модерацию постов: кнопки `✅ Опубликовать`, `🔁 Переделать`, `❌ Отклонить` для Telegram, VK, OK контента
+- `sanitizeHtmlForTelegram(html)` — нормализует HTML перед отправкой в Telegram API (допустимы только `<b>`, `<i>`, `<u>`, `<s>`, `<code>`, `<pre>`, `<a>`)
+
+**`manage/telegram/agentLoop.js`** (47 KB) — цикл рассуждений AI. `executeAgentLoop(chatId, userMessage, mode, onStep)` строит контекст, вызывает LLM, обрабатывает `tool_calls` через `toolHandlers`, итерирует пока AI не вызовет `task_completed`. Поддерживает прерывание через флаг `interrupted`.
+
+**`manage/telegram/toolHandlers.js`** (77 KB) — реализация всех инструментов AI:
+- Файловые: `readFile`, `writeFile`, `patchFile` (unified diff формат), `listDir`, `createFolder`, `deleteFile`, `sendFile`
+- Системные: `executeCommand` (bash в контейнере), `interrupt`
+- Планирование: `createPlan`, `updateStepStatus`, `taskCompleted`
+- Контекст: `requestContext` (загружает содержимое файла/папки в контекст)
+
+**`manage/telegram/tools.js`** (24 KB) — JSON-определения инструментов, передаваемых в LLM. Три набора: `TOOLS_CHAT`, `TOOLS_WORKSPACE`, `TOOLS_TERMINAL`.
+
+---
+
+### 4. AI Context & Prompts
+
+**`manage/context.js`** — собирает структурированный контекст для LLM. `buildFullContextStructured(chatId)` возвращает: историю команд, дерево файлов (из `projectCacheService`), persona-файлы (IDENTITY.md, SOUL.md, USER.md, MEMORY.md), активные навыки, информацию о БД, список приложений, активные планы, резюме сессий.
+
+**Автоматические навыки-копирайтеры** добавляются в контекст при активном канале:
+- `isTelegramChannelActive(chatId)` → `contentSettings.channelId` задан → добавляется `tg-copywriter`
+- `isVkChannelActive(chatId)` → `vkConfig.is_active && group_id && access_token` → добавляется `vk-copywriter`
+- `isOkChannelActive(chatId)` → `okConfig.is_active && group_id && access_token` → добавляется `ok-copywriter`
+
+**`manage/prompts.js`** — `getSystemInstruction(mode, structuredContext, channel, enabledChannels)`. Формирует системный промпт: личность AI, режим работы (CHAT/WORKSPACE/TERMINAL), доступные инструменты, URL входящего webhook, параметры PostgreSQL, активные навыки (из context), краткие инструкции для каждого подключённого канала публикации. Для каждого канала в `enabledChannels` включает специфику: Telegram (HTML-теги, длина, хэштеги), VK (разговорный стиль, 300–800 симв.), OK (аудитория 35+, 400–600 симв.), Pinterest (SEO, 100–300 симв.), Instagram, YouTube, Email, Дзен, TikTok.
+
+---
+
+### 5. MySQL — навыки AI (ai_skills_db)
+
+**`services/mysql.service.js`** — работа с MySQL через пул `mysql2`. База `ai_skills_db`.
+
+**Таблицы:**
+- `ai_skills` — каталог навыков. Поля: `user_email` ("system" для встроенных, "chat_{chatId}" для личных), `slug` (уникальный идентификатор), `system_prompt` (LONGTEXT — основная инструкция для AI), `is_public`, `is_active`, `usage_count`.
+- `user_selected_skills` — выбранные пользователем навыки (user_email + skill_id).
+
+**Встроенные навыки (11 штук, slug → назначение):**
+1. `python-developer` — Python + type hints, PEP 8, asyncio
+2. `javascript-nodejs-developer` — ES6+, async/await, Clean Code
+3. `seo-specialist` — ключевые слова, meta-теги, H1-H6
+4. `copywriter` — AIDA/PAS, CTA, продающие тексты
+5. `data-analyst` — статистика, визуализация, инсайты
+6. `postgresql-expert` — оптимизация запросов, EXPLAIN ANALYZE
+7. `devops-engineer` — bash, CI/CD, мониторинг
+8. `telegram-bot-developer` — Bot API, FSM, callback query
+9. `email-marketer` — subject line, сегментация, A/B
+10. `linux-sysadmin` — systemd, journalctl, firewall
+11. `tg-copywriter` — **копирайтер для Telegram-каналов**: HTML-форматирование (`<b>`, `<i>`, `<code>` и др.), структура поста (превью уведомления ~60 симв.), длина (300–800 / до 1024 для медиа), эмодзи как маркеры, хэштеги 1–4, стиль без воды, специфика для информационных / коммерческих / развлекательных каналов.
+
+`seedInitialSkillsIfEmpty()` — срабатывает при пустой таблице. **Для существующих установок** `tg-copywriter` нужно добавить вручную через `/admin/skills`.
+
+---
+
+### 6. Content MVP — многоканальная публикация
+
+Контент-пайплайн построен по единой схеме для каждого канала:
+
+**`services/contentMvp.service.js`** (74 KB) — публикация в **Telegram**. Оркестрирует генерацию, модерацию и публикацию. `runNow(chatId, botFacade, reason)` запускает немедленную генерацию. Планировщик вызывается каждые 60 секунд через `setInterval` в `server.js`, проверяет расписание (`SCHEDULE_TIME`, `SCHEDULE_TZ`) и суточный лимит (`DAILY_LIMIT = 1`).
+
+**`services/vkMvp.service.js`** (29 KB) — публикация в **ВКонтакте**. `DAILY_VK_LIMIT = 5`, `VK_MODERATION_TIMEOUT_HOURS = 24`. Использует `services/vk.service.js` (VK API v5.199).
+
+**`services/okMvp.service.js`** (32 KB) — публикация в **Одноклассники**. `OK_DAILY_LIMIT = 5`. Использует `services/ok.service.js`. Требует: `OK_APP_ID`, `OK_PUBLIC_KEY`, `OK_SECRET_KEY`.
+
+**`services/pinterestMvp.service.js`** (27 KB) — публикация в **Pinterest**. SEO-ориентированный контент. Использует `services/pinterest.service.js`.
+
+**Модули `services/content/`:**
+- `repository.js` — CRUD для контента в PostgreSQL per-user БД
+- `queue.repository.js` — очередь задач: FIFO, статусы `queued/processing/done/failed`, exponential backoff retry
+- `worker.js` — воркер для обработки очереди публикаций
+- `status.js` — машина состояний контента: `draft → ready → approved → published` (+ `error/failed`)
+- `validators.js` — валидация контента (запрещённые темы, длина, формат)
+- `limits.js` — суточные лимиты публикаций
+- `video.service.js` — асинхронная генерация видео (Runway/другой провайдер), polling статуса, fallback на изображение если видео не готово
+
+**Поток публикации:**
+```
+AI генерирует черновик (correlationId)
+    ↓
+premoderationEnabled = true?
+    ├─ ДА: отправить черновик moderatorUserId → ждать кнопку ✅/❌/🔁
+    └─ НЕТ: сразу в очередь → worker → публикация в канал
+```
+
+`moderatorUserId` по умолчанию = `CONTENT_MVP_MODERATOR_USER_ID` из `.env`. Если не задан и премодерация включена — ошибка при отправке. **Alerts отключены** — `checkAndAlert()` удалён из планировщика, автоматические уведомления об ошибках не отправляются.
+
+---
+
+### 7. AI Router
+
+**`services/ai_router_service.js`** — `callAI(chatId, authToken, model, messages, tools, userEmail)`. Определяет провайдера из `manageStore` и маршрутизирует:
+- **ProTalk** (по умолчанию): `https://ai.pro-talk.ru/api/router`
+- **OpenAI**: `https://api.openai.com/v1`
+- **OpenRouter**: `https://openrouter.ai/api/v1`
+
+Логирует `usage` (токены), время выполнения, обрабатывает ошибки 401/402/429. Поддерживает function calling (tools в JSON Schema формате).
+
+---
+
+### 8. Онбординг
+
+**`public/setup.html`** + **`public/js/setup.js`** — страница первоначальной настройки. Появляется при первом входе (`onboardingComplete = false`).
+
+Шаги:
+1. **Токен Telegram-бота** (обязателен) — пользователь создаёт бота через @BotFather, вставляет токен. Система проверяет токен (`telegram.getMe()`), запускает бота (`telegramRunner.startBot()`), сохраняет `token` и `botUsername` в store.
+2. **Выбор каналов публикации** — чекбоксы: Telegram (включён по умолчанию, нельзя снять), VK, OK, Pinterest, Instagram, Email, YouTube, Дзен, TikTok. Сохраняются в `content_config` таблицу через `setEnabledChannels(chatId, channels)`.
+3. После сохранения: `onboardingComplete = true`, редирект на `/channels.html`.
+
+---
+
+### 9. Admin Panel
+
+**`routes/admin.routes.js`** + страницы в **`public/admin/`**.
+
+Требует авторизации через `ADMIN_PASSWORD` (Bearer токен, query param `password`, заголовок `x-admin-password`, или session cookie).
+
+**Страницы:**
+- `login.html` — форма входа
+- `containers.html` — список всех контейнеров (`sandbox-user-*`) со статусом, кнопками управления
+- `container-manage.html` — детальная страница контейнера: информация (Chat ID, User Name из Telegram API, Container ID, Status, Session Created, Last Activity, Commands Executed, Python3), terminal (bash exec), кнопки Start/Stop/Restart
+- `skills.html` — CRUD навыков в MySQL `ai_skills` таблице
+- `chat.html` — чат с пользователем
+
+**Ключевые API маршруты:**
+
+| Метод | Endpoint | Описание |
+|-------|----------|----------|
+| GET | `/admin/containers-api` | Список контейнеров (JSON) |
+| GET | `/admin/container/:chatId/info` | Информация + username через AUTH_BOT_TOKEN `getChat()` |
+| POST | `/admin/container/:chatId/exec` | Выполнить bash в контейнере |
+| DELETE | `/admin/container/:chatId` | Мягкое удаление: только контейнер + сессия из памяти |
+| **DELETE** | **`/admin/container/:chatId/kill`** | **Полное удаление пользователя** (см. ниже) |
+
+**Kill operation** — `DELETE /admin/container/:chatId/kill` — последовательно удаляет 8 слоёв данных, каждый в отдельном `try/catch` (ошибка одного шага не прерывает остальные):
+1. Docker-контейнер (`stop` + `removeContainer`)
+2. PostgreSQL БД (`deleteUserDatabase` → `DROP DATABASE`)
+3. Файлы пользователя (`fs.rm` `/var/sandbox-data/{chatId}/`, recursive)
+4. State-файлы (`manageStore.clearToken` → удаляет `.json` + `.bak`)
+5. Бэкапы (`fs.readdir` `BACKUP_ROOT`, удалить все `{chatId}_*`)
+6. Снапшоты (`fs.rm` `SNAPSHOT_ROOT/{chatId}/`, recursive)
+7. MySQL записи (`DELETE FROM user_selected_skills WHERE user_email = 'chat_{chatId}'` + аналогично `ai_skills`)
+8. Сессия из памяти (`sessionService.removeSession`)
+
+Возвращает `{ success: true, chatId, results: ["container: removed", "postgres: dropped", ...] }`. Фронтенд требует ввод `chatId` в `prompt()` для подтверждения (защита от случайного нажатия).
+
+Кнопка **User Name** на странице `container-manage.html` — получает Telegram username через `AUTH_BOT_TOKEN` (не через токен пользователя), так как auth-бот гарантированно имеет переписку со всеми пользователями системы.
+
+---
+
+### 10. Route Structure
+
+Все API маршруты регистрируются в `routes/index.js`:
+
+| Префикс | Файл | Назначение |
+|---------|------|-----------|
+| `/api/session/*` | `session.routes.js` | Жизненный цикл контейнера |
+| `/api/execute` | `execute.routes.js` | Выполнение bash (legacy) |
+| `/api/files/*` | `files.routes.js` | Загрузка/скачивание файлов |
+| `/api/content/*` | `content.routes.js` | Контент CRUD и публикация |
+| `/api/manage/*` | `manage/routes.js` | Telegram/Email/AI/VK/OK настройки |
+| `/api/auth/*` | `auth.routes.js` | Аутентификация |
+| `/api/plans/*` | `plans.routes.js` | CRUD планов |
+| `/api/database/*` | `database.routes.js` | Операции с PostgreSQL |
+| `/admin/*` | `admin.routes.js` | Admin panel (password-protected) |
+| `/sandbox/*` | `sandbox.routes.js` | Прокси к контейнеру |
+| `/hook/*` | `webhook.routes.js` | Входящие webhook |
+
+---
+
+### 11. Configuration
+
+Все переменные окружения централизованы в `config.js`. Загружаются из `.env`, переопределяются `.env.local`.
+
+Критические переменные:
+
+| Переменная | Назначение |
+|-----------|-----------|
+| `PORT` | Порт сервера (3015) |
+| `PG_HOST`, `PG_PORT`, `PG_USER`, `PG_PASSWORD` | PostgreSQL подключение |
+| `PG_ADMIN_HOST` | Хост для операций CREATE/DROP DATABASE |
+| `MYSQL_SKILLS_HOST` | MySQL для навыков |
+| `DOCKER_IMAGE` | Образ контейнера (node:20-bookworm) |
+| `AUTH_BOT_TOKEN` | Центральный auth-бот (один на систему) |
+| `BOT_TOKEN` | Дефолтный бот (legacy) |
+| `CHANNEL_ID` | ID Telegram-канала по умолчанию |
+| `OPENAI_API_KEY`, `KIE_API_KEY` | AI провайдеры |
+| `ADMIN_PASSWORD` | Пароль admin-панели |
+| `DATA_ROOT` | Корень хранилища (`/var/sandbox-data`) |
+| `BACKUP_ROOT` | Бэкапы (`/var/sandbox-backups`) |
+| `SNAPSHOT_ROOT` | Снапшоты файлов (`/var/sandbox-snapshots`) |
+| `CONTENT_MVP_MODERATOR_USER_ID` | Дефолтный ID модератора контента |
+
+---
+
+### 12. Frontend
+
+Статические файлы в `public/`. Каждая страница — самодостаточный HTML-файл. Общие утилиты в `public/js/common.js` (`initAuth()`, обработка `tg_login_token`). Стили в `public/css/main.css`.
+
+**Ключевые страницы:**
+- `index.html` — лендинг (без авторизации)
+- `auth.html` — точка входа после Telegram-логина; `initAuth()` обрабатывает `tg_login_token` из URL
+- `setup.html` — онбординг (первый вход)
+- `channels.html` — настройка каналов публикации, модератора, расписания
+- `console.html` — терминал / AI-чат
+- `ai.html` — настройки AI провайдера
+- `content.html` — управление темами контента
+- `skills.html` — выбор AI навыков
+- `apps.html` — реестр приложений в контейнере
+- `files.html` — файловый менеджер
+- `info.html` — статистика контейнера и диска
+- `tasks.html` — задачи (plans)
+
+---
 
 ## Database Schema
 
-The project uses a **two-tier database architecture**:
+### Трёхуровневая архитектура БД
 
-### Central Database (`clientzavod`)
-Global database shared across all users. Contains:
-- `content_queue` — main content items for generation and publishing (50+ columns, indexed on status/channel/pending/scheduled)
-- `content_channels` — publishing channel configs per user (Telegram, Facebook, Instagram, Pinterest, YouTube, etc.) with auth tokens, rate limits
-- `content_analytics` — metrics: views, likes, shares, clicks, conversions (linked to content_queue)
-- `content_templates` — reusable content templates per channel/content-type
-- `content_assets` — media files (images, videos) with storage paths (local, S3, GCS)
-- `content_workflow` — audit log of status transitions with action metadata
-- `content_import_sources` — configs for importing from Excel, Google Sheets, CSV, RSS feeds
+#### 1. Центральная PostgreSQL БД (`clientzavod`)
 
-**Key tables:**
-- `content_queue` tracks the full lifecycle: `draft → pending → processing → generated → waiting_approval → approved → scheduled → publishing → published`
-- `content_analytics` collects metrics hourly/daily via external APIs
-- `content_channels` stores encrypted access tokens for multi-platform publishing
+Глобальная БД, разделяемая между всеми пользователями:
+- `content_queue` — очередь контента. Полный жизненный цикл: `draft → pending → processing → generated → waiting_approval → approved → scheduled → publishing → published`. 50+ колонок, индексы на status/channel/pending/scheduled.
+- `content_channels` — конфиги каналов публикации (Telegram, VK, OK, Facebook, Instagram, Pinterest, YouTube, Email). Хранит auth-токены, rate limits, расписание.
+- `content_analytics` — метрики: просмотры, лайки, шары, клики, конверсии. Сбор hourly/daily через внешние API.
+- `content_templates` — шаблоны контента per channel/content-type.
+- `content_assets` — медиафайлы (изображения, видео) с путями хранения (local/S3/GCS).
+- `content_workflow` — audit log переходов статусов.
+- `content_import_sources` — конфиги импорта из Excel, Google Sheets, CSV, RSS.
 
-### Per-User Database (`db_{chatId}`)
-Separate PostgreSQL database created for each authenticated user. Isolated data per user. Contains:
-- `content_jobs` — individual content generation tasks (main entity, linked to content_queue)
-- `content_posts` — generated posts ready for publishing
-- `content_assets` — media files for jobs (images, generated videos)
-- `content_job_queue` — async task queue with exponential backoff retry (FIFO, status: queued/processing/done/failed)
-- `publish_logs` — audit trail of publish attempts to each channel
-- `content_topics` — content ideas/topics for generation from import
-- `content_materials` — source materials for content generation
-- `content_sheet_state` — tracking state of imported spreadsheet rows
-- `content_config` — key-value user configuration
-- `pinterest_jobs` — Pinterest-specific pin generation tasks
-- `pinterest_publish_logs` — Pinterest publication audit
-- `video_generations` — Runway/video provider task tracking with polling (status: pending/processing/completed/failed/timeout)
+#### 2. Пользовательская PostgreSQL БД (`db_{chatId}`)
 
-**Initialization:** Automatic via `repository.ensureSchema()` called during user session creation. Uses `CREATE TABLE IF NOT EXISTS` for idempotency. Full schema definition in `content_schema.sql`.
+Создаётся автоматически при первой сессии через `repository.ensureSchema()` (`CREATE TABLE IF NOT EXISTS`):
+- `content_jobs` — задания генерации (привязаны к `content_queue` через uuid)
+- `content_posts` — сгенерированные посты (draft → ready)
+- `content_assets` — медиафайлы заданий
+- `content_job_queue` — async очередь с exponential backoff retry (FIFO, статусы: queued/processing/done/failed)
+- `publish_logs` — audit trail публикаций по каждому каналу
+- `content_topics` — темы/идеи для генерации из импорта
+- `content_materials` — исходные материалы
+- `content_sheet_state` — состояние строк импортированных таблиц
+- `content_config` — key-value конфигурация пользователя
+- `pinterest_jobs`, `pinterest_publish_logs` — Pinterest-специфика
+- `vk_jobs`, `vk_publish_logs` — VK-специфика
+- `ok_jobs`, `ok_publish_logs` — OK-специфика
+- `video_generations` — задания генерации видео (Runway), polling статуса (pending/processing/completed/failed/timeout)
 
-**Data Flow:**
+#### 3. MySQL БД (`ai_skills_db`)
+
+Навыки AI — описано выше в разделе "MySQL — навыки AI".
+
+---
+
+## File System Layout
+
 ```
-Spreadsheet (Excel/Google Sheets)
-  ↓
-content_topics (import)
-  ↓
-content_jobs (one job per topic)
-  ↓
-content_posts (after generation: draft → ready)
-  ↓
-publish_logs (after publishing to channels)
+/var/sandbox-data/                          # DATA_ROOT
+├── manage-state-{chatId}.json              # State пользователя (token, settings, история)
+├── manage-state-{chatId}.json.bak          # Бэкап state
+└── {chatId}/                               # Файлы пользователя (монтируются в /workspace)
+    ├── apps/                               # Node.js приложения
+    ├── input/, output/, work/              # Рабочие директории
+    ├── log/, tmp/                          # Логи и временные файлы
+    └── plans/                              # Markdown планы
+
+/var/sandbox-backups/
+└── {chatId}_{ISO_timestamp}/               # Бэкап данных пользователя (TTL 7 дней)
+
+/var/sandbox-snapshots/
+└── {chatId}/
+    └── {escaped_file_path}/
+        └── {timestamp}.snap               # Версии файлов (max 10 на файл, TTL 7 дней)
 ```
 
-**Key Relations:**
-- Central DB `content_queue` ← Per-user DB `content_jobs` (one-to-one mapping via uuid/external_id)
-- `content_job_queue` → `content_jobs` (task polling, retry logic in queue.repository.js)
-- `content_jobs` → `content_posts` (generation → publication)
-- `content_posts` → `publish_logs` (multi-channel audit)
-- `content_queue` → `content_workflow` (status audit trail, triggered by row update)
-- `content_queue` → `content_analytics` (metrics collection, daily aggregation)
+---
 
 ## Testing
 
-Tests are in `tests/` using Node.js built-in `assert` module (no framework). Two test files:
-- `tests/content.status.test.js` — status machine transitions
-- `tests/validators.extended.test.js` — content validation, forbidden topics, quotas
+Тесты в `tests/` используют встроенный `assert` Node.js (без тестового раннера):
+- `tests/content.status.test.js` — переходы машины состояний контента
+- `tests/validators.extended.test.js` — валидация контента, запрещённые темы, квоты
 
-Run a single test: `node tests/content.status.test.js`
+Запуск одного теста: `node tests/content.status.test.js`
+
+---
 
 ## Language
 
-The project documentation (README.md, commits, UI) is primarily in Russian.
+Документация (README.md, коммиты, UI) — преимущественно на русском языке.
