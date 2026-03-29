@@ -157,19 +157,26 @@ async function startServer() {
             }
             
             // Находим правильный chatId: ищем сессию где есть черновик с этим jobId
+            // Модератор может иметь доступ к черновикам разных пользователей
             let resolvedChatId = null;
             const allStates = manageStore.getAllStates();
             for (const [cid, data] of Object.entries(allStates)) {
-                if (String(data.verifiedTelegramId) !== String(fromId)) {
+                // Проверяем есть ли черновик с этим jobId
+                const drafts = data.contentDrafts || {};
+                if (!drafts[String(jobId)]) {
                     continue;
                 }
-                const drafts = data.contentDrafts || {};
-                if (drafts[String(jobId)]) {
+                // Проверяем доступ: владелец или модератор
+                const ownerTgId = String(data.verifiedTelegramId || '');
+                const contentSettings = data.contentSettings || {};
+                const moderatorId = String(contentSettings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
+                const allowedIds = new Set([ownerTgId, moderatorId].filter(Boolean));
+                if (allowedIds.has(fromId)) {
                     resolvedChatId = cid;
                     break;
                 }
             }
-            
+
             if (!resolvedChatId) {
                 resolvedChatId = manageStore.getByVerifiedTelegramId(fromId);
             }
@@ -195,7 +202,79 @@ async function startServer() {
                 await ctx.reply(`Ошибка модерации: ${e.message}`).catch(() => {});
             }
         });
-        
+
+        // VK moderation callbacks for CW_BOT_TOKEN users
+        cwBot.action(/^vk_mod:(\d+):(approve|reject|regen_text|regen_image)$/, async (ctx) => {
+            const fromId = String(ctx.from?.id || '');
+            const jobId = Number(ctx.match?.[1]);
+            const action = ctx.match?.[2];
+            
+            console.log(`[CW-BOT-VK] ${action} job ${jobId} (fromId=${fromId})`);
+            
+            // Находим chatId по черновику
+            let resolvedChatId = null;
+            const allStates = manageStore.getAllStates();
+            for (const [cid, data] of Object.entries(allStates)) {
+                const drafts = data.vkDrafts || {};
+                if (!drafts[String(jobId)]) continue;
+                
+                const vkSettings = manageStore.getVkSettings?.(cid) || {};
+                const globalSettings = data.contentSettings || {};
+                const channelModeratorId = vkSettings.moderatorUserId || 
+                                           globalSettings.moderatorUserId || 
+                                           process.env.CONTENT_MVP_MODERATOR_USER_ID;
+                const ownerTgId = String(data.verifiedTelegramId || '');
+                const allowedIds = new Set([ownerTgId, channelModeratorId].filter(Boolean));
+                
+                if (allowedIds.has(fromId)) {
+                    resolvedChatId = cid;
+                    break;
+                }
+            }
+            
+            if (!resolvedChatId) {
+                await ctx.answerCbQuery('Черновик не найден').catch(() => {});
+                return;
+            }
+            
+            try {
+                const result = await vkMvpService.handleVkModerationAction(resolvedChatId, { telegram: ctx.telegram }, jobId, action);
+                await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
+                await ctx.reply(result?.message || 'Операция выполнена.').catch(() => {});
+            } catch (e) {
+                console.error(`[CW-BOT-VK] Error:`, e);
+                await ctx.answerCbQuery('Ошибка').catch(() => {});
+                await ctx.reply(`Ошибка модерации VK: ${e.message}`).catch(() => {});
+            }
+        });
+
+        // OK moderation callbacks for CW_BOT_TOKEN users
+        cwBot.action(/^ok_mod:(\d+):(approve|reject|regen_text|regen_image)$/, async (ctx) => {
+            const fromId = String(ctx.from?.id || '');
+            const jobId = Number(ctx.match?.[1]);
+            const action = ctx.match?.[2];
+            console.log(`[CW-BOT-OK] ${action} job ${jobId} (fromId=${fromId})`);
+            await ctx.answerCbQuery('В разработке').catch(() => {});
+        });
+
+        // Instagram moderation callbacks for CW_BOT_TOKEN users
+        cwBot.action(/^ig_mod:(\d+):(approve|reject|regen_text|regen_image)$/, async (ctx) => {
+            const fromId = String(ctx.from?.id || '');
+            const jobId = Number(ctx.match?.[1]);
+            const action = ctx.match?.[2];
+            console.log(`[CW-BOT-IG] ${action} job ${jobId} (fromId=${fromId})`);
+            await ctx.answerCbQuery('В разработке').catch(() => {});
+        });
+
+        // Pinterest moderation callbacks for CW_BOT_TOKEN users
+        cwBot.action(/^pin_mod:(\d+):(approve|reject|regen_text|regen_image)$/, async (ctx) => {
+            const fromId = String(ctx.from?.id || '');
+            const jobId = Number(ctx.match?.[1]);
+            const action = ctx.match?.[2];
+            console.log(`[CW-BOT-PIN] ${action} job ${jobId} (fromId=${fromId})`);
+            await ctx.answerCbQuery('В разработке').catch(() => {});
+        });
+
         // Запускаем с webhook если WEBHOOK_URL установлен
         if (process.env.WEBHOOK_URL) {
             const webhookUrl = `${process.env.WEBHOOK_URL}/cw`;
@@ -219,8 +298,19 @@ async function startServer() {
         console.log('🤖 Content bot: ⏸️  SKIPPED (CW_BOT_TOKEN not set)');
     }
     
-    // Делаем cwBot доступным для contentMvpService
+    // Делаем cwBot доступным для всех сервисов
     contentMvpService.setContentBot(cwBot);
+    
+    // Передаём cwBot в другие сервисы (Pinterest, VK, OK, Instagram)
+    const pinterestMvpService = require('./services/pinterestMvp.service');
+    const vkMvpService = require('./services/vkMvp.service');
+    const okMvpService = require('./services/okMvp.service');
+    const instagramMvpService = require('./services/instagramMvp.service');
+    
+    pinterestMvpService.setPinterestCwBot(cwBot);
+    vkMvpService.setVkCwBot(cwBot);
+    okMvpService.setOkCwBot(cwBot);
+    instagramMvpService.setIgCwBot(cwBot);
     
     // Email processor - запуск cron для опроса почты
     let emailProcessor;
@@ -244,19 +334,15 @@ async function startServer() {
     contentMvpService.startScheduler(() => telegramRunner.bots);
 
     // Запуск Pinterest-планировщика
-    const pinterestMvpService = require('./services/pinterestMvp.service');
     pinterestMvpService.startScheduler(() => telegramRunner.bots);
 
     // Запуск VK-планировщика
-    const vkMvpService = require('./services/vkMvp.service');
     vkMvpService.startScheduler(() => telegramRunner.bots);
 
     // Запуск OK-планировщика
-    const okMvpService = require('./services/okMvp.service');
     okMvpService.startScheduler(() => telegramRunner.bots);
 
     // Запуск Instagram-планировщика
-    const instagramMvpService = require('./services/instagramMvp.service');
     instagramMvpService.startScheduler(() => telegramRunner.bots);
 
     // Подключение Webhook API

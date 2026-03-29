@@ -836,6 +836,12 @@ async function loadInstagramConfig() {
             if (cfg.default_alt_text) document.getElementById('instagramDefaultAltText').value = cfg.default_alt_text;
             if (cfg.location_id) document.getElementById('instagramLocationId').value = cfg.location_id;
 
+            // Загружаем moderator_user_id
+            const moderatorEl = document.getElementById('instagramModeratorUserId');
+            if (moderatorEl) {
+                moderatorEl.value = cfg.moderator_user_id || chatId;
+            }
+
             const isActiveEl = document.getElementById('instagramIsActive');
             if (isActiveEl) isActiveEl.checked = cfg.is_active !== false;
             const autoPublishEl = document.getElementById('instagramAutoPublish');
@@ -934,6 +940,7 @@ async function saveInstagramConfig() {
     const postingHours = postingHoursRaw
         ? postingHoursRaw.split(',').map(h => parseInt(h.trim(), 10)).filter(h => h >= 0 && h <= 23)
         : [];
+    const moderatorUserId = (document.getElementById('instagramModeratorUserId')?.value || '').trim() || chatId;
 
     try {
         const res = await fetch(`${API_MANAGE}/channels/instagram`, {
@@ -951,7 +958,8 @@ async function saveInstagramConfig() {
                 auto_publish: autoPublish,
                 is_reel: isReel,
                 daily_limit: dailyLimit,
-                posting_hours: postingHours
+                posting_hours: postingHours,
+                moderator_user_id: moderatorUserId
             })
         });
         const data = await res.json().catch(() => ({}));
@@ -1080,6 +1088,12 @@ async function loadVkStatus() {
                 const cb = document.getElementById('vkWeekday' + d);
                 if (cb) cb.checked = weekdays.includes(d);
             }
+
+            // Загружаем moderator_user_id
+            const moderatorEl = document.getElementById('vkModeratorUserId');
+            if (moderatorEl) {
+                moderatorEl.value = s.moderator_user_id || chatId;
+            }
         } else {
             statusEl.textContent = '';
             if (disconnectBtn) disconnectBtn.style.display = 'none';
@@ -1144,6 +1158,8 @@ async function saveVkSettings() {
     if (!chatId) return;
     updateVkScheduleTime();
 
+    const moderatorUserId = (document.getElementById('vkModeratorUserId')?.value || '').trim() || chatId;
+
     try {
         const res = await fetch(`${API_MANAGE}/channels/vk/settings`, {
             method: 'POST',
@@ -1157,7 +1173,8 @@ async function saveVkSettings() {
                 random_publish: !!document.getElementById('vkRandomPublish')?.checked,
                 premoderation_enabled: !!document.getElementById('vkPremoderation')?.checked,
                 post_type: (document.getElementById('vkPostType')?.value || 'post').trim(),
-                allowed_weekdays: [0,1,2,3,4,5,6].filter(d => document.getElementById('vkWeekday' + d)?.checked)
+                allowed_weekdays: [0,1,2,3,4,5,6].filter(d => document.getElementById('vkWeekday' + d)?.checked),
+                moderator_user_id: moderatorUserId
             })
         });
         const data = await res.json().catch(() => ({}));
@@ -1296,6 +1313,12 @@ async function loadOkStatus() {
                 const cb = document.getElementById('okWeekday' + d);
                 if (cb) cb.checked = weekdays.includes(d);
             }
+
+            // Загружаем moderator_user_id
+            const moderatorEl = document.getElementById('okModeratorUserId');
+            if (moderatorEl) {
+                moderatorEl.value = s.moderator_user_id || chatId;
+            }
         } else {
             statusEl.textContent = '';
             if (disconnectBtn) disconnectBtn.style.display = 'none';
@@ -1364,6 +1387,8 @@ async function saveOkSettings() {
     if (!chatId) return;
     updateOkScheduleTime();
 
+    const moderatorUserId = (document.getElementById('okModeratorUserId')?.value || '').trim() || chatId;
+
     try {
         const res = await fetch(`${API_MANAGE}/channels/ok/settings`, {
             method: 'POST',
@@ -1377,7 +1402,8 @@ async function saveOkSettings() {
                 random_publish: !!document.getElementById('okRandomPublish')?.checked,
                 premoderation_enabled: !!document.getElementById('okPremoderation')?.checked,
                 post_type: (document.getElementById('okPostType')?.value || 'post').trim(),
-                allowed_weekdays: [0,1,2,3,4,5,6].filter(d => document.getElementById('okWeekday' + d)?.checked)
+                allowed_weekdays: [0,1,2,3,4,5,6].filter(d => document.getElementById('okWeekday' + d)?.checked),
+                moderator_user_id: moderatorUserId
             })
         });
         const data = await res.json().catch(() => ({}));

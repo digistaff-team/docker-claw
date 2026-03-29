@@ -1930,16 +1930,16 @@ async function getMetrics(chatId) {
 
 function startScheduler(getBots) {
   botsGetter = getBots;
-  
+
   // Регистрируем обработчики задач
   worker.registerJobHandler('generate', handleGenerateJob);
   worker.registerJobHandler('publish', handlePublishJob);
-  
+
   // TASK-015: Регистрируем callback для завершения генерации видео
   worker.registerVideoCallback(handleVideoGenerationComplete);
-  
-  // Запускаем worker для обработки очереди
-  worker.startWorker(getBots);
+
+  // Запускаем worker для обработки очереди (передаём getCwBot для пользователей с CW_BOT_TOKEN)
+  worker.startWorker(getBots, () => cwBot);
   
   // Запускаем планировщик
   if (schedulerHandle) clearInterval(schedulerHandle);

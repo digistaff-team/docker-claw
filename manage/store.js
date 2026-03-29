@@ -110,6 +110,9 @@ async function loadChatState(chatId) {
 }
 
 async function load() {
+    const stackTrace = new Error().stack.split('\n').slice(1, 6).join('\n');
+    console.log('[MANAGE] load() called from:\n' + stackTrace);
+    
     try {
         await fs.mkdir(STATE_DIR, { recursive: true });
     } catch (e) {}
@@ -616,6 +619,7 @@ function setInstagramConfig(chatId, patch = {}) {
     if (patch.is_reel !== undefined) next.is_reel = !!patch.is_reel;
     if (patch.daily_limit !== undefined) next.daily_limit = Math.min(Math.max(parseInt(patch.daily_limit, 10) || 5, 1), 25);
     if (patch.posting_hours !== undefined && Array.isArray(patch.posting_hours)) next.posting_hours = patch.posting_hours;
+    if (patch.moderator_user_id !== undefined) next.moderator_user_id = String(patch.moderator_user_id || '').trim() || null;
     if (patch.stats !== undefined) next.stats = { ...(next.stats || {}), ...patch.stats };
 
     statesCache[chatId].instagramConfig = next;
@@ -654,7 +658,12 @@ function setVkConfig(chatId, patch = {}) {
 
 function getVkSettings(chatId) {
     const data = statesCache[chatId];
-    return data?.vkSettings || null;
+    const settings = data?.vkSettings || null;
+    return settings ? {
+        ...settings,
+        moderatorUserId: settings.moderatorUserId || null,
+        moderator_user_id: settings.moderatorUserId || null
+    } : null;
 }
 
 function setVkSettings(chatId, patch = {}) {
@@ -722,6 +731,10 @@ function setVkSettings(chatId, patch = {}) {
         next.post_type = postType;
     }
 
+    if (patch.moderatorUserId !== undefined) {
+        next.moderatorUserId = String(patch.moderatorUserId || '').trim() || null;
+    }
+
     statesCache[chatId].vkSettings = next;
     return persist(chatId);
 }
@@ -763,7 +776,12 @@ function clearOkConfig(chatId) {
 
 function getOkSettings(chatId) {
     const data = statesCache[chatId];
-    return data?.okSettings || null;
+    const settings = data?.okSettings || null;
+    return settings ? {
+        ...settings,
+        moderatorUserId: settings.moderatorUserId || null,
+        moderator_user_id: settings.moderatorUserId || null
+    } : null;
 }
 
 function setOkSettings(chatId, patch = {}) {
@@ -829,6 +847,10 @@ function setOkSettings(chatId, patch = {}) {
             throw new Error('post_type must be one of: ' + allowedTypes.join(', '));
         }
         next.post_type = postType;
+    }
+
+    if (patch.moderatorUserId !== undefined) {
+        next.moderatorUserId = String(patch.moderatorUserId || '').trim() || null;
     }
 
     statesCache[chatId].okSettings = next;

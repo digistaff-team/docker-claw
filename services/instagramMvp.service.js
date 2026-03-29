@@ -24,6 +24,8 @@ const {
   worker
 } = contentModules;
 
+let cwBot = null; // Центральный бот премодерации (CW_BOT_TOKEN)
+
 const SCHEDULE_TZ = process.env.CONTENT_MVP_TZ || 'Europe/Moscow';
 const MAX_IMAGE_ATTEMPTS = 3;
 const MAX_REJECT_ATTEMPTS = 3;
@@ -77,6 +79,7 @@ function getIgSettings(chatId) {
     autoPublish: !!cfg?.auto_publish,
     locationId: cfg?.location_id || null,
     allowedWeekdays: Array.isArray(cfg?.allowed_weekdays) ? cfg.allowed_weekdays : [0, 1, 2, 3, 4, 5, 6],
+    moderator_user_id: cfg?.moderator_user_id || null,
     stats: cfg?.stats || { total_posts: 0, posts_today: 0, last_post_date: null }
   };
 }
@@ -520,10 +523,17 @@ async function publishIgPost(chatId, bot, jobId, correlationId) {
 // ============================================
 
 async function sendIgToModerator(chatId, bot, draft) {
-  const moderatorId = manageStore.getContentSettings?.(chatId)?.moderatorUserId || chatId;
+  const igSettings = getIgSettings(chatId);
+  const globalSettings = manageStore.getContentSettings?.(chatId);
+  
+  // Иерархия: модератор канала → глобальный модератор → chatId
+  const moderatorId = igSettings?.moderator_user_id || 
+                      globalSettings?.moderatorUserId || 
+                      chatId;
 
   const caption = [
-    `📷 Instagram → @${draft.igUserId || '?'}`,
+    `📷 Черновик для Instagram #${draft.jobId}`,
+    `Аккаунт: @${draft.igUserId || '?'}`,
     '',
     `🪝 Хук: ${draft.hookText || '—'}`,
     '',
@@ -550,7 +560,10 @@ async function sendIgToModerator(chatId, bot, draft) {
     const session = await sessionService.getOrCreateSession(chatId);
     const tempPath = path.join(os.tmpdir(), `ig-mod-${chatId}-${draft.jobId}.png`);
     await dockerService.copyFromContainer(session.containerId, draft.imagePath, tempPath);
-    const sent = await bot.telegram.sendPhoto(moderatorId, { source: tempPath }, { caption, reply_markup: kb });
+    
+    // Используем cwBot если он есть и у пользователя нет своего бота
+    const moderatorBot = cwBot && cwBot.token !== bot?.token ? cwBot : bot;
+    const sent = await moderatorBot.telegram.sendPhoto(moderatorId, { source: tempPath }, { caption, reply_markup: kb });
     await fs.unlink(tempPath).catch(() => {});
 
     await setDraft(chatId, String(draft.jobId), {
@@ -558,7 +571,9 @@ async function sendIgToModerator(chatId, bot, draft) {
       moderationMessageId: sent.message_id
     });
   } else {
-    const sent = await bot.telegram.sendMessage(moderatorId, caption, { reply_markup: kb });
+    // Используем cwBot если он есть и у пользователя нет своего бота
+    const moderatorBot = cwBot && cwBot.token !== bot?.token ? cwBot : bot;
+    const sent = await moderatorBot.telegram.sendMessage(moderatorId, caption, { reply_markup: kb });
     await setDraft(chatId, String(draft.jobId), {
       ...draft,
       moderationMessageId: sent.message_id
@@ -761,6 +776,9 @@ function startScheduler(getBots) {
     }
   });
 
+  // Запускаем worker с поддержкой CW_BOT_TOKEN
+  worker.startWorker(getBots, () => cwBot);
+
   // Планировщик Instagram (раз в минуту)
   if (schedulerHandle) clearInterval(schedulerHandle);
   schedulerHandle = setInterval(async () => {
@@ -774,7 +792,7 @@ function startScheduler(getBots) {
     }
   }, 60 * 1000);
 
-  console.log('[IG-MVP] Scheduler started');
+  console.log('[IG-MVP] Scheduler and worker started');
 }
 
 function stopScheduler() {
@@ -800,5 +818,7 @@ module.exports = {
   tickIgSchedule,
   getIgSettings,
   listJobs: (chatId, opts) => igRepo.listJobs(chatId, opts),
-  getJobById: (chatId, jobId) => igRepo.getJobById(chatId, jobId)
+  getJobById: (chatId, jobId) => igRepo.getJobById(chatId, jobId),
+  setIgCwBot: (bot) => { cwBot = bot; },
+  getIgCwBot: () => cwBot
 };

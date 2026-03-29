@@ -24,6 +24,8 @@ const {
   worker
 } = contentModules;
 
+let cwBot = null; // Центральный бот премодерации (CW_BOT_TOKEN)
+
 const SCHEDULE_TZ = process.env.CONTENT_MVP_TZ || 'Europe/Moscow';
 const MAX_IMAGE_ATTEMPTS = 3;
 const MAX_REJECT_ATTEMPTS = 3;
@@ -64,6 +66,7 @@ function getPinterestSettings(chatId) {
     lastBoardIndex: cfg?.last_board_index || 0,
     scheduleTime: cfg?.schedule_time || '10:00',
     publishIntervalHours: Number.isFinite(cfg?.publish_interval_hours) ? cfg.publish_interval_hours : 4,
+    moderatorUserId: cfg?.moderator_user_id || null,
     stats: cfg?.stats || { total_pins: 0, pins_today: 0, last_pin_date: null }
   };
 }
@@ -491,7 +494,12 @@ async function publishPin(chatId, bot, jobId, correlationId) {
 
 async function sendPinToModerator(chatId, bot, draft) {
   const settings = getPinterestSettings(chatId);
-  const moderatorId = manageStore.getContentSettings?.(chatId)?.moderatorUserId || chatId;
+  const globalSettings = manageStore.getContentSettings?.(chatId);
+  
+  // Иерархия: модератор канала → глобальный модератор → chatId
+  const moderatorId = settings.moderatorUserId || 
+                      globalSettings?.moderatorUserId || 
+                      chatId;
 
   const caption = [
     `📌 Черновик для Pinterest #${draft.jobId}`,
@@ -522,7 +530,10 @@ async function sendPinToModerator(chatId, bot, draft) {
   const session = await sessionService.getOrCreateSession(chatId);
   const tempPath = path.join(os.tmpdir(), `pin-mod-${chatId}-${draft.jobId}.png`);
   await dockerService.copyFromContainer(session.containerId, draft.imagePath, tempPath);
-  const sent = await bot.telegram.sendPhoto(moderatorId, { source: tempPath }, { caption, reply_markup: kb });
+  
+  // Используем cwBot если он есть и у пользователя нет своего бота
+  const moderatorBot = cwBot && cwBot.token !== bot?.token ? cwBot : bot;
+  const sent = await moderatorBot.telegram.sendPhoto(moderatorId, { source: tempPath }, { caption, reply_markup: kb });
   await fs.unlink(tempPath).catch(() => {});
 
   await setDraft(chatId, String(draft.jobId), {
@@ -734,6 +745,9 @@ function startScheduler(getBots) {
     }
   });
 
+  // Запускаем worker с поддержкой CW_BOT_TOKEN
+  worker.startWorker(getBots, () => cwBot);
+
   // Планировщик Pinterest (раз в минуту)
   if (schedulerHandle) clearInterval(schedulerHandle);
   schedulerHandle = setInterval(async () => {
@@ -747,7 +761,7 @@ function startScheduler(getBots) {
     }
   }, 60 * 1000);
 
-  console.log('[PINTEREST-MVP] Scheduler started');
+  console.log('[PINTEREST-MVP] Scheduler and worker started');
 }
 
 function stopScheduler() {
@@ -774,5 +788,7 @@ module.exports = {
   selectNextBoard,
   getPinterestSettings,
   listJobs: (chatId, opts) => pinterestRepo.listJobs(chatId, opts),
-  getJobById: (chatId, jobId) => pinterestRepo.getJobById(chatId, jobId)
+  getJobById: (chatId, jobId) => pinterestRepo.getJobById(chatId, jobId),
+  setPinterestCwBot: (bot) => { cwBot = bot; },
+  getPinterestCwBot: () => cwBot
 };

@@ -24,6 +24,8 @@ const {
   worker
 } = contentModules;
 
+let cwBot = null; // Центральный бот премодерации (CW_BOT_TOKEN)
+
 const SCHEDULE_TZ = process.env.CONTENT_MVP_TZ || 'Europe/Moscow';
 const MAX_IMAGE_ATTEMPTS = 3;
 const MAX_REJECT_ATTEMPTS = 3;
@@ -84,6 +86,7 @@ function getOkSettings(chatId) {
     premoderationEnabled: settings.premoderation_enabled !== false,
     postType: settings.post_type || 'post',
     allowedWeekdays: Array.isArray(settings.allowed_weekdays) ? settings.allowed_weekdays : [0, 1, 2, 3, 4, 5, 6],
+    moderatorUserId: settings.moderatorUserId || null,
     stats: cfg?.stats || { total_posts: 0, posts_today: 0, last_post_date: null }
   };
 }
@@ -550,7 +553,13 @@ async function publishOkPost(chatId, bot, jobId, correlationId) {
  * @param {Object} draft - Объект черновика
  */
 async function sendOkToModerator(chatId, bot, draft) {
-  const moderatorId = manageStore.getContentSettings?.(chatId)?.moderatorUserId || chatId;
+  const okSettings = getOkSettings(chatId);
+  const globalSettings = manageStore.getContentSettings?.(chatId);
+  
+  // Иерархия: модератор канала → глобальный модератор → chatId
+  const moderatorId = okSettings?.moderatorUserId || 
+                      globalSettings?.moderatorUserId || 
+                      chatId;
 
   console.log(`[OK-MODERATION] Sending draft to moderator ${moderatorId}, jobId=${draft.jobId}, corr=${draft.correlationId || 'n/a'}`);
 
@@ -585,14 +594,16 @@ async function sendOkToModerator(chatId, bot, draft) {
     try {
       const session = await sessionService.getOrCreateSession(chatId);
       const tempPath = path.join(os.tmpdir(), `ok-mod-${chatId}-${draft.jobId}.png`);
-      
+
       console.log(`[OK-MODERATION] Copying image from container: ${draft.imagePath} → ${tempPath}`);
       await dockerService.copyFromContainer(session.containerId, draft.imagePath, tempPath);
-      
+
       console.log(`[OK-MODERATION] Sending photo to Telegram...`);
-      const sent = await bot.telegram.sendPhoto(moderatorId, { source: tempPath }, { caption, reply_markup: kb });
+      // Используем cwBot если он есть и у пользователя нет своего бота
+      const moderatorBot = cwBot && cwBot.token !== bot?.token ? cwBot : bot;
+      const sent = await moderatorBot.telegram.sendPhoto(moderatorId, { source: tempPath }, { caption, reply_markup: kb });
       console.log(`[OK-MODERATION] Photo sent, messageId=${sent.message_id}`);
-      
+
       await fs.unlink(tempPath).catch(() => {});
 
       await setDraft(chatId, String(draft.jobId), {
@@ -606,16 +617,18 @@ async function sendOkToModerator(chatId, bot, draft) {
     }
   } else {
     console.log(`[OK-MODERATION] Sending text message to Telegram...`);
-    const sent = await bot.telegram.sendMessage(moderatorId, caption, { reply_markup: kb });
+    // Используем cwBot если он есть и у пользователя нет своего бота
+    const moderatorBot = cwBot && cwBot.token !== bot?.token ? cwBot : bot;
+    const sent = await moderatorBot.telegram.sendMessage(moderatorId, caption, { reply_markup: kb });
     console.log(`[OK-MODERATION] Message sent, messageId=${sent.message_id}`);
-    
+
     await setDraft(chatId, String(draft.jobId), {
       ...draft,
       moderationMessageId: sent.message_id
     });
     console.log(`[OK-MODERATION] Draft saved with moderationMessageId=${sent.message_id}`);
   }
-  
+
   console.log(`[OK-MODERATION] Draft sent to moderator successfully`);
 }
 
@@ -825,6 +838,9 @@ function startScheduler(getBots) {
     }
   });
 
+  // Запускаем worker с поддержкой CW_BOT_TOKEN
+  worker.startWorker(getBots, () => cwBot);
+
   // Планировщик OK (раз в минуту)
   if (schedulerHandle) clearInterval(schedulerHandle);
   schedulerHandle = setInterval(async () => {
@@ -838,7 +854,7 @@ function startScheduler(getBots) {
     }
   }, 60 * 1000);
 
-  console.log('[OK-MVP] Scheduler started');
+  console.log('[OK-MVP] Scheduler and worker started');
 }
 
 function stopScheduler() {
@@ -865,5 +881,7 @@ module.exports = {
   getOkSettings,
   validateOkContent,
   listJobs: (chatId, opts) => okRepo.listJobs(chatId, opts),
-  getJobById: (chatId, jobId) => okRepo.getJobById(chatId, jobId)
+  getJobById: (chatId, jobId) => okRepo.getJobById(chatId, jobId),
+  setOkCwBot: (bot) => { cwBot = bot; },
+  getOkCwBot: () => cwBot
 };

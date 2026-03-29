@@ -108,6 +108,9 @@ services:
       - MYSQL_SKILLS_USER=ai_skills
       - MYSQL_SKILLS_PASSWORD=${MYSQL_SKILLS_PASSWORD:-mysql_password_change_me}
       - MYSQL_SKILLS_DATABASE=ai_skills_db
+      - CW_BOT_TOKEN=${CW_BOT_TOKEN}
+      - CONTENT_MVP_MODERATOR_USER_ID=${CONTENT_MVP_MODERATOR_USER_ID}
+      - WEBHOOK_URL=${WEBHOOK_URL}
     ports:
       - "3015:3015"
     depends_on:

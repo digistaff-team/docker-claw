@@ -5,6 +5,24 @@
 const https = require('https');
 const manageStore = require('../manage/store');
 
+// Утилита: удалить Markdown-разметку
+function stripMarkdown(text) {
+  if (!text) return '';
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^[-*+]\s+/gm, '')
+    .replace(/^\d+\.\s+/gm, '')
+    .replace(/^>\s+/gm, '')
+    .trim();
+}
+
 const VK_API = 'https://api.vk.com/method';
 const VK_API_VERSION = '5.199';
 const MAX_RETRIES = 3;
@@ -126,6 +144,8 @@ async function uploadPhoto(uploadUrl, imageBuffer, filename = 'photo.png') {
     const footer = Buffer.from(`\r\n--${boundary}--\r\n`);
     const body = Buffer.concat([header, imageBuffer, footer]);
 
+    console.log(`[VK-PHOTO] Upload request: body length=${body.length}, boundary=${boundary}`);
+
     const res = await retryRequest(uploadUrl, {
         method: 'POST',
         headers: {
@@ -135,6 +155,8 @@ async function uploadPhoto(uploadUrl, imageBuffer, filename = 'photo.png') {
         body,
         timeout: 60000
     });
+
+    console.log(`[VK-PHOTO] Upload response:`, JSON.stringify(res.json, null, 2).substring(0, 500));
 
     if (!res.json || res.json.error) {
         throw new Error(`VK photo upload failed: ${res.body?.slice(0, 300)}`);
@@ -204,11 +226,11 @@ async function publishPhotoPost({ serviceKey, groupId, text, imageBuffer, params
         }
     }
 
-    // Опубликовать пост
+    // Опубликовать пост (удаляем Markdown-разметку)
     const postParams = {
         owner_id: `-${gid}`,
         from_group: 1,
-        message: text || '',
+        message: stripMarkdown(text) || '',
     };
 
     if (attachments) postParams.attachments = attachments;

@@ -593,7 +593,8 @@ router.post('/channels/instagram', async (req, res) => {
             'fb_page_id', 'fb_page_name', 'ig_user_id', 'ig_username',
             'default_alt_text', 'location_id',
             'is_active', 'auto_publish', 'is_reel',
-            'daily_limit', 'posting_hours'
+            'daily_limit', 'posting_hours',
+            'moderator_user_id'
         ];
         for (const f of fields) {
             if (req.body[f] !== undefined) patch[f] = req.body[f];
@@ -724,12 +725,15 @@ router.post('/channels/vk/settings', async (req, res) => {
             random_publish,
             premoderation_enabled,
             post_type,
-            allowed_weekdays
+            allowed_weekdays,
+            moderator_user_id
         } = req.body;
 
         if (!chat_id) {
             return res.status(400).json({ error: 'chat_id is required' });
         }
+
+        console.log(`[VK-SETTINGS] Saving moderator_user_id=${moderator_user_id} for chat_id=${chat_id}`);
 
         manageStore.setVkSettings(chat_id, {
             schedule_time,
@@ -739,8 +743,12 @@ router.post('/channels/vk/settings', async (req, res) => {
             random_publish,
             premoderation_enabled,
             post_type,
-            allowed_weekdays
+            allowed_weekdays,
+            moderatorUserId: moderator_user_id
         });
+
+        const verifySettings = manageStore.getVkSettings(chat_id);
+        console.log(`[VK-SETTINGS] After save: moderator_user_id=${verifySettings?.moderator_user_id}`);
 
         res.json({ success: true });
     } catch (e) {
@@ -826,7 +834,8 @@ router.post('/channels/ok/settings', async (req, res) => {
             random_publish,
             premoderation_enabled,
             post_type,
-            allowed_weekdays
+            allowed_weekdays,
+            moderator_user_id
         } = req.body;
 
         if (!chat_id) {
@@ -841,7 +850,8 @@ router.post('/channels/ok/settings', async (req, res) => {
             random_publish,
             premoderation_enabled,
             post_type,
-            allowed_weekdays
+            allowed_weekdays,
+            moderatorUserId: moderator_user_id
         });
 
         res.json({ success: true });

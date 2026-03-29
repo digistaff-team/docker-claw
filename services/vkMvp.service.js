@@ -24,6 +24,8 @@ const {
   worker
 } = contentModules;
 
+let cwBot = null; // Центральный бот премодерации (CW_BOT_TOKEN)
+
 const SCHEDULE_TZ = process.env.CONTENT_MVP_TZ || 'Europe/Moscow';
 const MAX_IMAGE_ATTEMPTS = 3;
 const MAX_REJECT_ATTEMPTS = 3;
@@ -37,6 +39,23 @@ let botsGetter = null;
 // ============================================
 // Утилиты
 // ============================================
+
+function stripMarkdown(text) {
+  if (!text) return '';
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')   // **жирный** -> жирный
+    .replace(/\*([^*]+)\*/g, '$1')       // *курсив* -> курсив
+    .replace(/__([^_]+)__/g, '$1')       // __подчёркнутый__ -> подчёркнутый
+    .replace(/_([^_]+)_/g, '$1')         // _курсив_ -> курсив
+    .replace(/`([^`]+)`/g, '$1')         // `код` -> код
+    .replace(/```[\s\S]*?```/g, '')      // блоки кода
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // [текст](url) -> текст
+    .replace(/^#{1,6}\s+/gm, '')         // заголовки
+    .replace(/^[-*+]\s+/gm, '')          // списки
+    .replace(/^\d+\.\s+/gm, '')          // нумерованные списки
+    .replace(/^>\s+/gm, '')              // цитаты
+    .trim();
+}
 
 function getNowInTz(tz) {
   const p = new Intl.DateTimeFormat('sv-SE', {
@@ -75,6 +94,7 @@ function getVkSettings(chatId) {
     premoderationEnabled: settings.premoderation_enabled !== false, // по умолчанию включена
     postType: settings.post_type || 'post',
     allowedWeekdays: Array.isArray(settings.allowed_weekdays) ? settings.allowed_weekdays : [0, 1, 2, 3, 4, 5, 6],
+    moderatorUserId: settings.moderatorUserId || null,
     stats: cfg?.stats || { total_posts: 0, posts_today: 0, last_post_date: null }
   };
 }
@@ -164,8 +184,8 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
 
   const parsed = JSON.parse(jsonMatch[0]);
   return {
-    postText: String(parsed.postText || '').slice(0, 2000),
-    hookText: String(parsed.hookText || '').slice(0, 100),
+    postText: stripMarkdown(String(parsed.postText || '')).slice(0, 2000),
+    hookText: stripMarkdown(String(parsed.hookText || '')).slice(0, 100),
     imagePrompt: String(parsed.imagePrompt || '').slice(0, 800)
   };
 }
@@ -492,7 +512,20 @@ async function publishVkPost(chatId, bot, jobId, correlationId) {
 // ============================================
 
 async function sendVkToModerator(chatId, bot, draft) {
-  const moderatorId = manageStore.getContentSettings?.(chatId)?.moderatorUserId || chatId;
+  const vkSettings = getVkSettings(chatId);
+  const globalSettings = manageStore.getContentSettings?.(chatId);
+  
+  console.log(`[VK-MODERATION] DEBUG: chatId=${chatId}`);
+  console.log(`[VK-MODERATION] DEBUG: vkSettings=${JSON.stringify(vkSettings)}`);
+  console.log(`[VK-MODERATION] DEBUG: globalSettings=${JSON.stringify(globalSettings)}`);
+  
+  // Иерархия: модератор канала → глобальный модератор → chatId
+  const moderatorId = vkSettings?.moderatorUserId || 
+                      globalSettings?.moderatorUserId || 
+                      chatId;
+
+  console.log(`[VK-MODERATION] Sending draft to moderator ${moderatorId}, jobId=${draft.jobId}, corr=${draft.correlationId || 'n/a'}`);
+  console.log(`[VK-MODERATION] vkSettings.moderatorUserId=${vkSettings?.moderatorUserId}, globalSettings.moderatorUserId=${globalSettings?.moderatorUserId}`);
 
   const caption = [
     `📢 Черновик для ВКонтакте #${draft.jobId}`,
@@ -523,7 +556,10 @@ async function sendVkToModerator(chatId, bot, draft) {
     const session = await sessionService.getOrCreateSession(chatId);
     const tempPath = path.join(os.tmpdir(), `vk-mod-${chatId}-${draft.jobId}.png`);
     await dockerService.copyFromContainer(session.containerId, draft.imagePath, tempPath);
-    const sent = await bot.telegram.sendPhoto(moderatorId, { source: tempPath }, { caption, reply_markup: kb });
+    
+    // Используем cwBot если он есть и у пользователя нет своего бота
+    const moderatorBot = cwBot && cwBot.token !== bot?.token ? cwBot : bot;
+    const sent = await moderatorBot.telegram.sendPhoto(moderatorId, { source: tempPath }, { caption, reply_markup: kb });
     await fs.unlink(tempPath).catch(() => {});
 
     await setDraft(chatId, String(draft.jobId), {
@@ -531,7 +567,9 @@ async function sendVkToModerator(chatId, bot, draft) {
       moderationMessageId: sent.message_id
     });
   } else {
-    const sent = await bot.telegram.sendMessage(moderatorId, caption, { reply_markup: kb });
+    // Используем cwBot если он есть и у пользователя нет своего бота
+    const moderatorBot = cwBot && cwBot.token !== bot?.token ? cwBot : bot;
+    const sent = await moderatorBot.telegram.sendMessage(moderatorId, caption, { reply_markup: kb });
     await setDraft(chatId, String(draft.jobId), {
       ...draft,
       moderationMessageId: sent.message_id
@@ -747,6 +785,9 @@ function startScheduler(getBots) {
     }
   });
 
+  // Запускаем worker с поддержкой CW_BOT_TOKEN
+  worker.startWorker(getBots, () => cwBot);
+
   // Планировщик VK (раз в минуту)
   if (schedulerHandle) clearInterval(schedulerHandle);
   schedulerHandle = setInterval(async () => {
@@ -760,7 +801,7 @@ function startScheduler(getBots) {
     }
   }, 60 * 1000);
 
-  console.log('[VK-MVP] Scheduler started');
+  console.log('[VK-MVP] Scheduler and worker started');
 }
 
 function stopScheduler() {
@@ -786,5 +827,7 @@ module.exports = {
   tickVkSchedule,
   getVkSettings,
   listJobs: (chatId, opts) => vkRepo.listJobs(chatId, opts),
-  getJobById: (chatId, jobId) => vkRepo.getJobById(chatId, jobId)
+  getJobById: (chatId, jobId) => vkRepo.getJobById(chatId, jobId),
+  setVkCwBot: (bot) => { cwBot = bot; },
+  getVkCwBot: () => cwBot
 };

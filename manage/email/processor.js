@@ -4,7 +4,7 @@ const nodemailer = require('nodemailer');
 const fs = require('fs').promises;
 const path = require('path');
 const manageStore = require('../store');
-manageStore.load();
+// manageStore.load() вызывается в server.js при старте, не нужно вызывать здесь
 const sessionService = require('../../services/session.service');
 const contextHelper = require('../context');
 const aiRouterService = require('../../services/ai_router_service');

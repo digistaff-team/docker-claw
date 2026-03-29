@@ -17,7 +17,9 @@
       "Bash(docker logs *)",
       "Bash(docker compose *)",
       "Bash(find *)",
-      "Bash(sudo *)"
+      "Bash(sudo *)",
+      "Bash(pgrep *)",
+      "Bash(docker cp *)"
     ]
   },
   "$version": 3

@@ -14,6 +14,7 @@ const VIDEO_POLL_INTERVAL_MS = parseInt(process.env.VIDEO_POLL_INTERVAL_MS || '1
 let workerHandle = null;
 let videoPollingHandle = null; // TASK-015
 let botsGetter = null;
+let getCwBot = null; // Центральный CW бот
 let jobHandlers = new Map();
 let videoCallback = null; // TASK-015: callback при завершении генерации видео
 
@@ -37,11 +38,13 @@ function registerVideoCallback(callback) {
 /**
  * Запуск worker'а
  * @param {Function} getBots - функция, возвращающая Map(chatId -> { bot })
+ * @param {Function} getCwBot - функция, возвращающая центральный CW бот (опционально)
  */
-function startWorker(getBots) {
+function startWorker(getBots, getCwBotFn) {
   if (workerHandle) return;
   botsGetter = getBots;
-  
+  getCwBot = getCwBotFn;
+
   workerHandle = setInterval(async () => {
     try {
       await processAllQueues();
@@ -49,7 +52,7 @@ function startWorker(getBots) {
       console.error('[CONTENT-WORKER] Error:', e.message);
     }
   }, POLL_INTERVAL_MS);
-  
+
   // TASK-015: Запуск polling'а для видео
   videoPollingHandle = setInterval(async () => {
     try {
@@ -58,7 +61,7 @@ function startWorker(getBots) {
       console.error('[CONTENT-WORKER-VIDEO] Error:', e.message);
     }
   }, VIDEO_POLL_INTERVAL_MS);
-  
+
   console.log('[CONTENT-WORKER] Started (queue + video polling)');
 }
 
@@ -84,31 +87,93 @@ async function processAllQueues() {
   if (!botsGetter) return;
 
   const bots = botsGetter();
-  if (!bots || bots.size === 0) return;
+  const cwBotToken = process.env.CW_BOT_TOKEN;
 
-  // Сбрасываем застрявшие задачи
-  for (const [chatId] of bots) {
+  // Получаем все чаты, для которых нужно обработать очереди
+  let allChatIds = new Set();
+
+  // 1. Чаты с собственными ботами
+  if (bots && bots.size > 0) {
+    for (const [chatId] of bots) {
+      allChatIds.add(chatId);
+    }
+  }
+
+  // 2. Чаты с центральным CW_BOT_TOKEN (из manageStore)
+  if (cwBotToken) {
+    try {
+      const manageStore = require('../../manage/store');
+      const allTokens = manageStore.getAllTokens ? manageStore.getAllTokens() : [];
+      for (const { chatId, token } of allTokens) {
+        if (token === cwBotToken) {
+          allChatIds.add(chatId);
+        }
+      }
+    } catch (e) {
+      // Игнорируем ошибки доступа к manageStore
+    }
+  }
+
+  
+
+  if (allChatIds.size === 0) return;
+
+  // Сбрасываем застрявшие задачи для всех чатов
+  for (const chatId of allChatIds) {
     try {
       const resetCount = await queueRepo.resetStuckJobs(chatId, STUCK_TIMEOUT_MINUTES);
       if (resetCount > 0) {
         console.log(`[CONTENT-WORKER] Reset ${resetCount} stuck jobs for chat ${chatId}`);
       }
     } catch (e) {
-      // Игнорируем ошибки если база данных не существует (канал ещё не подключён)
       if (!e.message.includes('does not exist')) {
         console.error(`[CONTENT-WORKER] Failed to reset stuck jobs for ${chatId}:`, e.message);
       }
     }
   }
 
-  // Обрабатываем задачи
-  for (const [chatId, entry] of bots) {
+  // Обрабатываем задачи для чатов с собственными ботами
+  for (const [chatId, entry] of bots || new Map()) {
     try {
       await processQueueForChat(chatId, entry.bot);
     } catch (e) {
-      // Игнорируем ошибки если база данных не существует (канал ещё не подключён)
       if (!e.message.includes('does not exist')) {
         console.error(`[CONTENT-WORKER] Error processing queue for ${chatId}:`, e.message);
+      }
+    }
+  }
+
+  // Обрабатываем задачи для чатов с центральным CW_BOT_TOKEN
+  if (cwBotToken) {
+    // Получаем cwBot из переданной функции
+    const cwBot = getCwBot ? getCwBot() : null;
+    
+    if (!cwBot) {
+      console.error('[CONTENT-WORKER] CW_BOT_TOKEN is set but cwBot is not available');
+      return;
+    }
+
+    for (const chatId of allChatIds) {
+      // Пропускаем чаты с собственными ботами (уже обработаны)
+      if (bots && bots.has(chatId)) continue;
+
+      // Проверяем, использует ли этот чат CW_BOT_TOKEN
+      let stateToken = null;
+      try {
+        const manageStore = require('../../manage/store');
+        const state = manageStore.getState ? manageStore.getState(chatId) : null;
+        stateToken = state?.token || null;
+        if (stateToken !== cwBotToken) continue;
+      } catch (e) {
+        continue;
+      }
+
+      try {
+        await processQueueForChat(chatId, cwBot);
+      } catch (e) {
+        if (!e.message.includes('does not exist')) {
+          console.error(`[CONTENT-WORKER] Error processing queue for ${chatId} (CW_BOT):`, e.message);
+        }
       }
     }
   }
@@ -123,11 +188,11 @@ async function processQueueForChat(chatId, bot) {
   if (stats.processing >= MAX_CONCURRENT_JOBS) {
     return; // Уже обрабатываем
   }
-  
+
   // Забираем следующую задачу
   const jobs = await queueRepo.pollNextJobs(chatId, MAX_CONCURRENT_JOBS);
   if (!jobs || jobs.length === 0) return;
-  
+
   for (const job of jobs) {
     await processJob(chatId, job, bot);
   }

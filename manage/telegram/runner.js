@@ -870,22 +870,26 @@ function startBot(chatId, token) {
         }
         
         // Находим правильный chatId: ищем сессию где есть черновик с этим jobId
-        // Это нужно потому что у пользователя может быть несколько сессий с одинаковым токеном
+        // Модератор может иметь доступ к черновикам разных пользователей
         let resolvedChatId = null;
         const allStates = manageStore.getAllStates();
         for (const [cid, data] of Object.entries(allStates)) {
-            // Проверяем что этот пользователь имеет доступ к сессии
-            if (String(data.verifiedTelegramId) !== String(fromId)) {
-                continue;
-            }
             // Проверяем есть ли черновик с этим jobId
             const drafts = data.contentDrafts || {};
-            if (drafts[String(jobId)]) {
+            if (!drafts[String(jobId)]) {
+                continue;
+            }
+            // Проверяем доступ: владелец или модератор
+            const ownerTgId = String(data.verifiedTelegramId || '');
+            const contentSettings = data.contentSettings || {};
+            const moderatorId = String(contentSettings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
+            const allowedIds = new Set([ownerTgId, moderatorId].filter(Boolean));
+            if (allowedIds.has(fromId)) {
                 resolvedChatId = cid;
                 break;
             }
         }
-        
+
         if (!resolvedChatId) {
             // Fallback: ищем просто по verifiedTelegramId
             resolvedChatId = manageStore.getByVerifiedTelegramId(fromId);
@@ -928,18 +932,6 @@ function startBot(chatId, token) {
     bot.action(/^pin_mod:(\d+):(approve|reject|regen_text|regen_image)$/, async (ctx) => {
         const fromId = String(ctx.from?.id || '');
         const tgChatId = String(ctx.chat?.id || '');
-        const settings = contentMvpService.getContentSettings
-            ? contentMvpService.getContentSettings(chatId)
-            : {};
-        const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
-        const data = manageStore.getState(chatId);
-        const verifiedTgId = data?.verifiedTelegramId ? String(data.verifiedTelegramId) : null;
-        const allowedIds = new Set([String(chatId), moderatorId, tgChatId, verifiedTgId].filter(Boolean));
-        if (!allowedIds.has(fromId)) {
-            console.log(`[PIN-MOD] Access denied: fromId=${fromId}, chatId=${chatId}, moderatorId=${moderatorId}, tgChatId=${tgChatId}, verifiedTgId=${verifiedTgId}`);
-            await ctx.answerCbQuery('Недостаточно прав', { show_alert: true }).catch(() => {});
-            return;
-        }
 
         const [, jobIdRaw, action] = ctx.match || [];
         const jobId = Number(jobIdRaw);
@@ -948,8 +940,53 @@ function startBot(chatId, token) {
             return;
         }
 
+        // Находим правильный chatId: ищем сессию где есть черновик с этим jobId
+        // Модератор может иметь доступ к черновикам разных пользователей
+        let resolvedChatId = null;
+        const allStates = manageStore.getAllStates();
+        for (const [cid, data] of Object.entries(allStates)) {
+            // Проверяем есть ли черновик с этим jobId
+            const drafts = data.pinterestDrafts || {};
+            if (!drafts[String(jobId)]) {
+                continue;
+            }
+            // Проверяем доступ через модератора Pinterest канала
+            const pinSettings = manageStore.getPinterestConfig?.(cid) || {};
+            const globalSettings = data.contentSettings || {};
+            const channelModeratorId = pinSettings.moderator_user_id || 
+                                       globalSettings.moderatorUserId || 
+                                       process.env.CONTENT_MVP_MODERATOR_USER_ID;
+            
+            const ownerTgId = String(data.verifiedTelegramId || '');
+            const allowedIds = new Set([ownerTgId, channelModeratorId].filter(Boolean));
+            if (allowedIds.has(fromId)) {
+                resolvedChatId = cid;
+                break;
+            }
+        }
+
+        if (!resolvedChatId) {
+            resolvedChatId = manageStore.getByVerifiedTelegramId(fromId);
+        }
+        if (!resolvedChatId) {
+            resolvedChatId = chatId;
+        }
+
+        const settings = contentMvpService.getContentSettings
+            ? contentMvpService.getContentSettings(resolvedChatId)
+            : {};
+        const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
+        const data = manageStore.getState(resolvedChatId);
+        const verifiedTgId = data?.verifiedTelegramId ? String(data.verifiedTelegramId) : null;
+        const allowedIds = new Set([String(resolvedChatId), moderatorId, tgChatId, verifiedTgId].filter(Boolean));
+        if (!allowedIds.has(fromId)) {
+            console.log(`[PIN-MOD] Access denied: fromId=${fromId}, resolvedChatId=${resolvedChatId}, moderatorId=${moderatorId}`);
+            await ctx.answerCbQuery('Недостаточно прав', { show_alert: true }).catch(() => {});
+            return;
+        }
+
         try {
-            const result = await pinterestMvpService.handlePinModerationAction(chatId, { telegram: ctx.telegram }, jobId, action);
+            const result = await pinterestMvpService.handlePinModerationAction(resolvedChatId, { telegram: ctx.telegram }, jobId, action);
             await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
             await ctx.reply(result?.message || 'Операция выполнена.');
         } catch (e) {
@@ -962,18 +999,6 @@ function startBot(chatId, token) {
     bot.action(/^vk_mod:(\d+):(approve|reject|regen_text|regen_image)$/, async (ctx) => {
         const fromId = String(ctx.from?.id || '');
         const tgChatId = String(ctx.chat?.id || '');
-        const settings = contentMvpService.getContentSettings
-            ? contentMvpService.getContentSettings(chatId)
-            : {};
-        const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
-        const data = manageStore.getState(chatId);
-        const verifiedTgId = data?.verifiedTelegramId ? String(data.verifiedTelegramId) : null;
-        const allowedIds = new Set([String(chatId), moderatorId, tgChatId, verifiedTgId].filter(Boolean));
-        if (!allowedIds.has(fromId)) {
-            console.log(`[VK-MOD] Access denied: fromId=${fromId}, chatId=${chatId}, moderatorId=${moderatorId}, tgChatId=${tgChatId}, verifiedTgId=${verifiedTgId}`);
-            await ctx.answerCbQuery('Недостаточно прав', { show_alert: true }).catch(() => {});
-            return;
-        }
 
         const [, jobIdRaw, action] = ctx.match || [];
         const jobId = Number(jobIdRaw);
@@ -982,8 +1007,47 @@ function startBot(chatId, token) {
             return;
         }
 
+        // Находим правильный chatId: ищем сессию где есть черновик с этим jobId
+        let resolvedChatId = null;
+        const allStates = manageStore.getAllStates();
+        for (const [cid, data] of Object.entries(allStates)) {
+            const drafts = data.vkDrafts || {};
+            if (!drafts[String(jobId)]) continue;
+            
+            // Проверяем доступ через модератора VK канала
+            const vkSettings = manageStore.getVkSettings?.(cid) || {};
+            const globalSettings = data.contentSettings || {};
+            const channelModeratorId = vkSettings.moderatorUserId || 
+                                       globalSettings.moderatorUserId || 
+                                       process.env.CONTENT_MVP_MODERATOR_USER_ID;
+            
+            const ownerTgId = String(data.verifiedTelegramId || '');
+            const allowedIds = new Set([ownerTgId, channelModeratorId].filter(Boolean));
+            
+            if (allowedIds.has(fromId)) {
+                resolvedChatId = cid;
+                break;
+            }
+        }
+
+        if (!resolvedChatId) resolvedChatId = manageStore.getByVerifiedTelegramId(fromId);
+        if (!resolvedChatId) resolvedChatId = chatId;
+
+        const settings = contentMvpService.getContentSettings
+            ? contentMvpService.getContentSettings(resolvedChatId)
+            : {};
+        const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
+        const data = manageStore.getState(resolvedChatId);
+        const verifiedTgId = data?.verifiedTelegramId ? String(data.verifiedTelegramId) : null;
+        const allowedIds = new Set([String(resolvedChatId), moderatorId, tgChatId, verifiedTgId].filter(Boolean));
+        if (!allowedIds.has(fromId)) {
+            console.log(`[VK-MOD] Access denied: fromId=${fromId}, resolvedChatId=${resolvedChatId}, moderatorId=${moderatorId}`);
+            await ctx.answerCbQuery('Недостаточно прав', { show_alert: true }).catch(() => {});
+            return;
+        }
+
         try {
-            const result = await vkMvpService.handleVkModerationAction(chatId, { telegram: ctx.telegram }, jobId, action);
+            const result = await vkMvpService.handleVkModerationAction(resolvedChatId, { telegram: ctx.telegram }, jobId, action);
             await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
             await ctx.reply(result?.message || 'Операция выполнена.');
         } catch (e) {
@@ -996,16 +1060,6 @@ function startBot(chatId, token) {
     bot.action(/^ok_mod:(\d+):(approve|reject|regen_text|regen_image)$/, async (ctx) => {
         const fromId = String(ctx.from?.id || '');
         const tgChatId = String(ctx.chat?.id || '');
-        const settings = contentMvpService.getContentSettings
-            ? contentMvpService.getContentSettings(chatId)
-            : {};
-        const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
-        const allowedIds = new Set([String(chatId), moderatorId, tgChatId].filter(Boolean));
-        if (!allowedIds.has(fromId)) {
-            console.log(`[OK-MOD] Access denied: fromId=${fromId}, chatId=${chatId}, moderatorId=${moderatorId}, tgChatId=${tgChatId}`);
-            await ctx.answerCbQuery('Недостаточно прав', { show_alert: true }).catch(() => {});
-            return;
-        }
 
         const [, jobIdRaw, action] = ctx.match || [];
         const jobId = Number(jobIdRaw);
@@ -1014,8 +1068,45 @@ function startBot(chatId, token) {
             return;
         }
 
+        // Находим правильный chatId: ищем сессию где есть черновик с этим jobId
+        let resolvedChatId = null;
+        const allStates = manageStore.getAllStates();
+        for (const [cid, data] of Object.entries(allStates)) {
+            const drafts = data.okDrafts || {};
+            if (!drafts[String(jobId)]) continue;
+            
+            // Проверяем доступ через модератора OK канала
+            const okSettings = manageStore.getOkSettings?.(cid) || {};
+            const globalSettings = data.contentSettings || {};
+            const channelModeratorId = okSettings.moderatorUserId || 
+                                       globalSettings.moderatorUserId || 
+                                       process.env.CONTENT_MVP_MODERATOR_USER_ID;
+            
+            const ownerTgId = String(data.verifiedTelegramId || '');
+            const allowedIds = new Set([ownerTgId, channelModeratorId].filter(Boolean));
+            
+            if (allowedIds.has(fromId)) {
+                resolvedChatId = cid;
+                break;
+            }
+        }
+
+        if (!resolvedChatId) resolvedChatId = manageStore.getByVerifiedTelegramId(fromId);
+        if (!resolvedChatId) resolvedChatId = chatId;
+
+        const settings = contentMvpService.getContentSettings
+            ? contentMvpService.getContentSettings(resolvedChatId)
+            : {};
+        const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
+        const allowedIds = new Set([String(resolvedChatId), moderatorId, tgChatId].filter(Boolean));
+        if (!allowedIds.has(fromId)) {
+            console.log(`[OK-MOD] Access denied: fromId=${fromId}, resolvedChatId=${resolvedChatId}, moderatorId=${moderatorId}`);
+            await ctx.answerCbQuery('Недостаточно прав', { show_alert: true }).catch(() => {});
+            return;
+        }
+
         try {
-            const result = await okMvpService.handleOkModerationAction(chatId, { telegram: ctx.telegram }, jobId, action);
+            const result = await okMvpService.handleOkModerationAction(resolvedChatId, { telegram: ctx.telegram }, jobId, action);
             await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
             await ctx.reply(result?.message || 'Операция выполнена.');
         } catch (e) {
@@ -1028,18 +1119,6 @@ function startBot(chatId, token) {
     bot.action(/^ig_mod:(\d+):(approve|reject|regen_text|regen_image)$/, async (ctx) => {
         const fromId = String(ctx.from?.id || '');
         const tgChatId = String(ctx.chat?.id || '');
-        const settings = contentMvpService.getContentSettings
-            ? contentMvpService.getContentSettings(chatId)
-            : {};
-        const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
-        const data = manageStore.getState(chatId);
-        const verifiedTgId = data?.verifiedTelegramId ? String(data.verifiedTelegramId) : null;
-        const allowedIds = new Set([String(chatId), moderatorId, tgChatId, verifiedTgId].filter(Boolean));
-        if (!allowedIds.has(fromId)) {
-            console.log(`[IG-MOD] Access denied: fromId=${fromId}, chatId=${chatId}, moderatorId=${moderatorId}, tgChatId=${tgChatId}, verifiedTgId=${verifiedTgId}`);
-            await ctx.answerCbQuery('Недостаточно прав', { show_alert: true }).catch(() => {});
-            return;
-        }
 
         const [, jobIdRaw, action] = ctx.match || [];
         const jobId = Number(jobIdRaw);
@@ -1048,8 +1127,47 @@ function startBot(chatId, token) {
             return;
         }
 
+        // Находим правильный chatId: ищем сессию где есть черновик с этим jobId
+        let resolvedChatId = null;
+        const allStates = manageStore.getAllStates();
+        for (const [cid, data] of Object.entries(allStates)) {
+            const drafts = data.instagramDrafts || {};
+            if (!drafts[String(jobId)]) continue;
+            
+            // Проверяем доступ через модератора Instagram канала
+            const igSettings = manageStore.getIgSettings?.(cid) || {};
+            const globalSettings = data.contentSettings || {};
+            const channelModeratorId = igSettings.moderator_user_id || 
+                                       globalSettings.moderatorUserId || 
+                                       process.env.CONTENT_MVP_MODERATOR_USER_ID;
+            
+            const ownerTgId = String(data.verifiedTelegramId || '');
+            const allowedIds = new Set([ownerTgId, channelModeratorId].filter(Boolean));
+            
+            if (allowedIds.has(fromId)) {
+                resolvedChatId = cid;
+                break;
+            }
+        }
+
+        if (!resolvedChatId) resolvedChatId = manageStore.getByVerifiedTelegramId(fromId);
+        if (!resolvedChatId) resolvedChatId = chatId;
+
+        const settings = contentMvpService.getContentSettings
+            ? contentMvpService.getContentSettings(resolvedChatId)
+            : {};
+        const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
+        const data = manageStore.getState(resolvedChatId);
+        const verifiedTgId = data?.verifiedTelegramId ? String(data.verifiedTelegramId) : null;
+        const allowedIds = new Set([String(resolvedChatId), moderatorId, tgChatId, verifiedTgId].filter(Boolean));
+        if (!allowedIds.has(fromId)) {
+            console.log(`[IG-MOD] Access denied: fromId=${fromId}, resolvedChatId=${resolvedChatId}, moderatorId=${moderatorId}`);
+            await ctx.answerCbQuery('Недостаточно прав', { show_alert: true }).catch(() => {});
+            return;
+        }
+
         try {
-            const result = await instagramMvpService.handleInstagramModerationAction(chatId, { telegram: ctx.telegram }, jobId, action);
+            const result = await instagramMvpService.handleInstagramModerationAction(resolvedChatId, { telegram: ctx.telegram }, jobId, action);
             await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
             await ctx.reply(result?.message || 'Операция выполнена.');
         } catch (e) {
