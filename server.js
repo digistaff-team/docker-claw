@@ -35,6 +35,7 @@ app.use(async (req, res, next) => {
                 if (req.session) {
                     req.session.chatId = chatId;
                     req.session.authorizedByAdmin = true;
+                    req.session.adminChatId = chatId; // Сохраняем original chatId для админа
                 }
 
                 // Очищаем токен после использования
@@ -46,8 +47,8 @@ app.use(async (req, res, next) => {
                 allStates[chatId] = state;
                 await manageStore.persist(chatId);
 
-                // Редирект на страницу авторизации с chatId для автовхода
-                return res.redirect('/auth.html?chat_id=' + encodeURIComponent(chatId));
+                // Редирект на страницу авторизации с chatId и admin_auth для автовхода
+                return res.redirect('/auth.html?chat_id=' + encodeURIComponent(chatId) + '&admin_auth=' + encodeURIComponent(admin_auth));
             }
         } catch (e) {
             console.error('[ADMIN_AUTH] Error:', e.message);
@@ -133,6 +134,93 @@ async function startServer() {
     } else {
         console.log('🤖 Auth bot: ⏸️  SKIPPED (AUTH_BOT_TOKEN not set)');
     }
+
+    // Запуск центрального бота премодерации контента (единый для всех пользователей)
+    const cwBotToken = process.env.CW_BOT_TOKEN;
+    let cwBot = null;
+    
+    if (cwBotToken) {
+        // Создаём отдельного бота для премодерации
+        const { Telegraf } = require('telegraf');
+        cwBot = new Telegraf(cwBotToken);
+        
+        // Регистрируем обработчик callback query для модерации контента
+        cwBot.action(/^content:(\d+):(approve|regen_text|regen_image|regen_video|reject)$/, async (ctx) => {
+            const fromId = String(ctx.from?.id || '');
+            const tgChatId = String(ctx.chat?.id || '');
+            
+            const [, jobIdRaw, action] = ctx.match || [];
+            const jobId = Number(jobIdRaw);
+            if (!Number.isFinite(jobId)) {
+                await ctx.answerCbQuery('Некорректный ID').catch(() => {});
+                return;
+            }
+            
+            // Находим правильный chatId: ищем сессию где есть черновик с этим jobId
+            let resolvedChatId = null;
+            const allStates = manageStore.getAllStates();
+            for (const [cid, data] of Object.entries(allStates)) {
+                if (String(data.verifiedTelegramId) !== String(fromId)) {
+                    continue;
+                }
+                const drafts = data.contentDrafts || {};
+                if (drafts[String(jobId)]) {
+                    resolvedChatId = cid;
+                    break;
+                }
+            }
+            
+            if (!resolvedChatId) {
+                resolvedChatId = manageStore.getByVerifiedTelegramId(fromId);
+            }
+            
+            if (!resolvedChatId) {
+                await ctx.answerCbQuery('Черновик не найден').catch(() => {});
+                await ctx.reply('❌ Черновик не найден. Возможно, он уже был обработан.').catch(() => {});
+                return;
+            }
+            
+            console.log(`[CW-BOT] ${action} job ${jobId} for chatId=${resolvedChatId} (fromId=${fromId})`);
+            try {
+                const result = await contentMvpService.handleModerationAction(resolvedChatId, { telegram: ctx.telegram }, action, jobId);
+                await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
+                if (result?.ok) {
+                    await ctx.reply(result.message || 'Операция выполнена.').catch(() => {});
+                } else {
+                    await ctx.reply(`❌ ${result?.error || 'Ошибка модерации'}`).catch(() => {});
+                }
+            } catch (e) {
+                console.error(`[CW-BOT] Error:`, e);
+                await ctx.answerCbQuery('Ошибка').catch(() => {});
+                await ctx.reply(`Ошибка модерации: ${e.message}`).catch(() => {});
+            }
+        });
+        
+        // Запускаем с webhook если WEBHOOK_URL установлен
+        if (process.env.WEBHOOK_URL) {
+            const webhookUrl = `${process.env.WEBHOOK_URL}/cw`;
+            cwBot.telegram.setWebhook(webhookUrl).then(() => {
+                console.log(`🤖 Content bot: ✅ WEBHOOK SET (${webhookUrl})`);
+            }).catch((err) => {
+                console.error('🤖 Content bot: ⚠️  WEBHOOK ERROR:', err.message);
+            });
+            app.use('/telegram/webhook/cw', async (req, res) => {
+                await cwBot.handleUpdate(req.body);
+                res.status(200).send('OK');
+            });
+        } else {
+            cwBot.launch().catch((err) => {
+                console.error('[CW-BOT] Launch error:', err.message);
+            });
+        }
+        
+        console.log('🤖 Content bot: ✅ STARTED (CW_BOT_TOKEN)');
+    } else {
+        console.log('🤖 Content bot: ⏸️  SKIPPED (CW_BOT_TOKEN not set)');
+    }
+    
+    // Делаем cwBot доступным для contentMvpService
+    contentMvpService.setContentBot(cwBot);
     
     // Email processor - запуск cron для опроса почты
     let emailProcessor;

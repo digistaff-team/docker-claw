@@ -414,16 +414,17 @@ function initAuth() {
     const logoutBtn = document.getElementById('logoutButton');
     const chatIdInput = document.getElementById('chatIdInput');
 
-    // Проверяем параметры URL для автовхода из Telegram-бота
+    // Проверяем параметры URL для автовхода из Telegram-бота или admin_auth
     const urlParams = new URLSearchParams(window.location.search);
     const tgLoginToken = urlParams.get('tg_login_token');
+    const adminAuth = urlParams.get('admin_auth');
     const chatIdFromUrl = urlParams.get('chat_id');
-    
+
     // Проверяем сохранённые данные
     const savedChatId = localStorage.getItem('chatId');
     const savedTelegramId = localStorage.getItem('telegramId');
 
-    // Приоритет: одноразовый tg_login_token > старый chat_id > сохранённые данные
+    // Приоритет: одноразовый tg_login_token > admin_auth > старый chat_id > сохранённые данные
     if (tgLoginToken) {
         autoLoginByTelegramToken(tgLoginToken).then(success => {
             if (!success) {
@@ -433,7 +434,26 @@ function initAuth() {
                 showToast('Ссылка входа недействительна или устарела. Войдите повторно из Telegram.', 'error');
             }
         });
+    } else if (adminAuth && chatIdFromUrl) {
+        // Админ входит в контейнер пользователя
+        // Сохраняем admin_auth в sessionStorage для последующего использования
+        sessionStorage.setItem('admin_auth_token', adminAuth);
+        sessionStorage.setItem('admin_auth_chatId', chatIdFromUrl);
+        
+        autoLoginByChatId(chatIdFromUrl).then(success => {
+            if (success) {
+                // Показываем кнопку Админ для возврата в панель управления
+                injectAdminButton();
+            } else {
+                // Ошибка автовхода — показываем форму
+                if (authSection) authSection.style.display = 'block';
+                if (mainContent) mainContent.style.display = 'none';
+                if (logoutBtn) logoutBtn.style.display = 'none';
+                showToast('Не удалось войти автоматически. Войдите вручную.', 'error');
+            }
+        });
     } else if (chatIdFromUrl) {
+        // Обычный автовход по chat_id (из Telegram бота)
         autoLoginByChatId(chatIdFromUrl).then(success => {
             if (success) {
             } else {

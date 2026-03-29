@@ -118,6 +118,11 @@ services:
       - app-network
     mem_limit: 512M
     cpus: '1.0'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "1"
 
 volumes:
   postgres_data:

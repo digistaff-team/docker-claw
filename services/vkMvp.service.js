@@ -495,7 +495,8 @@ async function sendVkToModerator(chatId, bot, draft) {
   const moderatorId = manageStore.getContentSettings?.(chatId)?.moderatorUserId || chatId;
 
   const caption = [
-    `📢 VK → Группа ${draft.groupId || '?'}`,
+    `📢 Черновик для ВКонтакте #${draft.jobId}`,
+    `Группа: ${draft.groupId || '?'}`,
     '',
     `🪝 Хук: ${draft.hookText || '—'}`,
     '',
@@ -651,14 +652,14 @@ async function tickVkSchedule(chatId, bot) {
   // Дневной лимит
   const publishedToday = await vkRepo.countPublishedToday(chatId, tz);
   if (publishedToday >= settings.dailyLimit) {
-    console.log(`[VK-SCHEDULE] ${chatId} skip: daily limit reached (${publishedToday}/${settings.dailyLimit})`);
+    // Не логируем - это нормальное поведение
     return;
   }
 
   // День недели
   const dayOfWeek = new Date().getDay();
   if (!settings.allowedWeekdays.includes(dayOfWeek)) {
-    console.log(`[VK-SCHEDULE] ${chatId} skip: weekday ${dayOfWeek} not in allowed ${JSON.stringify(settings.allowedWeekdays)}`);
+    // Не логируем - это нормальное поведение (например воскресенье не в разрешённых днях)
     return;
   }
 

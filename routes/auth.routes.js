@@ -298,7 +298,8 @@ router.post('/telegram-login', async (req, res) => {
             const session = await sessionService.getOrCreateSession(telegramId);
 
             // Если это первый вход и есть username — сохраняем
-            if (username && !directState.verifiedUsername) {
+            // Или обновляем username если пользователь сменил его в Telegram
+            if (username) {
                 // Сохраняем username, firstName, lastName
                 const state = manageStore.getState(telegramId) || {};
                 if (!state.verifiedTelegramId) {
@@ -308,6 +309,13 @@ router.post('/telegram-login', async (req, res) => {
                     if (firstName) state.verifiedFirstName = firstName;
                     if (lastName) state.verifiedLastName = lastName;
                     await manageStore.persist(telegramId);
+                } else if (state.verifiedUsername !== username) {
+                    // Username изменился — обновляем
+                    state.verifiedUsername = username;
+                    if (firstName) state.verifiedFirstName = firstName;
+                    if (lastName) state.verifiedLastName = lastName;
+                    await manageStore.persist(telegramId);
+                    console.log(`[AUTH] Updated username for ${telegramId}: ${state.verifiedUsername}`);
                 }
             }
             

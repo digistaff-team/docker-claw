@@ -551,11 +551,12 @@ async function publishOkPost(chatId, bot, jobId, correlationId) {
  */
 async function sendOkToModerator(chatId, bot, draft) {
   const moderatorId = manageStore.getContentSettings?.(chatId)?.moderatorUserId || chatId;
-  
+
   console.log(`[OK-MODERATION] Sending draft to moderator ${moderatorId}, jobId=${draft.jobId}, corr=${draft.correlationId || 'n/a'}`);
 
   const caption = [
-    `📢 ОК → Группа ${draft.communityId || '?'}`,
+    `📢 Черновик для Одноклассников #${draft.jobId}`,
+    `Группа: ${draft.communityId || '?'}`,
     '',
     `🪝 Хук: ${draft.hookText || '—'}`,
     '',
@@ -731,14 +732,14 @@ async function tickOkSchedule(chatId, bot) {
   // Дневной лимит
   const publishedToday = await okRepo.countPublishedToday(chatId, tz);
   if (publishedToday >= settings.dailyLimit) {
-    console.log(`[OK-SCHEDULE] ${chatId} skip: daily limit reached (${publishedToday}/${settings.dailyLimit})`);
+    // Не логируем - это нормальное поведение
     return;
   }
 
   // День недели
   const dayOfWeek = new Date().getDay();
   if (!settings.allowedWeekdays.includes(dayOfWeek)) {
-    console.log(`[OK-SCHEDULE] ${chatId} skip: weekday ${dayOfWeek} not in allowed ${JSON.stringify(settings.allowedWeekdays)}`);
+    // Не логируем - это нормальное поведение (например воскресенье не в разрешённых днях)
     return;
   }
 

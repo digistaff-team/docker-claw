@@ -861,31 +861,64 @@ function startBot(chatId, token) {
     bot.action(/^content:(\d+):(approve|regen_text|regen_image|regen_video|reject)$/, async (ctx) => {
         const fromId = String(ctx.from?.id || '');
         const tgChatId = String(ctx.chat?.id || '');
-        const settings = contentMvpService.getContentSettings
-            ? contentMvpService.getContentSettings(chatId)
-            : {};
-        const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
-        const data = manageStore.getState(chatId);
-        const verifiedTgId = data?.verifiedTelegramId ? String(data.verifiedTelegramId) : null;
-        const allowedIds = new Set([String(chatId), moderatorId, tgChatId, verifiedTgId].filter(Boolean));
-        if (!allowedIds.has(fromId)) {
-            console.log(`[CONTENT-MOD] Access denied: fromId=${fromId}, chatId=${chatId}, moderatorId=${moderatorId}, tgChatId=${tgChatId}, verifiedTgId=${verifiedTgId}`);
-            await ctx.answerCbQuery('Недостаточно прав', { show_alert: true }).catch(() => {});
-            return;
-        }
-
+        
         const [, jobIdRaw, action] = ctx.match || [];
         const jobId = Number(jobIdRaw);
         if (!Number.isFinite(jobId)) {
             await ctx.answerCbQuery('Некорректный ID').catch(() => {});
             return;
         }
+        
+        // Находим правильный chatId: ищем сессию где есть черновик с этим jobId
+        // Это нужно потому что у пользователя может быть несколько сессий с одинаковым токеном
+        let resolvedChatId = null;
+        const allStates = manageStore.getAllStates();
+        for (const [cid, data] of Object.entries(allStates)) {
+            // Проверяем что этот пользователь имеет доступ к сессии
+            if (String(data.verifiedTelegramId) !== String(fromId)) {
+                continue;
+            }
+            // Проверяем есть ли черновик с этим jobId
+            const drafts = data.contentDrafts || {};
+            if (drafts[String(jobId)]) {
+                resolvedChatId = cid;
+                break;
+            }
+        }
+        
+        if (!resolvedChatId) {
+            // Fallback: ищем просто по verifiedTelegramId
+            resolvedChatId = manageStore.getByVerifiedTelegramId(fromId);
+        }
+        if (!resolvedChatId) {
+            // Fallback: используем chatId из замыкания
+            resolvedChatId = chatId;
+        }
+        
+        const settings = contentMvpService.getContentSettings
+            ? contentMvpService.getContentSettings(resolvedChatId)
+            : {};
+        const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
+        const data = manageStore.getState(resolvedChatId);
+        const verifiedTgId = data?.verifiedTelegramId ? String(data.verifiedTelegramId) : null;
+        const allowedIds = new Set([String(resolvedChatId), moderatorId, tgChatId, verifiedTgId].filter(Boolean));
+        if (!allowedIds.has(fromId)) {
+            console.log(`[CONTENT-MOD] Access denied: fromId=${fromId}, resolvedChatId=${resolvedChatId}, moderatorId=${moderatorId}, tgChatId=${tgChatId}, verifiedTgId=${verifiedTgId}`);
+            await ctx.answerCbQuery('Недостаточно прав', { show_alert: true }).catch(() => {});
+            return;
+        }
 
+        console.log(`[CONTENT-MOD] ${action} job ${jobId} for chatId=${resolvedChatId} (fromId=${fromId})`);
         try {
-            const result = await contentMvpService.handleModerationAction(chatId, { telegram: ctx.telegram }, action, jobId);
+            const result = await contentMvpService.handleModerationAction(resolvedChatId, { telegram: ctx.telegram }, action, jobId);
             await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
-            await ctx.reply(result?.message || 'Операция выполнена.');
+            if (result?.ok) {
+                await ctx.reply(result.message || 'Операция выполнена.');
+            } else {
+                await ctx.reply(`❌ ${result?.error || 'Ошибка модерации'}`);
+            }
         } catch (e) {
+            console.error(`[CONTENT-MOD] Error:`, e);
             await ctx.answerCbQuery('Ошибка').catch(() => {});
             await ctx.reply(`Ошибка модерации: ${e.message}`);
         }
@@ -1133,7 +1166,14 @@ function stopBot(chatId) {
 
 async function startAllBots() {
     const list = manageStore.getAllTokens();
+    const cwBotToken = process.env.CW_BOT_TOKEN;
+    
     for (const { chatId, token } of list) {
+        // Пропускаем ботов с CW_BOT_TOKEN - они запускаются централизованно в server.js
+        if (cwBotToken && token === cwBotToken) {
+            console.log(`[MANAGE-TG] Skipping bot for ${chatId} - will use central CW_BOT_TOKEN`);
+            continue;
+        }
         if (token) startBot(chatId, token);
     }
 }

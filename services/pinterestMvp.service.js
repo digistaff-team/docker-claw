@@ -494,7 +494,8 @@ async function sendPinToModerator(chatId, bot, draft) {
   const moderatorId = manageStore.getContentSettings?.(chatId)?.moderatorUserId || chatId;
 
   const caption = [
-    `📌 Pinterest → ${draft.board?.board_name || 'Board'}`,
+    `📌 Черновик для Pinterest #${draft.jobId}`,
+    `Доска: ${draft.board?.board_name || 'Board'}`,
     '',
     `Заголовок: ${draft.pinTitle}`,
     '',

@@ -142,6 +142,11 @@ router.post('/container/:chatId/auth', requireAdminAuth, async (req, res) => {
         // Получаем текущее состояние из cache
         const state = manageStore.getState(chatId) || {};
 
+        // Устанавливаем verifiedTelegramId = chatId для корректной авторизации
+        // Это важно чтобы API /auth/check возвращал правильный chatId
+        state.verifiedTelegramId = parseInt(chatId, 10) || chatId;
+        state.verifiedUsername = state.verifiedUsername || `admin_user_${chatId}`;
+
         // Добавляем admin auth данные
         state.adminAuthToken = authToken;
         state.adminAuthExpires = Date.now() + (24 * 60 * 60 * 1000); // 24 часа

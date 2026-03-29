@@ -196,7 +196,10 @@
         <div class="stats" id="stats"></div>
         
         <div class="containers-table">
-            <h2>User Containers</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid #eee;">
+                <h2 style="margin: 0;">User Containers</h2>
+                <button class="btn btn-start" style="font-size: 14px; padding: 10px 20px;" onclick="createContainer()">➕ Создать контейнер</button>
+            </div>
             <div id="content">
                 <div class="loading">Loading...</div>
             </div>
@@ -457,6 +460,47 @@
             });
             sessionStorage.removeItem('isAdminAuthenticated');
             window.location.href = '/admin/login';
+        }
+
+        async function createContainer() {
+            const chatId = prompt('Введите Chat ID пользователя для создания контейнера:');
+            if (!chatId || !chatId.trim()) return;
+
+            const trimmedChatId = chatId.trim();
+            
+            if (!/^\d+$/.test(trimmedChatId)) {
+                alert('Chat ID должен содержать только цифры');
+                return;
+            }
+
+            if (!confirm(`Создать контейнер для пользователя ${trimmedChatId}?\n\nЭто создаст:\n- Docker контейнер sandbox-user-${trimmedChatId}\n- PostgreSQL базу данных db_${trimmedChatId}\n- Рабочую директорию в /var/sandbox-data/${trimmedChatId}`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/session/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        chat_id: trimmedChatId,
+                        force: false
+                    })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    alert(`✅ Контейнер успешно создан!\n\nChat ID: ${data.chat_id}\nContainer: ${data.containerId}\nDatabase: ${data.database}`);
+                    loadContainers();
+                } else {
+                    alert(`❌ Ошибка создания: ${data.error || 'Неизвестная ошибка'}`);
+                }
+            } catch (err) {
+                alert(`❌ Ошибка: ${err.message}`);
+            }
         }
 
         // Initial load

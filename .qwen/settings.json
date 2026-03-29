@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(lsof *)",
+      "Bash(xargs *)",
+      "Bash(sleep *)",
+      "Bash(nohup *)",
+      "Bash(ss *)",
+      "Bash(kill *)",
+      "Bash(fuser *)",
+      "Bash(pkill *)",
+      "Bash(node *)",
+      "Bash(netstat *)",
+      "Bash(docker ps)",
+      "Bash(docker exec *)",
+      "Bash(docker restart *)",
+      "Bash(docker logs *)",
+      "Bash(docker compose *)",
+      "Bash(find *)",
+      "Bash(sudo *)"
+    ]
+  },
+  "$version": 3
+}

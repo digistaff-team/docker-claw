@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Баланс токенов - Клиент Завод</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        h2 {
+            color: #333;
+            margin: 30px 0 15px;
+            font-size: 1.5rem;
+        }
+
+        .balance-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+
+        .balance-amount {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .balance-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .balance-detail-item {
+            text-align: center;
+        }
+
+        .balance-detail-label {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+        }
+
+        .balance-detail-value {
+            color: #333;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .packages {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .package-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+
+        .package-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            border-color: #667eea;
+        }
+
+        .package-name {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .package-tokens {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .package-price {
+            font-size: 1.5rem;
+            color: #28a745;
+            font-weight: 600;
+        }
+
+        .package-features {
+            list-style: none;
+            margin-top: 15px;
+            text-align: left;
+        }
+
+        .package-features li {
+            padding: 5px 0;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .package-features li:before {
+            content: "✓ ";
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .transactions-table {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: #667eea;
+            color: white;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #eee;
+        }
+
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .amount-positive {
+            color: #28a745;
+            font-weight: 600;
+        }
+
+        .amount-negative {
+            color: #dc3545;
+            font-weight: 600;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .error-message {
+            background: #dc3545;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .success-message {
+            background: #28a745;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .refresh-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-bottom: 20px;
+            transition: background 0.3s ease;
+        }
+
+        .refresh-btn:hover {
+            background: #5568d3;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .balance-amount {
+                font-size: 2rem;
+            }
+
+            .package-tokens {
+                font-size: 1.5rem;
+            }
+
+            th, td {
+                padding: 10px 5px;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💰 Баланс токенов</h1>
+
+        <div id="error-container"></div>
+        <div id="success-container"></div>
+
+        <div class="balance-card">
+            <div class="balance-amount" id="balance">Загрузка...</div>
+            <div class="balance-details">
+                <div class="balance-detail-item">
+                    <div class="balance-detail-label">План</div>
+                    <div class="balance-detail-value" id="plan">-</div>
+                </div>
+                <div class="balance-detail-item">
+                    <div class="balance-detail-label">Ежемесячно</div>
+                    <div class="balance-detail-value" id="monthly">-</div>
+                </div>
+                <div class="balance-detail-item">
+                    <div class="balance-detail-label">Следующий ресет</div>
+                    <div class="balance-detail-value" id="reset">-</div>
+                </div>
+                <div class="balance-detail-item">
+                    <div class="balance-detail-label">Расход за 7 дней</div>
+                    <div class="balance-detail-value" id="usage">-</div>
+                </div>
+            </div>
+        </div>
+
+        <h2>Пополнить баланс</h2>
+        <div class="packages">
+            <div class="package-card" onclick="createPayment(30, 1000000)">
+                <div class="package-name">Free</div>
+                <div class="package-tokens">1M</div>
+                <div class="package-price">30₽</div>
+                <ul class="package-features">
+                    <li>1,000,000 токенов</li>
+                    <li>~100 запросов к GPT-4o</li>
+                    <li>Мгновенное зачисление</li>
+                </ul>
+            </div>
+
+            <div class="package-card" onclick="createPayment(75, 3000000)">
+                <div class="package-name">Basic</div>
+                <div class="package-tokens">3M</div>
+                <div class="package-price">75₽</div>
+                <ul class="package-features">
+                    <li>3,000,000 токенов</li>
+                    <li>~300 запросов к GPT-4o</li>
+                    <li>Выгода 25₽</li>
+                    <li>Мгновенное зачисление</li>
+                </ul>
+            </div>
+
+            <div class="package-card" onclick="createPayment(300, 15000000)">
+                <div class="package-name">Pro</div>
+                <div class="package-tokens">15M</div>
+                <div class="package-price">300₽</div>
+                <ul class="package-features">
+                    <li>15,000,000 токенов</li>
+                    <li>~1500 запросов к GPT-4o</li>
+                    <li>Выгода 150₽</li>
+                    <li>Приоритетная поддержка</li>
+                </ul>
+            </div>
+        </div>
+
+        <h2>
+            История транзакций
+            <button class="refresh-btn" onclick="loadData()">🔄 Обновить</button>
+        </h2>
+        <div class="transactions-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Тип</th>
+                        <th>Модель</th>
+                        <th>Входящие</th>
+                        <th>Исходящие</th>
+                        <th>Сумма</th>
+                    </tr>
+                </thead>
+                <tbody id="transactions-body">
+                    <tr>
+                        <td colspan="6" class="no-data">Загрузка...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin;
+
+        // Get telegram_id from URL query or session
+        function getTelegramId() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('telegram_id') || sessionStorage.getItem('telegram_id');
+        }
+
+        function showError(message) {
+            const container = document.getElementById('error-container');
+            container.innerHTML = `<div class="error-message">${message}</div>`;
+            setTimeout(() => container.innerHTML = '', 5000);
+        }
+
+        function showSuccess(message) {
+            const container = document.getElementById('success-container');
+            container.innerHTML = `<div class="success-message">${message}</div>`;
+            setTimeout(() => container.innerHTML = '', 5000);
+        }
+
+        async function loadBalance() {
+            const telegramId = getTelegramId();
+            if (!telegramId) {
+                document.getElementById('balance').textContent = 'Требуется авторизация';
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/api/billing/balance?telegram_id=${telegramId}`);
+                if (!res.ok) throw new Error('Failed to load balance');
+                
+                const data = await res.json();
+
+                document.getElementById('balance').textContent = 
+                    `${data.balance_tokens.toLocaleString()} токенов`;
+                document.getElementById('plan').textContent = 
+                    data.plan_id ? data.plan_id.toUpperCase() : 'FREE';
+                document.getElementById('monthly').textContent = 
+                    `${data.monthly_included_tokens.toLocaleString()} токенов`;
+                document.getElementById('reset').textContent = 
+                    data.next_reset_date ? new Date(data.next_reset_date).toLocaleDateString('ru-RU') : 'Никогда';
+
+                // Load usage stats
+                await loadUsage();
+            } catch (error) {
+                console.error('Load balance error:', error);
+                document.getElementById('balance').textContent = 'Ошибка загрузки';
+                showError('Не удалось загрузить баланс. Попробуйте обновить страницу.');
+            }
+        }
+
+        async function loadUsage() {
+            const telegramId = getTelegramId();
+            if (!telegramId) return;
+
+            try {
+                const res = await fetch(`${API_URL}/api/billing/usage?telegram_id=${telegramId}&period=7d`);
+                if (!res.ok) throw new Error('Failed to load usage');
+                
+                const data = await res.json();
+                document.getElementById('usage').textContent = 
+                    `${data.total_spent.toLocaleString()} токенов`;
+            } catch (error) {
+                console.error('Load usage error:', error);
+                document.getElementById('usage').textContent = '-';
+            }
+        }
+
+        async function loadTransactions() {
+            const telegramId = getTelegramId();
+            if (!telegramId) {
+                document.querySelector('#transactions-body').innerHTML = 
+                    '<tr><td colspan="6" class="no-data">Требуется авторизация</td></tr>';
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/api/billing/transactions?telegram_id=${telegramId}&limit=50`);
+                if (!res.ok) throw new Error('Failed to load transactions');
+                
+                const transactions = await res.json();
+                const tbody = document.querySelector('#transactions-body');
+
+                if (transactions.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="no-data">Нет транзакций</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = transactions.map(t => {
+                    const date = new Date(t.created_at).toLocaleDateString('ru-RU', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    
+                    const type = t.amount > 0 ? '➕ Пополнение' : '➖ Расход';
+                    const amountClass = t.amount > 0 ? 'amount-positive' : 'amount-negative';
+                    const amountText = t.amount > 0 ? `+${t.amount.toLocaleString()}` : `${t.amount.toLocaleString()}`;
+
+                    return `
+                        <tr>
+                            <td>${date}</td>
+                            <td>${type}<br><small style="color:#666">${t.reason?.slice(0, 30) || '-'}${t.reason?.length > 30 ? '...' : ''}</small></td>
+                            <td>${t.model || '-'}</td>
+                            <td>${t.prompt_tokens?.toLocaleString() || '-'}</td>
+                            <td>${t.completion_tokens?.toLocaleString() || '-'}</td>
+                            <td class="${amountClass}">${amountText}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Load transactions error:', error);
+                document.querySelector('#transactions-body').innerHTML = 
+                    '<tr><td colspan="6" class="no-data">Ошибка загрузки</td></tr>';
+                showError('Не удалось загрузить историю транзакций.');
+            }
+        }
+
+        async function createPayment(amount, tokens) {
+            const telegramId = getTelegramId();
+            if (!telegramId) {
+                showError('Сначала авторизуйтесь через Telegram');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/api/billing/create-payment`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        telegramId: parseInt(telegramId),
+                        amount: amount,
+                        tokens: tokens
+                    })
+                });
+
+                if (!res.ok) {
+                    const error = await res.json();
+                    throw new Error(error.error || 'Failed to create payment');
+                }
+
+                const { paymentUrl } = await res.json();
+                
+                // Open payment in new window
+                window.open(paymentUrl, '_blank');
+                showSuccess('Переход к оплате...');
+            } catch (error) {
+                console.error('Create payment error:', error);
+                showError('Ошибка создания платежа: ' + error.message);
+            }
+        }
+
+        async function loadData() {
+            await Promise.all([loadBalance(), loadTransactions()]);
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', loadData);
+    </script>
+</body>
+</html>

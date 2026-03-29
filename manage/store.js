@@ -174,6 +174,27 @@ function getByToken(token) {
     return null;
 }
 
+function getByVerifiedTelegramId(telegramId) {
+    for (const [cid, data] of Object.entries(statesCache)) {
+        if (String(data.verifiedTelegramId) === String(telegramId)) return cid;
+    }
+    return null;
+}
+
+/**
+ * Найти chatId по токену бота и Telegram ID пользователя
+ * Используется для callback handler'ов чтобы найти правильную сессию
+ */
+function getByTokenAndTelegramId(token, telegramId) {
+    for (const [cid, data] of Object.entries(statesCache)) {
+        if (data.token === token && String(data.verifiedTelegramId) === String(telegramId)) {
+            return cid;
+        }
+    }
+    // Если не найдено по комбинации, ищем просто по токену
+    return getByToken(token);
+}
+
 function setToken(chatId, token) {
     if (!statesCache[chatId]) statesCache[chatId] = {};
     statesCache[chatId].token = token;
@@ -1047,6 +1068,8 @@ function getAIRouterStats(chatId) {
 module.exports = {
     getState,
     getByToken,
+    getByVerifiedTelegramId,
+    getByTokenAndTelegramId,
     setToken,
     setPending,
     verify,

@@ -58,6 +58,7 @@ const PROFILE_TEMPLATES = {
 
 let schedulerHandle = null;
 let botsGetter = null;
+let cwBot = null; // Центральный бот премодерации (CW_BOT_TOKEN)
 
 // ============================================
 // Конфигурация
@@ -1046,7 +1047,7 @@ async function handleVideoGenerationComplete(chatId, job, bot, videoResult) {
 async function sendVideoDraftToModerator(chatId, bot, draft) {
   const settings = getContentSettings(chatId);
   const caption = [
-    `🎬 Видео-черновик #${draft.jobId}`,
+    `🎬 Видео-черновик #${draft.jobId} для Telegram`,
     `Тема: ${draft.topic.topic}`,
     draft.correlationId ? `📋 ${draft.correlationId}` : '',
     '',
@@ -1164,7 +1165,7 @@ async function routeDraft(chatId, bot, draft) {
 async function sendDraftToModerator(chatId, bot, draft) {
   const settings = getContentSettings(chatId);
   const caption = [
-    `📝 Черновик #${draft.jobId}`,
+    `📝 Черновик #${draft.jobId} для Telegram`,
     `Тема: ${draft.topic.topic}`,
     draft.correlationId ? `📋 ${draft.correlationId}` : '',
     '',
@@ -1188,7 +1189,10 @@ async function sendDraftToModerator(chatId, bot, draft) {
   const session = await sessionService.getOrCreateSession(chatId);
   const tempPath = path.join(os.tmpdir(), `draft-${chatId}-${draft.jobId}.png`);
   await dockerService.copyFromContainer(session.containerId, draft.imagePath, tempPath);
-  const sent = await bot.telegram.sendPhoto(settings.moderatorUserId, { source: tempPath }, { caption, reply_markup: kb });
+  
+  // Используем cwBot если он есть и у пользователя нет своего бота
+  const moderatorBot = cwBot && cwBot.token !== bot?.token ? cwBot : bot;
+  const sent = await moderatorBot.telegram.sendPhoto(settings.moderatorUserId, { source: tempPath }, { caption, reply_markup: kb });
   await fs.unlink(tempPath).catch(() => {});
 
   await setDraft(chatId, String(draft.jobId), {
@@ -2014,7 +2018,11 @@ module.exports = {
   // Очередь (для прямого доступа)
   enqueue: queueRepo.enqueue,
   getQueueStats: queueRepo.getQueueStats,
-  
+
+  // Центральный бот премодерации
+  setContentBot: (bot) => { cwBot = bot; },
+  getContentBot: () => cwBot,
+
   // TASK-015: Video
   videoService,
   VIDEO_STATUS,

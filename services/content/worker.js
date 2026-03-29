@@ -82,10 +82,10 @@ function stopWorker() {
  */
 async function processAllQueues() {
   if (!botsGetter) return;
-  
+
   const bots = botsGetter();
   if (!bots || bots.size === 0) return;
-  
+
   // Сбрасываем застрявшие задачи
   for (const [chatId] of bots) {
     try {
@@ -94,16 +94,22 @@ async function processAllQueues() {
         console.log(`[CONTENT-WORKER] Reset ${resetCount} stuck jobs for chat ${chatId}`);
       }
     } catch (e) {
-      console.error(`[CONTENT-WORKER] Failed to reset stuck jobs for ${chatId}:`, e.message);
+      // Игнорируем ошибки если база данных не существует (канал ещё не подключён)
+      if (!e.message.includes('does not exist')) {
+        console.error(`[CONTENT-WORKER] Failed to reset stuck jobs for ${chatId}:`, e.message);
+      }
     }
   }
-  
+
   // Обрабатываем задачи
   for (const [chatId, entry] of bots) {
     try {
       await processQueueForChat(chatId, entry.bot);
     } catch (e) {
-      console.error(`[CONTENT-WORKER] Error processing queue for ${chatId}:`, e.message);
+      // Игнорируем ошибки если база данных не существует (канал ещё не подключён)
+      if (!e.message.includes('does not exist')) {
+        console.error(`[CONTENT-WORKER] Error processing queue for ${chatId}:`, e.message);
+      }
     }
   }
 }
@@ -188,7 +194,10 @@ async function pollVideoGenerations() {
     try {
       await pollVideoForChat(chatId, entry.bot);
     } catch (e) {
-      console.error(`[CONTENT-WORKER-VIDEO] Error polling for ${chatId}:`, e.message);
+      // Игнорируем ошибки если база данных не существует (канал ещё не подключён)
+      if (!e.message.includes('does not exist')) {
+        console.error(`[CONTENT-WORKER-VIDEO] Error polling for ${chatId}:`, e.message);
+      }
     }
   }
 }
