@@ -1,12 +1,5 @@
 const API_CONTENT = `${window.location.origin}/api/content`;
 const API_MANAGE = `${window.location.origin}/api/manage`;
-const PROFILE_KEYS = [
-    { file: 'IDENTITY.md', field: 'profileIdentity', badge: 'profileStatusIdentity' },
-    { file: 'SOUL.md', field: 'profileSoul', badge: 'profileStatusSoul' },
-    { file: 'USER.md', field: 'profileUser', badge: 'profileStatusUser' },
-    { file: 'MEMORY.md', field: 'profileMemory', badge: 'profileStatusMemory' }
-];
-
 let selectedJobId = null;
 let editingTopicId = null;
 let editingMaterialId = null;
@@ -75,7 +68,6 @@ async function loadDashboard() {
     await Promise.all([
         loadTopics(),
         loadMaterials(),
-        loadProfile(),
         loadJobs()
     ]);
 }
@@ -510,55 +502,6 @@ async function deleteMaterial(materialId) {
         await loadMaterials();
     } catch (e) {
         showToast(e.message, 'error');
-    }
-}
-
-async function loadProfile() {
-    const chatId = getChatId();
-    if (!chatId) return;
-    try {
-        const data = await fetchJson(`${API_CONTENT}/profile?chat_id=${encodeURIComponent(chatId)}`);
-        const sourceEl = document.getElementById('profileSourceLine');
-        if (sourceEl) {
-            sourceEl.textContent = data.directory
-                ? `Профиль хранится в ${data.directory}`
-                : 'Путь профиля не определён';
-            sourceEl.className = 'content-status-line';
-        }
-        PROFILE_KEYS.forEach((entry) => {
-            const field = document.getElementById(entry.field);
-            const badge = document.getElementById(entry.badge);
-            const fileData = data.files?.[entry.file] || {};
-            if (field) {
-                field.value = fileData.content || fileData.template || '';
-            }
-            if (badge) {
-                badge.textContent = String(fileData.content || '').trim() ? 'filled' : 'empty';
-            }
-        });
-    } catch (e) {
-        setApiStatus(`Профиль: ${e.message}`, 'error');
-    }
-}
-
-async function saveProfile() {
-    const chatId = getChatId();
-    if (!chatId) return;
-    const files = {};
-    PROFILE_KEYS.forEach((entry) => {
-        files[entry.file] = document.getElementById(entry.field)?.value || '';
-    });
-    try {
-        await fetchJson(`${API_CONTENT}/profile`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: chatId, files })
-        });
-        showToast('Профиль сохранён', 'success');
-        await loadProfile();
-    } catch (e) {
-        showToast(e.message, 'error');
-        setApiStatus(`Профиль: ${e.message}`, 'error');
     }
 }
 

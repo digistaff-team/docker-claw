@@ -63,31 +63,26 @@
             <div class="panel full-width">
                 <h2>🎭 Настройка личности AI агента</h2>
                 <div class="template-hint">
-                    <strong>💡 Совет:</strong> Заполните файлы персонализации, чтобы AI агент лучше понимал вас и работал в нужном стиле. Эти файлы автоматически добавляются в контекст каждого запроса.
+                    <strong>💡 Совет:</strong> Заполните файлы персонализации, чтобы AI агент лучше понимал вас и работал в нужном стиле. Эти файлы автоматически добавляются в контекст.
                 </div>
 
                 <div class="personalization-grid">
                     <div class="person-card" id="card-IDENTITY.md" onclick="selectPersonFile('IDENTITY.md')">
-                        <h3>👤 IDENTITY.md</h3>
-                        <p>Имя, роль и основные данные AI агента</p>
+                        <h3>👤 ЛИЧНОСТЬ</h3>
+                        <p>Имя, роль и основные данные</p>
                         <span class="status empty" id="status-IDENTITY.md">Не заполнено</span>
                     </div>
                     <div class="person-card" id="card-SOUL.md" onclick="selectPersonFile('SOUL.md')">
-                        <h3>💫 SOUL.md</h3>
-                        <p>Характер, личность и стиль общения</p>
+                        <h3>💫 ТОН ГОЛОСА</h3>
+                        <p>Характер и стиль общения</p>
                         <span class="status empty" id="status-SOUL.md">Не заполнено</span>
                     </div>
                     <div class="person-card" id="card-USER.md" onclick="selectPersonFile('USER.md')">
-                        <h3>🤝 USER.md</h3>
-                        <p>Информация о вас и контекст работы</p>
+                        <h3>🤝 СОБЕСЕДНИК</h3>
+                        <p>Информация о целевой аудитории</p>
                         <span class="status empty" id="status-USER.md">Не заполнено</span>
                     </div>
-                    <div class="person-card" id="card-MEMORY.md" onclick="selectPersonFile('MEMORY.md')">
-                        <h3>🔐 MEMORY.md</h3>
-                        <p>Токены, пароли, важные регламенты</p>
-                        <span class="status empty" id="status-MEMORY.md">Не заполнено</span>
                     </div>
-                </div>
 
                 <div class="editor-container" id="editorContainer" style="display: none;">
                     <div class="editor-header">

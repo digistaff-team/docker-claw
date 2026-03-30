@@ -39,7 +39,7 @@ const {
 
 const SCHEDULE_TIME = process.env.CONTENT_MVP_TIME || '09:00';
 const SCHEDULE_TZ = process.env.CONTENT_MVP_TZ || 'Europe/Moscow';
-const CHANNEL_ID = process.env.CHANNEL_ID || '-1002263032027';
+const CHANNEL_ID = process.env.CHANNEL_ID || null; // Должен быть указан в настройках пользователя
 const MODERATOR_USER_ID = process.env.CONTENT_MVP_MODERATOR_USER_ID || '128247430';
 const DAILY_LIMIT = parseInt(process.env.CONTENT_MVP_DAILY_LIMIT || '1', 10);
 const MAX_IMAGE_ATTEMPTS = parseInt(process.env.CONTENT_MVP_MAX_IMAGE_ATTEMPTS || '3', 10);
@@ -576,7 +576,7 @@ async function generateImage(topic, text) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'grok-imagine/text-to-image',
+      model: 'z-image',
       input: {
         prompt,
         aspect_ratio: '1:1',
@@ -1205,6 +1205,11 @@ async function sendDraftToModerator(chatId, bot, draft) {
 async function publishDraft(chatId, bot, draft, correlationId = null) {
   const corrId = correlationId || draft.correlationId || generateCorrelationId();
   const settings = getContentSettings(chatId);
+
+  // Проверка наличия channelId перед публикацией
+  if (!settings.channelId) {
+    throw new Error(`Telegram канал не настроен для пользователя ${chatId}. Укажите channel_id в настройках контента.`);
+  }
 
   // TASK-011: Валидация перед публикацией
   const validation = validators.validatePostForPublish(draft);

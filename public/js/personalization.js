@@ -1,7 +1,7 @@
 let currentPersonFile = null;
 
 const TEMPLATES = {
-    'IDENTITY.md': `# Личность AI агента
+    'IDENTITY.md': `# Персона AI агента
 
 ## Имя
 [Ваше имя для AI, например: Алекс, Джарвис, Помощник]
@@ -50,28 +50,7 @@ const TEMPLATES = {
 [Над чем вы сейчас работаете]
 
 ## Важная информация
-[Что AI должен всегда помнить о вас]`,
-
-    'MEMORY.md': `# Важная информация
-
-## API токены
-\`\`\`
-[Ваши API ключи, если нужно]
-\`\`\`
-
-## Пароли и доступы
-\`\`\`
-[Пароли к базам данных, сервисам]
-\`\`\`
-
-## Регламенты
-[Правила и процедуры которые должны соблюдаться]
-
-## Частые команды
-[Команды которые вы часто используете]
-
-## Важные пути
-[Пути к файлам, директориям]`
+[Что AI должен всегда помнить о вас]`
 };
 
 async function onLoginSuccess() {
@@ -81,7 +60,7 @@ async function onLoginSuccess() {
 async function loadPersonalizationStatus() {
     const chatId = getChatId();
     if (!chatId) return;
-    const files = ['IDENTITY.md', 'SOUL.md', 'USER.md', 'MEMORY.md'];
+    const files = ['IDENTITY.md', 'SOUL.md', 'USER.md'];
     for (const file of files) {
         try {
             const response = await fetch(

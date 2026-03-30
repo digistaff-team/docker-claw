@@ -556,9 +556,23 @@ async function sendVkToModerator(chatId, bot, draft) {
     const session = await sessionService.getOrCreateSession(chatId);
     const tempPath = path.join(os.tmpdir(), `vk-mod-${chatId}-${draft.jobId}.png`);
     await dockerService.copyFromContainer(session.containerId, draft.imagePath, tempPath);
+
+    // Используем cwBot если бот пользователя недоступен или это cwBot пользователь
+    let moderatorBot = bot;
+    if (!bot || !bot.telegram) {
+      moderatorBot = cwBot;
+    } else if (cwBot && cwBot.token !== bot.token) {
+      // Проверяем, не использует ли пользователь CW_BOT_TOKEN
+      const userState = manageStore.getState(chatId);
+      if (userState?.token === cwBot.token) {
+        moderatorBot = cwBot;
+      }
+    }
     
-    // Используем cwBot если он есть и у пользователя нет своего бота
-    const moderatorBot = cwBot && cwBot.token !== bot?.token ? cwBot : bot;
+    if (!moderatorBot) {
+      throw new Error('No bot available for sending VK draft');
+    }
+    
     const sent = await moderatorBot.telegram.sendPhoto(moderatorId, { source: tempPath }, { caption, reply_markup: kb });
     await fs.unlink(tempPath).catch(() => {});
 
@@ -567,8 +581,21 @@ async function sendVkToModerator(chatId, bot, draft) {
       moderationMessageId: sent.message_id
     });
   } else {
-    // Используем cwBot если он есть и у пользователя нет своего бота
-    const moderatorBot = cwBot && cwBot.token !== bot?.token ? cwBot : bot;
+    // Используем cwBot если бот пользователя недоступен
+    let moderatorBot = bot;
+    if (!bot || !bot.telegram) {
+      moderatorBot = cwBot;
+    } else if (cwBot && cwBot.token !== bot.token) {
+      const userState = manageStore.getState(chatId);
+      if (userState?.token === cwBot.token) {
+        moderatorBot = cwBot;
+      }
+    }
+    
+    if (!moderatorBot) {
+      throw new Error('No bot available for sending VK draft');
+    }
+    
     const sent = await moderatorBot.telegram.sendMessage(moderatorId, caption, { reply_markup: kb });
     await setDraft(chatId, String(draft.jobId), {
       ...draft,

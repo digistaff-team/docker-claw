@@ -443,6 +443,35 @@ premoderationEnabled = true?
 
 ---
 
-## Language
+## Полный цикл авторизации пользователя
 
-Документация (README.md, коммиты, UI) — преимущественно на русском языке.
+### Этап 1: Инициация входа через Telegram-бота
+
+**Точка входа:** `@clientzavod_bot` (центральный auth-бот, управляется системой администратора).
+
+**Процесс:**
+1. Пользователь находит бота `@clientzavod_bot` в Telegram
+2. Нажимает `/start` или кнопку "Войти в аккаунт"
+3. Bot отправляет inline-кнопку с callback-действием
+4. Пользователь нажимает кнопку → bot отправляет запрос на сервер:
+   ```
+   POST /api/auth/telegram-login
+   {
+     "telegram_id": "123456789",
+     "username": "@myusername",
+     "first_name": "John",
+     "last_name": "Doe"
+   }
+   ```
+
+**Файлы:**
+- `manage/telegram/authBot.js` — инициализация и обработка callback-кнопок (функция `handleAuthFlow`)
+- `routes/auth.routes.js` — POST `/api/auth/telegram-login`
+
+### Этап 2: Проверка / создание сессии на сервере
+
+При получении запроса сервер выполняет следующую логику (`routes/auth.routes.js`, метод `POST /api/auth/telegram-login`):
+
+**Поиск существующей сессии:**
+1. Сначала проверяет наличие сессии с `chatId = telegramId` (прямое совпадение)
+2. Если не найдена — ищет сессию, где `state.verifiedTelegramId === telegramId` (пользова

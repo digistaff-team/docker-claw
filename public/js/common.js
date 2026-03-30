@@ -527,7 +527,7 @@ async function renderMenu(currentPage) {
     }
 
     const menuItems = [
-        { href: '/auth.html', label: '🎭 Личность' },
+        { href: '/auth.html', label: '🎭 Персона' },
         { href: '/files.html', label: '📁 Файлы' },
         { href: '/channels.html', label: '📡 Каналы' },
         { href: '/content.html', label: '📝 Контент' },
