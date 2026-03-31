@@ -216,24 +216,35 @@
                 <div class="spinner"></div>
             </div>
 
-            <!-- Блок 1: Телеграм-бот -->
+            <!-- Блок 1: Подключение к боту -->
             <div class="form-group">
-                <label class="form-label">🤖 Токен Telegram-бота (для модерации)</label>
-                <input
-                    type="password"
-                    id="botTokenInput"
-                    class="form-input"
-                    placeholder="1234567890:ABCDEFGHIJKLMNOPQRSTUVWxyz-_"
-                    required
-                />
-                <div class="form-hint">Создайте бота через @BotFather и вставьте его токен</div>
-                <button type="button" id="verifyBotBtn" class="btn btn-secondary" style="margin-top: 10px; width: auto;">
-                    Проверить токен
+                <label class="form-label">🤖 Подключение к боту Копирайтер</label>
+                <p style="margin-bottom: 15px; line-height: 1.6;">
+                    Нажмите кнопку <b>Подключить</b>, перейдите в Telegram и напишите боту Копирайтер любое слово — в ответ бот пришлёт Вам шестизначный код — введите его в поле ниже.
+                </p>
+                <button type="button" id="connectBotBtn" class="btn btn-secondary" style="margin-bottom: 15px; width: auto;">
+                    Подключить
                 </button>
-                <div id="botStatusDiv" style="margin-top: 10px; font-size: 12px;"></div>
             </div>
 
-            <!-- Блок 2: Выбор каналов -->
+            <!-- Блок 2: Код подтверждения -->
+            <div class="form-group">
+                <label class="form-label">Код подтверждения</label>
+                <input
+                    type="text"
+                    id="verifyCodeInput"
+                    class="form-input"
+                    placeholder="123456"
+                    maxlength="6"
+                    style="max-width: 150px;"
+                />
+                <button type="button" id="verifyCodeBtn" class="btn btn-secondary" style="margin-top: 10px; width: auto;">
+                    Подтвердить
+                </button>
+                <div id="verifyStatusDiv" style="margin-top: 10px; font-size: 12px;"></div>
+            </div>
+
+            <!-- Блок 3: Выбор каналов -->
             <div class="form-group">
                 <label class="form-label">📱 Выберите каналы для публикации</label>
                 <div class="channels-grid">

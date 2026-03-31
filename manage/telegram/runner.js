@@ -1097,7 +1097,8 @@ function startBot(chatId, token) {
         const settings = contentMvpService.getContentSettings
             ? contentMvpService.getContentSettings(resolvedChatId)
             : {};
-        const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
+        const okSettings = manageStore.getOkSettings?.(resolvedChatId) || {};
+        const moderatorId = String(okSettings.moderatorUserId || settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
         const allowedIds = new Set([String(resolvedChatId), moderatorId, tgChatId].filter(Boolean));
         if (!allowedIds.has(fromId)) {
             console.log(`[OK-MOD] Access denied: fromId=${fromId}, resolvedChatId=${resolvedChatId}, moderatorId=${moderatorId}`);

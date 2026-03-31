@@ -138,12 +138,39 @@ async function startServer() {
     // Запуск центрального бота премодерации контента (единый для всех пользователей)
     const cwBotToken = process.env.CW_BOT_TOKEN;
     let cwBot = null;
-    
+    let cwBotUsername = null;
+
     if (cwBotToken) {
         // Создаём отдельного бота для премодерации
         const { Telegraf } = require('telegraf');
         cwBot = new Telegraf(cwBotToken);
-        
+
+        // Получаем username бота для deep link'а
+        cwBot.telegram.getMe().then(info => {
+            cwBotUsername = info.username;
+            console.log(`[CW-BOT] Username: @${cwBotUsername}`);
+        }).catch(err => {
+            console.error(`[CW-BOT] Failed to get bot info:`, err.message);
+        });
+
+        // Обработчик текстовых сообщений для верификации через код
+        cwBot.on('text', async (ctx) => {
+            const fromId = String(ctx.from?.id || '');
+            const username = ctx.from?.username ? `@${ctx.from.username}` : null;
+            const data = manageStore.getState(fromId);
+            if (!data) {
+                await ctx.reply('Вы не найдены в системе. Авторизуйтесь на сайте.').catch(() => {});
+                return;
+            }
+            if (data.verifiedTelegramId) {
+                await ctx.reply('Аккаунт уже подтверждён.').catch(() => {});
+                return;
+            }
+            const code = String(Math.floor(100000 + Math.random() * 900000));
+            manageStore.setPending(fromId, code, fromId, username);
+            await ctx.reply(`Код подтверждения: <b>${code}</b>\n\nВведите этот код на странице настройки. Код действителен 10 минут.`, { parse_mode: 'HTML' }).catch(() => {});
+        });
+
         // Регистрируем обработчик callback query для модерации контента
         cwBot.action(/^content:(\d+):(approve|regen_text|regen_image|regen_video|reject)$/, async (ctx) => {
             const fromId = String(ctx.from?.id || '');
@@ -253,8 +280,44 @@ async function startServer() {
             const fromId = String(ctx.from?.id || '');
             const jobId = Number(ctx.match?.[1]);
             const action = ctx.match?.[2];
+
             console.log(`[CW-BOT-OK] ${action} job ${jobId} (fromId=${fromId})`);
-            await ctx.answerCbQuery('В разработке').catch(() => {});
+
+            // Находим chatId по черновику
+            let resolvedChatId = null;
+            const allStatesOk = manageStore.getAllStates();
+            for (const [cid, data] of Object.entries(allStatesOk)) {
+                const drafts = data.okDrafts || {};
+                if (!drafts[String(jobId)]) continue;
+
+                const okSettings = manageStore.getOkSettings?.(cid) || {};
+                const globalSettings = data.contentSettings || {};
+                const channelModeratorId = okSettings.moderatorUserId ||
+                                           globalSettings.moderatorUserId ||
+                                           process.env.CONTENT_MVP_MODERATOR_USER_ID;
+                const ownerTgId = String(data.verifiedTelegramId || '');
+                const allowedIds = new Set([ownerTgId, channelModeratorId].filter(Boolean));
+
+                if (allowedIds.has(fromId)) {
+                    resolvedChatId = cid;
+                    break;
+                }
+            }
+
+            if (!resolvedChatId) {
+                await ctx.answerCbQuery('Черновик не найден').catch(() => {});
+                return;
+            }
+
+            try {
+                const result = await okMvpService.handleOkModerationAction(resolvedChatId, { telegram: ctx.telegram }, jobId, action);
+                await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
+                await ctx.reply(result?.message || 'Операция выполнена.').catch(() => {});
+            } catch (e) {
+                console.error(`[CW-BOT-OK] Error:`, e);
+                await ctx.answerCbQuery('Ошибка').catch(() => {});
+                await ctx.reply(`Ошибка модерации ОК: ${e.message}`).catch(() => {});
+            }
         });
 
         // Instagram moderation callbacks for CW_BOT_TOKEN users
@@ -273,6 +336,11 @@ async function startServer() {
             const action = ctx.match?.[2];
             console.log(`[CW-BOT-PIN] ${action} job ${jobId} (fromId=${fromId})`);
             await ctx.answerCbQuery('В разработке').catch(() => {});
+        });
+
+        // API endpoint для получения username CW бота
+        app.get('/api/manage/cw-bot-info', (req, res) => {
+            res.json({ username: cwBotUsername || null });
         });
 
         // Запускаем с webhook если WEBHOOK_URL установлен

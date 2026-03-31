@@ -929,27 +929,15 @@ router.get('/setup', async (req, res) => {
  */
 router.post('/setup', async (req, res) => {
     try {
-        const { chat_id: chatId, token, channels } = req.body;
-        if (!chatId || !token) {
-            return res.status(400).json({ error: 'chat_id and token are required' });
+        const { chat_id: chatId, channels } = req.body;
+        if (!chatId) {
+            return res.status(400).json({ error: 'chat_id is required' });
         }
 
-        // Сохраняем токен бота
-        const trimmedToken = String(token).trim();
-        await manageStore.setToken(chatId, trimmedToken);
-        telegramRunner.startBot(chatId, trimmedToken);
-
-        // Получаем информацию о боте
-        try {
-            const { Telegraf } = require('telegraf');
-            const tempBot = new Telegraf(trimmedToken);
-            const botInfo = await tempBot.telegram.getMe();
-            if (botInfo && botInfo.username) {
-                await manageStore.setBotUsername(chatId, botInfo.username);
-            }
-            tempBot.stop();
-        } catch (botErr) {
-            console.error('[SETUP-ROUTE] Could not fetch bot username:', botErr.message);
+        // Проверяем что аккаунт уже подтвержден через CW-бот
+        const data = manageStore.getState(chatId);
+        if (!data?.verifiedTelegramId) {
+            return res.status(400).json({ error: 'Сначала подтвердите аккаунт через бота Копирайтер' });
         }
 
         // Гарантируем что схема БД пользователя создана

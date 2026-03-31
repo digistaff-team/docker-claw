@@ -1,57 +1,76 @@
 const API_MANAGE = `${window.location.origin}/api/manage`;
 
-let botTokenValid = false;
+let codeVerified = false;
 
 async function onLoginSuccess() {
     // Показываем форму настройки
     // mainContent уже показан через common.js после авторизации
-
-    // Фокус на поле токена
-    document.getElementById('botTokenInput').focus();
 }
 
 /**
- * Проверить токен бота через API
+ * Открыть диалог с ботом Копирайтер
  */
-async function verifyBotToken() {
-    const token = document.getElementById('botTokenInput').value.trim();
-    if (!token) {
-        showError('Введите токен бота');
-        botTokenValid = false;
-        updateSaveButton();
-        return;
-    }
-
-    const statusDiv = document.getElementById('botStatusDiv');
-    statusDiv.innerHTML = '<div class="spinner" style="width: 20px; height: 20px; display: inline-block;"></div> Проверка...';
-
+async function connectBot() {
     try {
-        // Простая проверка через API: попробуем сохранить и получить статус
-        const response = await fetch(`${API_MANAGE}/telegram/status?chat_id=${encodeURIComponent(currentChatId)}`, {
+        const response = await fetch(`${API_MANAGE}/cw-bot-info`, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' }
         });
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        // На данном этапе просто проверяем формат токена и доступность API
-        // Реальная проверка произойдёт при сохранении
-        if (token.length > 20 && token.includes(':')) {
-            botTokenValid = true;
-            statusDiv.innerHTML = '✅ Формат токена корректен';
-            showSuccess('Токен проверен. Убедитесь, что выбрали нужные каналы и нажмите "Сохранить".');
+        const data = await response.json();
+        if (data.username) {
+            window.open(`https://t.me/${data.username}`, '_blank');
         } else {
-            throw new Error('Неверный формат токена');
+            showError('Не удалось получить информацию о боте');
         }
     } catch (e) {
-        botTokenValid = false;
-        statusDiv.innerHTML = `❌ Ошибка: ${e.message}`;
-        showError(`Не удалось проверить токен: ${e.message}`);
+        console.error('Connect bot error:', e);
+        showError(`Ошибка подключения: ${e.message}`);
+    }
+}
+
+/**
+ * Подтвердить код из бота
+ */
+async function verifyCode() {
+    const code = document.getElementById('verifyCodeInput').value.trim();
+    if (!code || code.length !== 6) {
+        showError('Введите 6-значный код');
+        return;
     }
 
-    updateSaveButton();
+    const statusDiv = document.getElementById('verifyStatusDiv');
+    statusDiv.innerHTML = '<div class="spinner" style="width: 20px; height: 20px; display: inline-block;"></div> Проверка...';
+    statusDiv.style.color = '';
+
+    try {
+        const response = await fetch(`${API_MANAGE}/telegram/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: currentChatId,
+                code: code
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+        }
+
+        codeVerified = true;
+        statusDiv.innerHTML = '✅ Подтверждено';
+        statusDiv.style.color = 'green';
+        document.getElementById('verifyCodeInput').disabled = true;
+        document.getElementById('verifyCodeBtn').disabled = true;
+        updateSaveButton();
+        showSuccess('Аккаунт подтвержден. Выберите каналы и сохраните.');
+    } catch (e) {
+        codeVerified = false;
+        statusDiv.innerHTML = `❌ ${e.message}`;
+        statusDiv.style.color = 'red';
+        showError(`Ошибка подтверждения: ${e.message}`);
+    }
 }
 
 /**
@@ -69,12 +88,11 @@ function getSelectedChannels() {
  * Обновить статус кнопки сохранения
  */
 function updateSaveButton() {
-    const botToken = document.getElementById('botTokenInput').value.trim();
     const channels = getSelectedChannels();
     const saveBtn = document.getElementById('saveBtn');
 
-    // Кнопка активна если: токен введён, токен проверен, выбраны каналы
-    const isEnabled = botToken && botTokenValid && channels.length > 0;
+    // Кнопка активна если: код подтвержден, выбраны каналы
+    const isEnabled = codeVerified && channels.length > 0;
     saveBtn.disabled = !isEnabled;
 }
 
@@ -82,16 +100,10 @@ function updateSaveButton() {
  * Сохранить настройки
  */
 async function saveSetup() {
-    const token = document.getElementById('botTokenInput').value.trim();
     const channels = getSelectedChannels();
 
-    if (!token) {
-        showError('Введите токен бота');
-        return;
-    }
-
-    if (!botTokenValid) {
-        showError('Проверьте токен бота');
+    if (!codeVerified) {
+        showError('Сначала подтвердите код');
         return;
     }
 
@@ -109,7 +121,6 @@ async function saveSetup() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 chat_id: currentChatId,
-                token: token,
                 channels: channels
             })
         });
@@ -174,18 +185,14 @@ function clearMessages() {
 
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
-    // Кнопка "Проверить токен"
-    document.getElementById('verifyBotBtn').addEventListener('click', verifyBotToken);
+    // Кнопка "Подключить"
+    document.getElementById('connectBotBtn').addEventListener('click', connectBot);
+
+    // Кнопка "Подтвердить" (код)
+    document.getElementById('verifyCodeBtn').addEventListener('click', verifyCode);
 
     // Кнопка "Сохранить и продолжить"
     document.getElementById('saveBtn').addEventListener('click', saveSetup);
-
-    // Обновляем статус кнопки при вводе токена
-    document.getElementById('botTokenInput').addEventListener('input', () => {
-        botTokenValid = false; // Сброс проверки при изменении
-        document.getElementById('botStatusDiv').innerHTML = '';
-        updateSaveButton();
-    });
 
     // Обновляем статус кнопки при выборе/отключении каналов
     document.querySelectorAll('.channel-checkbox input[type="checkbox"]').forEach(cb => {

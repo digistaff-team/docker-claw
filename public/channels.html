@@ -68,28 +68,9 @@
                 <!-- Telegram -->
                 <div class="channel-panel" id="channelPanel-telegram" style="display: none;">
                     <div class="channel-card">
-                        <h3>📱 Телеграм Бот</h3>
-                        <div id="telegramTokenBlock">
-                            <p>Токен из @BotFather. После сохранения отправьте боту любое сообщение — он пришлёт код. Введите код ниже и нажмите Подтвердить.</p>
-                            <label for="telegramBotToken">Токен бота</label>
-                            <input type="password" id="telegramBotToken" placeholder="123456789:AAH..." autocomplete="off" />
-                            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-                                <button class="btn btn-primary" onclick="saveTelegramToken()">💾 Сохранить токен</button>
-                            </div>
-                        </div>
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 10px;">
-                            <button class="btn btn-secondary" id="disconnectTelegramBtn" style="display: none;" onclick="disconnectTelegram()">Отключить бота</button>
-                        </div>
-                        <div id="telegramStatus" class="channel-status" style="margin-top: 14px; font-size: 14px;"></div>
-                        <div id="telegramVerifyBlock" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
-                            <label for="telegramVerifyCode">Код подтверждения из Telegram</label>
-                            <input type="text" id="telegramVerifyCode" placeholder="123456" maxlength="6" style="width: 120px; margin-right: 8px;" />
-                            <button class="btn btn-success" onclick="verifyTelegramCode()">Подтвердить</button>
-                        </div>
-
-                        <div id="contentSettingsBlock" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
-                            <h3 style="margin-bottom: 12px;">Контент-настройки</h3>
-                            <p style="color: #666; margin-bottom: 16px; font-size: 13px;">Настройки публикации контента через этого бота: канал, модератор, расписание.</p>
+                        <h3>📱 Телеграм</h3>
+                        <div id="contentSettingsBlock" style="margin-top: 20px; padding-top: 0; border-top: none;">
+                            <p style="color: #666; margin-bottom: 16px; font-size: 13px;">Настройки публикации контента: канал, модератор, расписание.</p>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
                                 <div>
                                     <label for="contentChannelId">Channel ID</label>
