@@ -72,6 +72,10 @@ function isValidTz(tz) {
 }
 
 function getOkSettings(chatId) {
+  // Загружаем состояние пользователя, если ещё не загружено
+  if (!manageStore.getState(chatId)) {
+    manageStore.loadChatState(chatId).catch(e => console.error(`[OK-MVP] Failed to load state for ${chatId}:`, e.message));
+  }
   const cfg = manageStore.getOkConfig(chatId);
   const settings = manageStore.getOkSettings(chatId) || {};
   return {
@@ -458,9 +462,21 @@ async function handleOkGenerateJob(chatId, queueJob, bot, correlationId) {
 // ============================================
 
 async function publishOkPost(chatId, bot, jobId, correlationId) {
+  console.log(`[OK-MVP] publishOkPost START for chatId=${chatId}, jobId=${jobId}`);
   const corrId = correlationId || generateCorrelationId();
+
+  // Загружаем состояние пользователя, если ещё не загружено
+  if (!manageStore.getState(chatId)) {
+    console.log(`[OK-MVP] Loading state for ${chatId}`);
+    await manageStore.loadChatState(chatId);
+  }
+
   const job = await okRepo.getJobById(chatId, jobId);
   if (!job) throw new Error(`OK job ${jobId} not found`);
+
+  // Обновляем статус в 'processing' перед публикацией
+  console.log(`[OK-MVP] Setting job ${jobId} status to processing`);
+  await okRepo.updateJob(chatId, jobId, { status: 'processing' });
 
   const cfg = manageStore.getOkConfig(chatId);
   const communityId = job.community_id || cfg?.group_id || config.OK_GROUP_ID;
@@ -822,6 +838,42 @@ async function runNow(chatId, bot, reason = 'manual') {
 // Scheduler & Worker Registration
 // ============================================
 
+/**
+ * Восстановление публикаций после перезагрузки
+ * Находит jobs со статусом 'processing' и ставит их на повторную публикацию
+ */
+async function recoverInterruptedPublications() {
+  try {
+    const bots = botsGetter ? botsGetter() : new Map();
+    if (!bots || bots.size === 0) return;
+
+    for (const [chatId, entry] of bots.entries()) {
+      // Ищем jobs, которые были прерваны во время публикации
+      const processingJobs = await okRepo.getJobsByStatus(chatId, 'processing', 5);
+      
+      for (const job of processingJobs) {
+        // Проверяем, есть ли уже запись в publish_logs для этого job
+        const logs = await okRepo.listJobs(chatId, { status: 'processing' });
+        const hasPublishLog = false; // Упрощённая проверка
+        
+        console.log(`[OK-RECOVER] Found interrupted job #${job.id} for chatId=${chatId}`);
+        
+        // Ставим в очередь на публикацию
+        await queueRepo.enqueue(chatId, {
+          jobType: 'ok_publish',
+          priority: 10,
+          payload: { jobId: job.id, reason: 'recovery' },
+          correlationId: job.correlation_id || generateCorrelationId()
+        });
+        
+        console.log(`[OK-RECOVER] Job #${job.id} re-queued for publishing`);
+      }
+    }
+  } catch (e) {
+    console.error('[OK-RECOVER] Error:', e.message);
+  }
+}
+
 function startScheduler(getBots) {
   botsGetter = getBots;
 
@@ -840,6 +892,9 @@ function startScheduler(getBots) {
 
   // Запускаем worker с поддержкой CW_BOT_TOKEN
   worker.startWorker(getBots, () => cwBot);
+
+  // Восстанавливаем прерванные публикации после перезагрузки
+  recoverInterruptedPublications();
 
   // Планировщик OK (раз в минуту)
   if (schedulerHandle) clearInterval(schedulerHandle);

@@ -25,6 +25,8 @@ function request(url, options = {}) {
             timeout: options.timeout || 30000
         };
 
+        console.log(`[OK-HTTP] Sending ${reqOptions.method} to ${urlObj.hostname}${reqOptions.path}, body_len=${options.body?.length || 0}`);
+
         const req = https.request(reqOptions, (res) => {
             const chunks = [];
             res.on('data', chunk => chunks.push(chunk));
@@ -32,12 +34,20 @@ function request(url, options = {}) {
                 const body = Buffer.concat(chunks).toString();
                 let json;
                 try { json = JSON.parse(body); } catch { json = null; }
+                console.log(`[OK-HTTP] Response: status=${res.statusCode}, body_len=${body.length}`);
                 resolve({ status: res.statusCode, headers: res.headers, body, json });
             });
         });
 
-        req.on('error', reject);
-        req.on('timeout', () => { req.destroy(); reject(new Error('Request timeout')); });
+        req.on('error', (e) => {
+            console.error(`[OK-HTTP] Request error: ${e.message}`);
+            reject(e);
+        });
+        req.on('timeout', () => { 
+            console.error(`[OK-HTTP] Request timeout`);
+            req.destroy(); 
+            reject(new Error('Request timeout')); 
+        });
 
         if (options.body) req.write(options.body);
         req.end();
@@ -47,6 +57,7 @@ function request(url, options = {}) {
 async function retryRequest(url, options, retries = MAX_RETRIES) {
     for (let attempt = 0; attempt <= retries; attempt++) {
         try {
+            console.log(`[OK-RETRY] Attempt ${attempt + 1}/${retries + 1} to ${url}`);
             const res = await request(url, options);
             // OK rate limit check
             if (res.json?.error_code === 2 && attempt < retries) {
@@ -57,6 +68,7 @@ async function retryRequest(url, options, retries = MAX_RETRIES) {
             }
             return res;
         } catch (e) {
+            console.error(`[OK-RETRY] Attempt ${attempt + 1} failed: ${e.message}`);
             if (attempt >= retries) throw e;
             const delay = RETRY_BASE_MS * Math.pow(2, attempt);
             await new Promise(r => setTimeout(r, delay));
@@ -164,6 +176,8 @@ async function callOkApi(method, params, chatId) {
         body
     });
 
+    console.log(`[OK-API] ${method} response:`, JSON.stringify(res.json).substring(0, 200));
+
     if (res.json?.error_code) {
         const err = res.json;
         console.error(`[OK-API] ${method} error: code=${err.error_code}, msg="${err.error_msg}", params=${JSON.stringify(params)}`);
@@ -232,6 +246,7 @@ async function uploadPhoto(uploadUrl, imageBuffer, filename = 'photo.png') {
  * Используем mediatopic.post с attachment JSON
  */
 async function publishPhotoPost({ chatId, groupId, text, imageBuffer, params = {} }) {
+    console.log(`[OK-PUBLISH] Starting publishPhotoPost for chatId=${chatId}, gid=${groupId || 'unknown'}`);
     const creds = getCredentials(chatId);
     const gid = groupId || creds.groupId;
 
@@ -298,6 +313,7 @@ async function publishPhotoPost({ chatId, groupId, text, imageBuffer, params = {
 
     console.log(`[OK] mediatopic.post: gid=${gid}, hasPhoto=${!!photoToken}`);
     const result = await callOkApi('mediatopic.post', postParams, chatId);
+    console.log(`[OK-PUBLISH] Publish completed, result=${JSON.stringify(result).substring(0, 50)}`);
 
     return {
         post_id: result,

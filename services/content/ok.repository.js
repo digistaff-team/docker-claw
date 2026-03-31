@@ -170,6 +170,16 @@ async function countPublishedToday(chatId, tz = 'Europe/Moscow') {
   });
 }
 
+async function getJobsByStatus(chatId, status, limit = 10) {
+  return withClient(chatId, async (client) => {
+    const result = await client.query(
+      `SELECT * FROM ok_jobs WHERE status = $1 ORDER BY updated_at ASC LIMIT $2`,
+      [status, limit]
+    );
+    return result.rows;
+  });
+}
+
 module.exports = {
   withClient,
   createJob,
@@ -177,5 +187,6 @@ module.exports = {
   getJobById,
   listJobs,
   addPublishLog,
-  countPublishedToday
+  countPublishedToday,
+  getJobsByStatus
 };

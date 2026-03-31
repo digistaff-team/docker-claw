@@ -424,6 +424,9 @@ async function publishVkPost(chatId, bot, jobId, correlationId) {
   const job = await vkRepo.getJobById(chatId, jobId);
   if (!job) throw new Error(`VK job ${jobId} not found`);
 
+  // Обновляем статус в 'processing' перед публикацией
+  await vkRepo.updateJob(chatId, jobId, { status: 'processing' });
+
   const cfg = manageStore.getVkConfig(chatId);
   if (!cfg) throw new Error('VK не настроен');
 
@@ -796,6 +799,36 @@ async function runNow(chatId, bot, reason = 'manual') {
 // Scheduler & Worker Registration
 // ============================================
 
+/**
+ * Восстановление публикаций после перезагрузки
+ * Находит jobs со статусом 'processing' и ставит их на повторную публикацию
+ */
+async function recoverInterruptedPublications() {
+  try {
+    const bots = botsGetter ? botsGetter() : new Map();
+    if (!bots || bots.size === 0) return;
+
+    for (const [chatId, entry] of bots.entries()) {
+      const processingJobs = await vkRepo.getJobsByStatus(chatId, 'processing', 5);
+      
+      for (const job of processingJobs) {
+        console.log(`[VK-RECOVER] Found interrupted job #${job.id} for chatId=${chatId}`);
+        
+        await queueRepo.enqueue(chatId, {
+          jobType: 'vk_publish',
+          priority: 10,
+          payload: { jobId: job.id, reason: 'recovery' },
+          correlationId: job.correlation_id || generateCorrelationId()
+        });
+        
+        console.log(`[VK-RECOVER] Job #${job.id} re-queued for publishing`);
+      }
+    }
+  } catch (e) {
+    console.error('[VK-RECOVER] Error:', e.message);
+  }
+}
+
 function startScheduler(getBots) {
   botsGetter = getBots;
 
@@ -814,6 +847,9 @@ function startScheduler(getBots) {
 
   // Запускаем worker с поддержкой CW_BOT_TOKEN
   worker.startWorker(getBots, () => cwBot);
+
+  // Восстанавливаем прерванные публикации после перезагрузки
+  recoverInterruptedPublications();
 
   // Планировщик VK (раз в минуту)
   if (schedulerHandle) clearInterval(schedulerHandle);

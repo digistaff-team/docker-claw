@@ -1645,6 +1645,10 @@ async function runNow(chatId, bot, reason = 'manual') {
 }
 
 async function tickScheduleForChat(chatId, bot) {
+  // Загружаем состояние пользователя, если ещё не загружено
+  if (!manageStore.getState(chatId)) {
+    await manageStore.loadChatState(chatId);
+  }
   const settings = getContentSettings(chatId);
   const now = getNowInTz(settings.scheduleTz);
 
@@ -1704,7 +1708,13 @@ async function tickScheduleForChat(chatId, bot) {
     for (let slot = startMinutes; slot < 24 * 60; slot += intervalMinutes) {
       if (nowMinutes === slot) { isSlot = true; break; }
     }
-    if (!isSlot) return;
+    if (!isSlot) {
+      // Логируем раз в 10 минут, чтобы не засорять
+      if (nowMinutes % 10 === 0) {
+        console.log(`[TG-SCHEDULE] ${chatId} waiting: now=${now.time}, start=${settings.scheduleTime}, interval=${settings.publishIntervalHours}h`);
+      }
+      return;
+    }
 
     const key = `contentLastRun:${now.time}`;
     if (data[key] === now.date) return;
@@ -1715,6 +1725,7 @@ async function tickScheduleForChat(chatId, bot) {
     await manageStore.persist(chatId);
   }
 
+  console.log(`[TG-SCHEDULE] ${chatId} slot matched ${now.time}, enqueueing content_generate`);
   await runNow(chatId, bot, 'schedule');
 }
 

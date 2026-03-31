@@ -547,7 +547,39 @@ premoderationEnabled = true?
 
 ---
 
-### 15. Snapshot Service
+### 15. Центральный бот модерации (`CW_BOT_TOKEN`)
+
+Единый Telegram-бот для всех пользователей системы. Используется для отправки черновиков на модерацию и обработки кнопок ✅/🔁/❌ по всем каналам (Telegram, VK, OK, Instagram, Pinterest).
+
+**Переменные окружения:**
+
+| Переменная | Назначение |
+|-----------|-----------|
+| `CW_BOT_TOKEN` | Токен бота |
+| `CW_BOT_USERNAME` | Username бота (отображается в UI на `/setup.html`) |
+| `WEBHOOK_URL` | Если задан — бот работает через webhook `{WEBHOOK_URL}/cw`; иначе fallback на long polling |
+
+**Режим webhook** (`WEBHOOK_URL` задан в `.env`):
+- `cwBot.telegram.setWebhook(webhookUrl)` устанавливает вебхук при старте
+- Endpoint `POST /telegram/webhook/cw` в `server.js` принимает обновления и передаёт в `cwBot.handleUpdate(req.body)`
+- Nginx проксирует запросы на app:3015
+
+**Регистрация пользователей в планировщике:**
+- При старте сервера: `startAllBots(cwBot)` — все пользователи с `state.token === CW_BOT_TOKEN` добавляются в `telegramRunner.bots` Map с ссылкой на cwBot
+- При новой авторизации: `routes/auth.routes.js` автоматически записывает `state.token = CW_BOT_TOKEN` и вызывает `telegramRunner.startBot()`, который регистрирует пользователя без создания дублирующего polling
+- Планировщики (Telegram, VK, OK, Pinterest, Instagram) итерируют по `telegramRunner.bots` каждые 60 сек
+
+**Обработчики в `server.js`:**
+- `cwBot.on('text', ...)` — генерирует 6-значный код верификации и сохраняет в `state.pending` (онбординг)
+- `cwBot.action(/^content:.../)` — модерация Telegram-контента
+- `cwBot.action(/^vk:.../)` — модерация VK
+- `cwBot.action(/^ok:.../)` — модерация OK
+- `cwBot.action(/^ig:.../)` — модерация Instagram
+- `cwBot.action(/^pinterest:.../)` — модерация Pinterest
+
+---
+
+### 16. Snapshot Service
 
 **`services/snapshot.service.js`** — многоуровневый undo для файлов.
 
@@ -560,7 +592,7 @@ premoderationEnabled = true?
 
 ---
 
-### 16. Project Cache Service
+### 17. Project Cache Service
 
 **`services/projectCache.service.js`** — постоянная карта файлового дерева.
 
@@ -573,7 +605,7 @@ premoderationEnabled = true?
 
 ---
 
-### 17. Buffer Service & Image Service
+### 18. Buffer Service & Image Service
 
 **`services/buffer.service.js`** — буферизация контента для генерации.
 
@@ -589,7 +621,7 @@ premoderationEnabled = true?
 
 ---
 
-### 18. Email Integration
+### 19. Email Integration
 
 **`manage/email/`** — полный Email-канал.
 
@@ -613,7 +645,7 @@ premoderationEnabled = true?
 
 ---
 
-### 19. Agent Queue
+### 20. Agent Queue
 
 **`manage/agentQueue.js`** — FIFO очередь AI задач на пользователя.
 
@@ -625,7 +657,7 @@ premoderationEnabled = true?
 
 ---
 
-### 20. Instagram Integration
+### 21. Instagram Integration
 
 Добавлен в v3.2.0 (но не был документирован).
 
@@ -643,7 +675,7 @@ premoderationEnabled = true?
 
 ---
 
-### 21. Database Schema Updates
+### 22. Database Schema Updates
 
 Новые таблицы в пользовательских БД:
 
@@ -659,16 +691,26 @@ CREATE TABLE content_config (
 
 ---
 
-### Summary of Key Missing Components
+### Summary of Key Subsystems
 
-1. **Биллинг** — система отслеживания баланса ProTalk токенов
-2. **Вебхуки** — входящие и пользовательские endpoints
-3. **Снапшоты** — многоуровневый undo для файлов
-4. **Кэш проекта** — постоянная файловая карта
-5. **Буферизация** — защита от спама AI запросов
-6. **Email интеграция** — полный двухсторонний Email-канал
-7. **Agent Queue** — очередь AI задач
-8. **Instagram** — поддержка публикации
-9. **Дополнительные сервисы** — image service, project cache
+Все основные компоненты полностью реализованы:
 
-Эти компоненты делают систему полной и готовой к продакшену с enterprise-функциями.
+1. **Авторизация** — двух-уровневая схема (auth-бот + веб-сессия), автоматическая привязка к центральному боту модерации
+2. **Управление контейнерами** — Docker per-user sandbox, Docker CLI, восстановление сессий при рестарте
+3. **Хранилище состояния** — in-memory + файловый бэкап с атомарными операциями
+4. **Telegram-боты** — auth-бот (центральный), бот модерации (центральный, webhook/polling), пользовательские боты (опционально)
+5. **Планировщики** — единая логика для всех каналов, итерирование по пользователям каждые 60 сек
+6. **Content MVP** — многоканальная публикация (Telegram, VK, OK, Pinterest, Instagram), очередь FIFO, машина состояний, модерация
+7. **AI Router** — маршрутизация между ProTalk/OpenAI/OpenRouter с логированием и обработкой ошибок
+8. **Онбординг** — обязательное подтверждение через код верификации, выбор каналов, автоматическая настройка
+9. **Admin Panel** — управление контейнерами, полное удаление пользователей (8 слоёв данных)
+10. **Вебхуки** — входящие и пользовательские endpoints с интеграцией в контейнеры
+11. **Снапшоты** — многоуровневый undo для файлов (10 версий, TTL 7 дней)
+12. **Кэш проекта** — постоянная файловая карта для оптимизации AI контекста
+13. **Буферизация** — защита от спама AI запросов и rate limiting
+14. **Email интеграция** — IMAP polling и SMTP отправка
+15. **Биллинг** — отслеживание баланса ProTalk с авто-отключением
+16. **Snapshot Service** — версионирование файлов с TTL
+17. **Database Schema** — полная миграция таблиц по каналам
+
+Система готова к продакшену с enterprise-функциями и масштабируемой архитектурой.
