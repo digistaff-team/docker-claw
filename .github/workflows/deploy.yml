@@ -1,0 +1,36 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /path/to/your/project
+            
+            # Сохраняем данные перед обновлением
+            cp -r data/ data.backup/ 2>/dev/null || true
+            
+            git pull origin main
+            
+            # Восстанавливаем данные после обновления
+            cp -r data.backup/ data/ 2>/dev/null || true
+            
+            docker compose down
+            docker compose up -d --build
+            docker image prune -f
+            
+            # Очищаем бэкап
+            rm -rf data.backup/
