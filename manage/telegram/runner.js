@@ -685,6 +685,17 @@ async function handleTextMessage(ctx, chatId) {
 }
 
 function startBot(chatId, token) {
+    const cwBotToken = process.env.CW_BOT_TOKEN;
+    if (cwBotToken && token === cwBotToken) {
+        // Не создаём дублирующий polling — регистрируем через уже запущенный cwBot
+        const cwBot = require('../../services/contentMvp.service').getContentBot();
+        if (cwBot) {
+            bots.set(chatId, { bot: cwBot, token: cwBotToken });
+            console.log(`[MANAGE-TG] Registered (via CW_BOT) for chatId: ${chatId}`);
+        }
+        return;
+    }
+
     if (bots.has(chatId)) {
         try {
             bots.get(chatId).bot.stop();
@@ -1283,14 +1294,21 @@ function stopBot(chatId) {
     }
 }
 
-async function startAllBots() {
+async function startAllBots(cwBot) {
     const list = manageStore.getAllTokens();
     const cwBotToken = process.env.CW_BOT_TOKEN;
-    
+
     for (const { chatId, token } of list) {
         // Пропускаем ботов с CW_BOT_TOKEN - они запускаются централизованно в server.js
         if (cwBotToken && token === cwBotToken) {
-            console.log(`[MANAGE-TG] Skipping bot for ${chatId} - will use central CW_BOT_TOKEN`);
+            if (cwBot) {
+                // Добавляем пользователя в bots Map с ссылкой на центральный cwBot
+                // чтобы планировщик мог его обслуживать
+                bots.set(chatId, { bot: cwBot, token: cwBotToken });
+                console.log(`[MANAGE-TG] Registered (via CW_BOT) for chatId: ${chatId}`);
+            } else {
+                console.log(`[MANAGE-TG] Skipping bot for ${chatId} - will use central CW_BOT_TOKEN`);
+            }
             continue;
         }
         if (token) startBot(chatId, token);

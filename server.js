@@ -368,24 +368,24 @@ async function startServer() {
     
     // Делаем cwBot доступным для всех сервисов
     contentMvpService.setContentBot(cwBot);
-    
+
     // Передаём cwBot в другие сервисы (Pinterest, VK, OK, Instagram)
     const pinterestMvpService = require('./services/pinterestMvp.service');
     const vkMvpService = require('./services/vkMvp.service');
     const okMvpService = require('./services/okMvp.service');
     const instagramMvpService = require('./services/instagramMvp.service');
-    
+
     pinterestMvpService.setPinterestCwBot(cwBot);
     vkMvpService.setVkCwBot(cwBot);
     okMvpService.setOkCwBot(cwBot);
     instagramMvpService.setIgCwBot(cwBot);
-    
+
     // Email processor - запуск cron для опроса почты
     let emailProcessor;
     try {
         emailProcessor = require('./manage/email/processor');
         const cronResult = emailProcessor.startEmailCron();
-        
+
         if (cronResult && cronResult.started) {
             console.log(`📧 Email polling: ✅ ACTIVE (${cronResult.activeConfigs} configs)`);
         } else {
@@ -396,9 +396,9 @@ async function startServer() {
         console.warn(`   Reason: ${e.message}`);
         console.warn('   Run "npm install" to enable Email channel');
     }
-    
-    // Запуск Telegram-ботов
-    telegramRunner.startAllBots();
+
+    // Запуск Telegram-ботов (передаём cwBot, чтобы зарегистрировать пользователей с CW_BOT_TOKEN в bots Map)
+    await telegramRunner.startAllBots(cwBot);
     contentMvpService.startScheduler(() => telegramRunner.bots);
 
     // Запуск Pinterest-планировщика

@@ -262,9 +262,15 @@ premoderationEnabled = true?
 **`public/setup.html`** + **`public/js/setup.js`** — страница первоначальной настройки. Появляется при первом входе (`onboardingComplete = false`).
 
 Шаги:
-1. **Токен Telegram-бота** (обязателен) — пользователь создаёт бота через @BotFather, вставляет токен. Система проверяет токен (`telegram.getMe()`), запускает бота (`telegramRunner.startBot()`), сохраняет `token` и `botUsername` в store.
+1. **Подключение к боту Копирайтер** — пользователь нажимает кнопку **Подключить**, которая открывает `https://t.me/{cwBotUsername}` (username получается через `GET /api/manage/cw-bot-info`). Пользователь пишет боту любое сообщение → cwBot присылает 6-значный код (`server.js`: `cwBot.on('text', ...)`), код сохраняется в `state.pending` через `manageStore.setPending()`. Пользователь вводит код на странице → `POST /api/manage/telegram/verify` → `manageStore.verify()` проверяет код и устанавливает `state.verifiedTelegramId`. Кнопка **Сохранить** становится активной только после успешного подтверждения.
+
+   Этот шаг обязателен: Telegram запрещает ботам писать пользователю первыми — без `/start` или первого сообщения отправка черновиков на модерацию невозможна.
+
 2. **Выбор каналов публикации** — чекбоксы: Telegram (включён по умолчанию, нельзя снять), VK, OK, Pinterest, Instagram, Email, YouTube, Дзен, TikTok. Сохраняются в `content_config` таблицу через `setEnabledChannels(chatId, channels)`.
+
 3. После сохранения: `onboardingComplete = true`, редирект на `/channels.html`.
+
+Токен Telegram-бота пользователю вводить не нужно — система автоматически привязывает его к центральному боту `CW_BOT_TOKEN` при первой авторизации (см. "Полный цикл авторизации пользователя").
 
 ---
 
@@ -450,66 +456,51 @@ premoderationEnabled = true?
 
 ## Полный цикл авторизации пользователя
 
-### Этап 1: Инициация входа через Telegram-бота
+### Этап 1: Вход через auth-бота
 
-**Точка входа:** `@clientzavod_bot` (центральный auth-бот, управляется системой администратора).
+**Точка входа:** `@clientzavod_bot` (`AUTH_BOT_TOKEN`) — один на всю систему.
 
-**Процесс:**
-1. Пользователь находит бота `@clientzavod_bot` в Telegram
-2. Нажимает `/start` или кнопку "Войти в аккаунт"
-3. Bot отправляет inline-кнопку с callback-действием
-4. Пользователь нажимает кнопку → bot отправляет запрос на сервер:
+1. Пользователь пишет `/start` боту → auth-бот отправляет кнопку "Войти в аккаунт"
+2. Пользователь нажимает → `manage/telegram/authBot.js` делает запрос:
    ```
    POST /api/auth/telegram-login
-   {
-     "telegram_id": "123456789",
-     "username": "@myusername",
-     "first_name": "John",
-     "last_name": "Doe"
-   }
+   { "telegram_id": "123456789", "username": "@user", "first_name": "...", "last_name": "..." }
    ```
 
-**Файлы:**
-- `manage/telegram/authBot.js` — инициализация и обработка callback-кнопок (функция `handleAuthFlow`)
-- `routes/auth.routes.js` — POST `/api/auth/telegram-login`
+**Файлы:** `manage/telegram/authBot.js`, `routes/auth.routes.js`
 
-### Этап 2: Проверка / создание сессии на сервере
+### Этап 2: Поиск или создание сессии (`routes/auth.routes.js`)
 
-При получении запроса сервер выполняет следующую логику (`routes/auth.routes.js`, метод `POST /api/auth/telegram-login`):
+Сервер ищет пользователя последовательно:
+1. По `chatId = telegramId` в `manageStore`
+2. По `state.verifiedTelegramId === telegramId` (перебор всех состояний)
 
-**Поиск существующей сессии:**
-1. Сначала проверяет наличие сессии с `chatId = telegramId` (прямое совпадение)
-2. Если не найдена — ищет сессию, где `state.verifiedTelegramId === telegramId` (поиск по верифицированному Telegram ID)
-3. Если не найдена — создаёт новую сессию через `sessionService.createSession(chatId)`
+**Существующий пользователь** — обновляет username если изменился, выдаёт `tg_login_token`.
 
-**Верификация пользователя:**
-1. Создаёт одноразовый 6-значный код (random)
-2. Запоминает код в `state.tempCode.code` + TTL (`CODE_EXPIRY_MS` = 10 мин)
-3. Отправляет приветственное сообщение с кодом через Telegram бота
+**Новый пользователь:**
+1. `sessionService.getOrCreateSession(telegramId)` — создаёт Docker-контейнер и PostgreSQL БД
+2. `state.verifiedTelegramId = telegramId`, `state.verifiedUsername = username`
+3. **Автоматическая привязка к боту модерации:** если `CW_BOT_TOKEN` задан и `state.token` пуст — записывает `state.token = CW_BOT_TOKEN` и вызывает `telegramRunner.startBot(telegramId, CW_BOT_TOKEN)`. `startBot()` при совпадении с `CW_BOT_TOKEN` не создаёт новый polling, а добавляет пользователя в `bots` Map через уже запущенный экземпляр cwBot → планировщик начнёт обслуживать пользователя при следующем тике (≤60 сек)
+4. `manageStore.persist(telegramId)` → сохраняет состояние в файл
+5. Выдаёт `tg_login_token` (hex, TTL 10 мин), редирект на `/auth.html?tg_login_token=<hex>`
 
-### Этап 3: Веб-интерфейс верификации
+### Этап 3: Веб-сессия (`/auth.html`)
 
-Пользователь переходит на `/auth.html?tg_login_token=<hex>`:
-1. JavaScript получает токен из URL
-2. Отправляет запрос на `/api/auth/verify-token` (в routes/auth.routes.js)
-3. Сервер проверяет токен → возвращает `chatId` или ошибку 404
+`public/js/common.js` → `initAuth()`:
+1. Извлекает `tg_login_token` из URL
+2. `GET /api/auth/telegram-web-login?token=<hex>` — обменивает одноразовый токен на `chatId`
+3. Сохраняет `chatId` в `localStorage`
+4. Редирект: `onboardingComplete = false` → `/setup.html`, иначе → `/channels.html`
 
-### Этап 4: Ввод кода и создание сессии
+### Этап 4: Онбординг (`/setup.html`)
 
-1. Пользователь вводит код в веб-интерфейсе
-2. Отправка на `/api/auth/verify-code?chatId=<chatId>&code=<code>`
-3. Сервер проверяет код → совпадение с state.tempCode.code
-4. **Сохранение верификации:**
-   - `state.verifiedUsername = username` (верифицированный username)
-   - `state.verifiedTelegramId = telegramId` (ID Telegram)
-   - `state.tempCode = null` (удаляем временный код)
-   - `state.onboardingComplete = false` (флаг для показа онбординга)
-5. Вызов `manageStore.persist(chatId)` → запись состояния в файл
-6. Сервер редиректит на `/setup.html?chatId=<chatId>`
+1. **Подключение к боту модерации** — пользователь нажимает **Подключить** → открывается `https://t.me/{cwBotUsername}`. Пользователь пишет боту любое сообщение → cwBot генерирует 6-значный код (`Math.floor(100000 + Math.random() * 900000)`), сохраняет в `state.pending` через `manageStore.setPending()`, отправляет код пользователю. Пользователь вводит код на странице → `POST /api/manage/telegram/verify` → `manageStore.verify()`. После подтверждения `state.verifiedTelegramId` обновляется и разблокируется кнопка **Сохранить**.
 
-### Этап 5: Онбординг и настройка
+   Этот шаг обязателен: Telegram запрещает боту писать пользователю первым — без инициации разговора отправка черновиков на модерацию будет завершаться ошибкой.
 
-Пользователь проходит онбординг (описан в разделе 8), после чего получает персонального Telegram бота и может начинать работу.
+2. **Выбор каналов публикации** — Telegram (обязателен), VK, OK, Pinterest, Instagram, Email, YouTube, Дзен, TikTok. Сохраняются через `setEnabledChannels(chatId, channels)` в `content_config`.
+
+3. `onboardingComplete = true` → редирект на `/channels.html`.
 
 ---
 
@@ -548,10 +539,10 @@ premoderationEnabled = true?
 - Тело запроса передаётся прямо в agentLoop через `agentQueue.add(chatId, message, mode)`
 - Пример использования: внешний сервис может отправлять данные → система автоматически обрабатывает их AI
 
-**`routes/user_hooks.routes.js`** — пользовательские вебхуки `/hook/:id`.
+**`routes/user_hooks.routes.js`** — пользовательские вебхуки `/hook/:chatId/*`.
 
-- Каждому пользователю можно создать персональный вебхук: `/hook/<random_id>`
-- Зарегистрированные в `user_hooks_repo` (пользовательская БД)
+- Каждому пользователю доступен персональный вебхук: `/hook/<chatId>`
+- Входящий запрос передаётся в `/workspace/webhook_handler.js` или `/workspace/webhook_handler.py` внутри контейнера пользователя
 - Пример: интеграция с внешними сервисами через уникальные URL
 
 ---
@@ -665,18 +656,6 @@ CREATE TABLE content_config (
 );
 ```
 
-**user_hooks** — пользовательские вебхуки:
-```sql
-CREATE TABLE user_hooks (
-  id SERIAL PRIMARY KEY,
-  chat_id BIGINT NOT NULL,
-  hook_id VARCHAR(32) UNIQUE NOT NULL,
-  name VARCHAR(100),
-  url VARCHAR(500),
-  config JSONB,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
 
 ---
 

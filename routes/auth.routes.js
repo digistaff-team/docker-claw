@@ -12,6 +12,7 @@ const crypto = require('crypto');
 const manageStore = require('../manage/store');
 const sessionService = require('../services/session.service');
 const config = require('../config');
+const telegramRunner = require('../manage/telegram/runner');
 
 const TELEGRAM_WEB_LOGIN_TTL_MS = 10 * 60 * 1000;
 const telegramWebLoginTokens = new Map();
@@ -308,6 +309,11 @@ router.post('/telegram-login', async (req, res) => {
                     state.verifiedUsername = username;
                     if (firstName) state.verifiedFirstName = firstName;
                     if (lastName) state.verifiedLastName = lastName;
+                    // Если токен не задан и есть CW_BOT_TOKEN — используем центральный бот
+                    if (!state.token && process.env.CW_BOT_TOKEN) {
+                        state.token = process.env.CW_BOT_TOKEN;
+                        telegramRunner.startBot(telegramId, process.env.CW_BOT_TOKEN);
+                    }
                     await manageStore.persist(telegramId);
                 } else if (state.verifiedUsername !== username) {
                     // Username изменился — обновляем
@@ -384,6 +390,11 @@ router.post('/telegram-login', async (req, res) => {
         const state = manageStore.getState(telegramId) || {};
         state.verifiedTelegramId = telegramId;
         state.verifiedUsername = username;
+        // Если CW_BOT_TOKEN задан — сразу регистрируем пользователя на центральный бот
+        if (!state.token && process.env.CW_BOT_TOKEN) {
+            state.token = process.env.CW_BOT_TOKEN;
+            telegramRunner.startBot(telegramId, process.env.CW_BOT_TOKEN);
+        }
         await manageStore.persist(telegramId);
         
         const appUrl = config.APP_URL;
