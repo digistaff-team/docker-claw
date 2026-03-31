@@ -438,6 +438,11 @@ premoderationEnabled = true?
 Тесты в `tests/` используют встроенный `assert` Node.js (без тестового раннера):
 - `tests/content.status.test.js` — переходы машины состояний контента
 - `tests/validators.extended.test.js` — валидация контента, запрещённые темы, квоты
+- `tests/vk.moderation.test.js` — тестирование VK модерации
+- `tests/vk.publisher.test.js` — тестирование VK публикации
+- `tests/test-openrouter.py` — Python тест для OpenRouter API
+- `tests/check-ai-config.js` — проверка конфигурации AI провайдеров
+- `tests/check-queue.js` — мониторинг очередей
 
 Запуск одного теста: `node tests/content.status.test.js`
 
@@ -474,4 +479,217 @@ premoderationEnabled = true?
 
 **Поиск существующей сессии:**
 1. Сначала проверяет наличие сессии с `chatId = telegramId` (прямое совпадение)
-2. Если не найдена — ищет сессию, где `state.verifiedTelegramId === telegramId` (пользова
+2. Если не найдена — ищет сессию, где `state.verifiedTelegramId === telegramId` (поиск по верифицированному Telegram ID)
+3. Если не найдена — создаёт новую сессию через `sessionService.createSession(chatId)`
+
+**Верификация пользователя:**
+1. Создаёт одноразовый 6-значный код (random)
+2. Запоминает код в `state.tempCode.code` + TTL (`CODE_EXPIRY_MS` = 10 мин)
+3. Отправляет приветственное сообщение с кодом через Telegram бота
+
+### Этап 3: Веб-интерфейс верификации
+
+Пользователь переходит на `/auth.html?tg_login_token=<hex>`:
+1. JavaScript получает токен из URL
+2. Отправляет запрос на `/api/auth/verify-token` (в routes/auth.routes.js)
+3. Сервер проверяет токен → возвращает `chatId` или ошибку 404
+
+### Этап 4: Ввод кода и создание сессии
+
+1. Пользователь вводит код в веб-интерфейсе
+2. Отправка на `/api/auth/verify-code?chatId=<chatId>&code=<code>`
+3. Сервер проверяет код → совпадение с state.tempCode.code
+4. **Сохранение верификации:**
+   - `state.verifiedUsername = username` (верифицированный username)
+   - `state.verifiedTelegramId = telegramId` (ID Telegram)
+   - `state.tempCode = null` (удаляем временный код)
+   - `state.onboardingComplete = false` (флаг для показа онбординга)
+5. Вызов `manageStore.persist(chatId)` → запись состояния в файл
+6. Сервер редиректит на `/setup.html?chatId=<chatId>`
+
+### Этап 5: Онбординг и настройка
+
+Пользователь проходит онбординг (описан в разделе 8), после чего получает персонального Telegram бота и может начинать работу.
+
+---
+
+### 13. Billing System
+
+**`manage/tokenBilling.js`** — токен-биллинг для AI-сервисов. Отслеживает баланс ProTalk токенов и автоматически отключает AI при исчерпании.
+
+- **Баланс чекается при каждом вызове AI Router** через `getProTalkBalance(aiAuthToken)` → `/api/balance/check`
+- **Токены кэшируются** в statesCache с TTL 1 час
+- **Авто-отключение:** если баланс < 0 или подписка истекла, AI режим отключается, остаётся direct command mode
+- **Ручная проверка:** доступна через админ-панель (`/admin/chat.html` → кнопка "Проверить баланс")
+
+**`manage/billingScheduler.js`** — периодическая проверка баланса всех пользователей.
+
+- Запускается через `setInterval` в `server.js` (каждые 60 минут)
+- Собирает всех пользователей с ProTalk (`aiProvider: "protalk"`)
+- Проверяет баланс → обновляет кэш в statesCache
+- Отключает AI для пользователей с отрицательным балансом
+- Логирует статистику по балансам
+
+**`routes/billing.routes.js`** — API для ручного управления биллингом.
+
+| Метод | Endpoint | Описание |
+|-------|----------|----------|
+| GET | `/api/balance/check` | Проверить баланс ProTalk (requires chatId) |
+| POST | `/api/balance/verify` | Верифицировать новый токен ProTalk |
+| POST | `/api/billing/import-users` | Импорт пользователей из Excel (admin only) |
+
+---
+
+### 14. Webhook System
+
+**`routes/webhook.routes.js`** — входящие вебхуки для запуска AI задач.
+
+- Endpoint: `POST /webhook`
+- Тело запроса передаётся прямо в agentLoop через `agentQueue.add(chatId, message, mode)`
+- Пример использования: внешний сервис может отправлять данные → система автоматически обрабатывает их AI
+
+**`routes/user_hooks.routes.js`** — пользовательские вебхуки `/hook/:id`.
+
+- Каждому пользователю можно создать персональный вебхук: `/hook/<random_id>`
+- Зарегистрированные в `user_hooks_repo` (пользовательская БД)
+- Пример: интеграция с внешними сервисами через уникальные URL
+
+---
+
+### 15. Snapshot Service
+
+**`services/snapshot.service.js`** — многоуровневый undo для файлов.
+
+- **Паттерн:** файл → каталог снапшотов → файлы `.snap`
+- **Структура:** `/var/snapshot-root/{chatId}/{escaped_path}/{timestamp}.snap`
+- **Автоматическое создание:** при `writeFile`, `patchFile`, `createFolder` (если размер > 10KB)
+- **Max depth:** `SNAPSHOT_MAX_DEPTH` (10 версий на файл)
+- **TTL:** `SNAPSHOT_TTL_DAYS` (7 дней) → автоматическая очистка
+- **Методы:** `createSnapshot(file, content)`, `getSnapshots(file)`, `restoreSnapshot(file, timestamp)`
+
+---
+
+### 16. Project Cache Service
+
+**`services/projectCache.service.js`** — постоянная карта файлового дерева.
+
+- **Файлы:** `{PROJECT_CACHE_DIR}/{chatId}.json`
+- **Структура:** дерево файлов с путями, типами, размерами
+- **Использование:** AI контекст → экономит время сканирования контейнера
+- **Обновление:** при изменении файлов через файловые API
+- **TTL:** `PROJECT_CACHE_TTL_DAYS` (30 дней)
+- **Max files:** `PROJECT_CACHE_MAX_FILES` (5000)
+
+---
+
+### 17. Buffer Service & Image Service
+
+**`services/buffer.service.js`** — буферизация контента для генерации.
+
+- **Охлаждение AI запросов:** если предыдущий запрос ещё в обработке, ставит в очередь
+- **Rate limiting:** защита от спама AI API
+- **Методы:** `shouldAllow(chatId)`, `markProcessing(chatId)`, `markDone(chatId)`
+
+**`services/image.service.js`** — генерация изображений (KIE API).
+
+- Интеграция с `KIE_API_KEY`
+- Форматы: PNG, JPEG (указываются в промпте)
+- Кэширование результатов в `/workspace/output/images/`
+
+---
+
+### 18. Email Integration
+
+**`manage/email/`** — полный Email-канал.
+
+**Processor** (`processor.js`):
+- IMAP опрос почты (каждые 5 минут через cron)
+- Парсинг писем → извлечение команд и вложений
+- Передача в agentLoop
+
+**Sender** (`sender.js`):
+- SMTP отправка ответов
+- Поддержка attachments
+- Форматирование для email (противоположность Telegram HTML)
+
+**Config**:
+```javascript
+{
+  imap: { host: 'imap.gmail.com', user: '...', password: '...' },
+  smtp: { host: 'smtp.gmail.com', user: '...', password: '...' }
+}
+```
+
+---
+
+### 19. Agent Queue
+
+**`manage/agentQueue.js`** — FIFO очередь AI задач на пользователя.
+
+- **Структура:** Map<chatId, Array<{id, message, mode}>>
+- **Ограничения:** max 10 задач на пользователя в очереди
+- **Rate limiting:** между запросами — 2 секунды cooldown
+- **Методы:** `add(chatId, message, mode)`, `processNext(chatId)`, `clear(chatId)`
+- **Интеграция:** используется при переполнении контекста AI или в webhook flow
+
+---
+
+### 20. Instagram Integration
+
+Добавлен в v3.2.0 (но не был документирован).
+
+**`services/instagramMvp.service.js`** — публикация в Instagram.
+
+- `DAILY_INSTAGRAM_LIMIT = 5`
+- Использует `services/instagram.service.js` (Instagram Graph API)
+- Планировщик запускается в `server.js` (строки 345-346)
+- Требует: `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_BUSINESS_ACCOUNT_ID`
+
+**Публикация:**
+- Текст + изображение (длина 2200 симв.)
+- Hashtags в конце
+- Авто-модерация через CW_BOT_TOKEN (кнопки ✅/❌)
+
+---
+
+### 21. Database Schema Updates
+
+Новые таблицы в пользовательских БД:
+
+**content_config** — key-value конфигурация:
+```sql
+CREATE TABLE content_config (
+  key VARCHAR(100) PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+**user_hooks** — пользовательские вебхуки:
+```sql
+CREATE TABLE user_hooks (
+  id SERIAL PRIMARY KEY,
+  chat_id BIGINT NOT NULL,
+  hook_id VARCHAR(32) UNIQUE NOT NULL,
+  name VARCHAR(100),
+  url VARCHAR(500),
+  config JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+---
+
+### Summary of Key Missing Components
+
+1. **Биллинг** — система отслеживания баланса ProTalk токенов
+2. **Вебхуки** — входящие и пользовательские endpoints
+3. **Снапшоты** — многоуровневый undo для файлов
+4. **Кэш проекта** — постоянная файловая карта
+5. **Буферизация** — защита от спама AI запросов
+6. **Email интеграция** — полный двухсторонний Email-канал
+7. **Agent Queue** — очередь AI задач
+8. **Instagram** — поддержка публикации
+9. **Дополнительные сервисы** — image service, project cache
+
+Эти компоненты делают систему полной и готовой к продакшену с enterprise-функциями.

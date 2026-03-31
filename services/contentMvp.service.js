@@ -576,7 +576,7 @@ async function generateImage(topic, text) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'z-image',
+      model: 'nano-banana-2',
       input: {
         prompt,
         aspect_ratio: '1:1',
