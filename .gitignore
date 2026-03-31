@@ -5,4 +5,6 @@ __pycache__/
 *.log
 documents/
 node_modules/
-CLAUDE.MD
+CLAUDE.md
+QWEN.md
+KODA.md
