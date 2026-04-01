@@ -561,12 +561,122 @@ async function generatePostText(chatId, topic, materialsText, personaText = '') 
   const content = resp?.choices?.[0]?.message?.content || '';
   return String(content).trim().slice(0, 4000);
 }
+
+// ============================================
+// User Input Files Helpers
+// ============================================
+
+/**
+ * Получить список файлов в папке input пользователя
+ */
+async function getInputFiles(chatId) {
+  try {
+    const session = await sessionService.getOrCreateSession(chatId);
+    const result = await dockerService.executeInContainer(
+      session.containerId,
+      "find /workspace/input -maxdepth 1 -type f -printf '%p\\n' 2>/dev/null"
+    );
+    const files = result.stdout.trim().split('\n').filter(Boolean);
+    return files.map(filepath => ({
+      path: filepath,
+      name: path.basename(filepath),
+      ext: path.extname(filepath).toLowerCase()
+    }));
+  } catch (e) {
+    console.error(`[CONTENT-MVP] Error getting input files for ${chatId}:`, e.message);
+    return [];
+  }
+}
+
+/**
+ * Прочитать содержимое файла из input
+ */
+async function readInputFile(chatId, filepath) {
+  try {
+    const session = await sessionService.getOrCreateSession(chatId);
+    const result = await dockerService.executeInContainer(
+      session.containerId,
+      `cat "${filepath.replace(/"/g, '\\"')}"`
+    );
+    return result.stdout;
+  } catch (e) {
+    console.error(`[CONTENT-MVP] Error reading input file ${filepath}:`, e.message);
+    return null;
+  }
+}
+
+/**
+ * Получить описание для генерации изображения из файлов input
+ * Приоритет: .txt/.md файлы с описанием > .png/.jpg изображения (имя файла)
+ */
+async function getImageContext(chatId) {
+  const files = await getInputFiles(chatId);
+  if (files.length === 0) {
+    return null;
+  }
+
+  // Ищем текстовые файлы с описанием (приоритет)
+  const textFiles = files.filter(f => ['.txt', '.md'].includes(f.ext));
+  if (textFiles.length > 0) {
+    const descriptions = [];
+    for (const file of textFiles) {
+      const content = await readInputFile(chatId, file.path);
+      if (content && content.trim()) {
+        descriptions.push(`File "${file.name}": ${content.trim().slice(0, 500)}`);
+      }
+    }
+    if (descriptions.length > 0) {
+      return {
+        type: 'text_description',
+        description: descriptions.join('\n\n'),
+        files: textFiles.map(f => f.name)
+      };
+    }
+  }
+
+  // Ищем изображения для использования как референс
+  const imageFiles = files.filter(f => ['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(f.ext));
+  if (imageFiles.length > 0) {
+    return {
+      type: 'image_reference',
+      description: `User uploaded image file: ${imageFiles[0].name}. Use visual elements, colors, and composition from this file as inspiration.`,
+      files: imageFiles.map(f => f.name)
+    };
+  }
+
+  // Другие файлы — используем имена как подсказку
+  return {
+    type: 'filename_hint',
+    description: `User uploaded files: ${files.map(f => f.name).join(', ')}. Consider these when creating the image.`,
+    files: files.map(f => f.name)
+  };
+}
+
+// ============================================
+// Image Generation
+// ============================================
+
 // Генерация изображения с помощью сервиса Kie.ai
-async function generateImage(topic, text) {
+async function generateImage(chatId, topic, text) {
   const apiKey = process.env.KIE_API_KEY;
   if (!apiKey) throw new Error('KIE_API_KEY is not set');
-  const rawPrompt = `Image for Telegram post. Topic: ${topic.topic}. Style: clean, commercial, no text, no signs, no logos on image.`;
-  const prompt = rawPrompt.slice(0, 800);
+
+  // Получаем контекст из файлов пользователя
+  const imageContext = chatId ? await getImageContext(chatId) : null;
+  
+  // Формируем промпт с учётом загруженных файлов
+  let basePrompt = `Image for Telegram post. Topic: ${topic.topic}.`;
+  
+  if (imageContext) {
+    // Добавляем описание из файлов пользователя
+    basePrompt += ` IMPORTANT: ${imageContext.description}`;
+    basePrompt += ` You are an advanced AI image generation assistant. Your purpose is to create high-quality, visually compelling images based on user requests. CORE PRINCIPLES: 1) Quality First - always aim for highest artistic and technical quality. 2) Safety - never generate harmful, illegal, explicit, or dangerous content. 3) Respect - create inclusive, non-discriminatory content. 4) Accuracy - represent subjects truthfully. 5) Creativity - interpret requests creatively while staying true to user intent. WORKFLOW: Analyze request, identify key elements (subject, style, mood, composition, colors), fill missing details with appropriate defaults, apply best practices, optimize prompt for quality. PROMPT ENHANCEMENT: Add details about lighting, composition, perspective, color palette; specify quality modifiers (high resolution, professional, detailed); include style references. TECHNICAL SPECS: Default aspect ratio 1:1, highest quality, photorealistic or artistic based on context. RESTRICTIONS: No violent/gory/harmful content, no explicit sexual content, no hate speech or discriminatory imagery, no real person likeness without consent, no copyrighted material replication, no dangerous activities or illegal acts, no misinformation. HANDLING: If unclear - ask clarification; if violates guidelines - explain and suggest alternatives; if vague - make reasonable assumptions. OUTPUT: Generate detailed optimized prompt including main subject, action, style, aesthetic, composition, framing, lighting, atmosphere, color scheme, quality level. Always prioritize user satisfaction while maintaining ethical standards and safety.`;
+  } else {
+    // Стандартный промпт без пользовательских файлов
+    basePrompt += ` You are an advanced AI image generation assistant. Your purpose is to create high-quality, visually compelling images based on user requests. CORE PRINCIPLES: 1) Quality First - always aim for highest artistic and technical quality. 2) Safety - never generate harmful, illegal, explicit, or dangerous content. 3) Respect - create inclusive, non-discriminatory content. 4) Accuracy - represent subjects truthfully. 5) Creativity - interpret requests creatively while staying true to user intent. WORKFLOW: Analyze request, identify key elements (subject, style, mood, composition, colors), fill missing details with appropriate defaults, apply best practices, optimize prompt for quality. PROMPT ENHANCEMENT: Add details about lighting, composition, perspective, color palette; specify quality modifiers (high resolution, professional, detailed); include style references. TECHNICAL SPECS: Default aspect ratio 1:1, highest quality, photorealistic or artistic based on context. RESTRICTIONS: No violent/gory/harmful content, no explicit sexual content, no hate speech or discriminatory imagery, no real person likeness without consent, no copyrighted material replication, no dangerous activities or illegal acts, no misinformation. HANDLING: If unclear - ask clarification; if violates guidelines - explain and suggest alternatives; if vague - make reasonable assumptions. OUTPUT: Generate detailed optimized prompt including main subject, action, style, aesthetic, composition, framing, lighting, atmosphere, color scheme, quality level. Always prioritize user satisfaction while maintaining ethical standards and safety`;
+  }
+  
+  const prompt = basePrompt.slice(0, 800);
 
   // Шаг 1: создаём задачу
   const createResp = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
@@ -751,7 +861,7 @@ async function handleGenerateJob(chatId, queueJob, bot, correlationId) {
   for (let i = 1; i <= MAX_IMAGE_ATTEMPTS; i++) {
     try {
       imageAttempts = i;
-      const imageBuffer = await generateImage(topic, text);
+      const imageBuffer = await generateImage(chatId, topic, text);
       imagePath = await saveImageToUserWorkspace(chatId, imageBuffer, `${topic.sheetRow}_${Date.now()}`);
       imageErr = '';
       break;
@@ -928,32 +1038,32 @@ async function handleVideoGenerateJob(chatId, queueJob, bot, correlationId) {
       
       // Обновляем contentType на text+image
       await repository.updateJob(chatId, jobId, { contentType: 'text+image' });
-      
+
       // Генерируем изображение
       let imagePath = '';
       let imageErr = '';
       for (let i = 1; i <= MAX_IMAGE_ATTEMPTS; i++) {
         try {
-          const imageBuffer = await generateImage(topic, text);
+          const imageBuffer = await generateImage(chatId, topic, text);
           imagePath = await saveImageToUserWorkspace(chatId, imageBuffer, `${topic.sheetRow}_${Date.now()}`);
           break;
         } catch (imgErr) {
           imageErr = imgErr?.message || String(imgErr);
         }
       }
-      
+
       if (imagePath) {
         await repository.updateJob(chatId, jobId, { imagePath, status: STATUS.READY });
         await repository.createAsset(chatId, jobId, 'image', imagePath, 'kie:kie-image-1');
         await repository.setSheetState(chatId, topic.sheetRow, STATUS.READY, `${reason}_fallback`);
-        
+
         const draft = { jobId, topic, text, imagePath, correlationId, contentType: 'text+image' };
         await routeDraft(chatId, bot, draft);
 
         return { success: true, data: { jobId, fallbackUsed: true } };
       }
     }
-    
+
     await releaseTopic(chatId, topic, `video_generation_start_failed: ${e.message}`);
     await repository.updateJobStatus(chatId, jobId, STATUS.FAILED, e.message);
     return { success: false, error: e.message, retry: true };
@@ -969,28 +1079,28 @@ async function handleVideoGenerationComplete(chatId, job, bot, videoResult) {
   
   if (!videoResult.success) {
     console.error(`[CONTENT-MVP] Video generation failed for job ${jobId}: ${videoResult.error}`);
-    
+
     // Fallback на изображение
     if (VIDEO_FALLBACK_ENABLED && !videoResult.timedOut) {
       console.log(`[CONTENT-MVP] Falling back to image for failed video job ${jobId}`);
-      
+
       try {
         let imagePath = '';
         for (let i = 1; i <= MAX_IMAGE_ATTEMPTS; i++) {
           try {
-            const imageBuffer = await generateImage(topic, draft_text);
+            const imageBuffer = await generateImage(chatId, topic, draft_text);
             imagePath = await saveImageToUserWorkspace(chatId, imageBuffer, `${sheet_row}_${Date.now()}`);
             break;
           } catch (e) {
             console.error(`[CONTENT-MVP] Image fallback attempt ${i} failed:`, e.message);
           }
         }
-        
+
         if (imagePath) {
-          await repository.updateJob(chatId, jobId, { 
-            imagePath, 
+          await repository.updateJob(chatId, jobId, {
+            imagePath,
             contentType: 'text+image',
-            status: STATUS.READY 
+            status: STATUS.READY
           });
           await repository.createAsset(chatId, jobId, 'image', imagePath, 'kie:kie-image-1');
           await repository.setSheetState(chatId, sheet_row, STATUS.READY, 'video_fallback');
@@ -1109,7 +1219,7 @@ async function generateDraft(chatId, reason = 'manual', correlationId = null) {
   for (let i = 1; i <= MAX_IMAGE_ATTEMPTS; i++) {
     try {
       imageAttempts = i;
-      const imageBuffer = await generateImage(topic, text);
+      const imageBuffer = await generateImage(chatId, topic, text);
       imagePath = await saveImageToUserWorkspace(chatId, imageBuffer, `${topic.sheetRow}_${Date.now()}`);
       imageErr = '';
       break;
@@ -1463,7 +1573,7 @@ async function publishMediaGroup(chatId, bot, draft, session, channelId, caption
 async function regenerateDraftPart(chatId, draft, part, correlationId = null) {
   const corrId = correlationId || draft.correlationId || generateCorrelationId();
   const topic = draft.topic;
-  
+
   if (part === 'text') {
     const [materialsText, persona] = await Promise.all([
       loadMaterialsText(chatId, 12),
@@ -1472,25 +1582,24 @@ async function regenerateDraftPart(chatId, draft, part, correlationId = null) {
     const text = await generatePostText(chatId, topic, materialsText, persona.text);
     draft.text = text;
   } else if (part === 'image') {
-    const imageBuffer = await generateImage(topic, draft.text);
+    const imageBuffer = await generateImage(chatId, topic, draft.text);
     draft.imagePath = await saveImageToUserWorkspace(chatId, imageBuffer, `${topic.sheetRow}_${Date.now()}`);
   } else if (part === 'video') {
     // TASK-015: Регенерация видео
     const videoPrompt = `Сгенерируй короткое видео для Telegram-поста. Тема: ${topic.topic}. Текст поста: ${draft.text}. Стиль: динамичный, коммерческий, без текста на видео.`;
-    
+
     const generation = await videoService.startVideoGeneration(chatId, {
       prompt: videoPrompt,
       correlationId: corrId,
       params: { duration: 5, ratio: '16:9' }
     });
-    
+
     // Ждём завершения генерации (синхронно для простоты)
     const startTime = Date.now();
     const timeout = videoService.VIDEO_TIMEOUT_SEC * 1000;
-    
     while (Date.now() - startTime < timeout) {
       const status = await videoService.checkVideoStatus(chatId, generation.generationId);
-      
+
       if (status.status === VIDEO_STATUS.COMPLETED && status.videoUrl) {
         const videoBuffer = await videoService.downloadVideo(status.videoUrl);
         draft.videoPath = await saveVideoToUserWorkspace(chatId, videoBuffer, `${topic.sheetRow}_${Date.now()}`);
@@ -1498,19 +1607,19 @@ async function regenerateDraftPart(chatId, draft, part, correlationId = null) {
       } else if (status.status === VIDEO_STATUS.FAILED || status.status === VIDEO_STATUS.TIMEOUT) {
         // Fallback на изображение
         if (VIDEO_FALLBACK_ENABLED) {
-          const imageBuffer = await generateImage(topic, draft.text);
+          const imageBuffer = await generateImage(chatId, topic, draft.text);
           draft.imagePath = await saveImageToUserWorkspace(chatId, imageBuffer, `${topic.sheetRow}_${Date.now()}`);
           draft.contentType = 'text+image';
         }
         break;
       }
-      
+
       await new Promise(r => setTimeout(r, videoService.VIDEO_POLL_INTERVAL_SEC * 1000));
     }
-    
+
     // Если таймаут — fallback
     if (!draft.videoPath && !draft.imagePath && VIDEO_FALLBACK_ENABLED) {
-      const imageBuffer = await generateImage(topic, draft.text);
+      const imageBuffer = await generateImage(chatId, topic, draft.text);
       draft.imagePath = await saveImageToUserWorkspace(chatId, imageBuffer, `${topic.sheetRow}_${Date.now()}`);
       draft.contentType = 'text+image';
     }

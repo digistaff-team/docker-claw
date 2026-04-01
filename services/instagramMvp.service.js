@@ -775,7 +775,12 @@ async function tickIgSchedule(chatId, bot) {
     for (let slot = startMinutes; slot < 24 * 60; slot += intervalMinutes) {
       if (nowMinutes === slot) { isSlot = true; break; }
     }
-    if (!isSlot) return;
+    if (!isSlot) {
+      if (nowMinutes % 10 === 0) {
+        console.log(`[IG-SCHEDULE] ${chatId} waiting: now=${now.time}, start=${settings.scheduleTime}, interval=${settings.publishIntervalHours}h`);
+      }
+      return;
+    }
 
     const key = `igLastRun:${now.time}`;
     if (data[key] === now.date) return;
