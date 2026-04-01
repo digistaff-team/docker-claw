@@ -565,8 +565,95 @@ router.get('/channels/pinterest/boards', async (req, res) => {
     }
     try {
         const pinterestService = require('../services/pinterest.service');
-        const boards = await pinterestService.getBoards(config.access_token);
+        const boards = await pinterestService.getBoards(chatId, config.access_token);
         res.json({ boards });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Обновление настроек доски (идея, фокус, ключи, ссылка)
+router.post('/channels/pinterest/board', async (req, res) => {
+    const chatId = req.body.chat_id;
+    const { board_id, idea, focus, purpose, keywords, link } = req.body;
+    if (!chatId || !board_id) {
+        return res.status(400).json({ error: 'chat_id и board_id обязательны' });
+    }
+    try {
+        const { updateBoard } = require('../services/pinterest.service');
+        await updateBoard(chatId, board_id, { idea, focus, purpose, keywords, link });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Получение настроек одной доски
+router.get('/channels/pinterest/board', async (req, res) => {
+    const chatId = req.query.chat_id;
+    const board_id = req.query.board_id;
+    if (!chatId || !board_id) {
+        return res.status(400).json({ error: 'chat_id и board_id обязательны' });
+    }
+    try {
+        const { getBoard } = require('../services/pinterest.service');
+        const board = await getBoard(chatId, board_id);
+        if (!board) {
+            return res.status(404).json({ error: 'Доска не найдена' });
+        }
+        // Возвращаем только публичные данные (без чувствительных полей)
+        res.json({
+            board_id: board.board_id,
+            board_name: board.board_name,
+            idea: board.idea || null,
+            focus: board.focus || null,
+            purpose: board.purpose || null,
+            keywords: board.keywords || null,
+            link: board.link || null
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Обновление настроек всех досок (массовое сохранение)
+router.post('/channels/pinterest/boards', async (req, res) => {
+    const chatId = req.body.chat_id;
+    const boards = req.body.boards;
+    if (!chatId) {
+        return res.status(400).json({ error: 'chat_id обязателен' });
+    }
+    if (!Array.isArray(boards)) {
+        return res.status(400).json({ error: 'boards должен быть массивом' });
+    }
+    try {
+        const { saveBoardsToDb } = require('../services/pinterest.service');
+        await saveBoardsToDb(chatId, boards.map(b => ({
+            board_id: b.id,
+            board_name: b.name,
+            idea: b.idea || null,
+            focus: b.focus || null,
+            purpose: b.purpose || null,
+            keywords: b.keywords || null,
+            link: b.link || null
+        })));
+        res.json({ success: true, count: boards.length });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Удаление доски из базы
+router.delete('/channels/pinterest/board', async (req, res) => {
+    const chatId = req.body.chat_id || req.query.chat_id;
+    const board_id = req.body.board_id || req.query.board_id;
+    if (!chatId || !board_id) {
+        return res.status(400).json({ error: 'chat_id и board_id обязательны' });
+    }
+    try {
+        const { deleteBoard } = require('../services/pinterest.service');
+        await deleteBoard(chatId, board_id);
+        res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

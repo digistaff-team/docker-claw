@@ -216,6 +216,32 @@ router.post('/import-google-sheet', async (req, res) => {
   }
 });
 
+// === Pinterest Boards Import from Google Sheets ===
+
+router.post('/import-pinterest-boards/preview', async (req, res) => {
+  const chatId = normalizeChatId(req.body.chat_id);
+  if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+
+  try {
+    const result = await contentMvpService.previewPinterestBoardsImport(chatId, req.body || {});
+    return res.json(result);
+  } catch (e) {
+    return res.status(400).json({ error: e.message });
+  }
+});
+
+router.post('/import-pinterest-boards', async (req, res) => {
+  const chatId = normalizeChatId(req.body.chat_id);
+  if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+
+  try {
+    const result = await contentMvpService.importPinterestBoardsFromSheet(chatId, req.body || {});
+    return res.json(result);
+  } catch (e) {
+    return res.status(400).json({ error: e.message });
+  }
+});
+
 router.get('/profile', async (req, res) => {
   const chatId = normalizeChatId(req.query.chat_id);
   if (!chatId) {

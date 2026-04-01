@@ -77,28 +77,43 @@ function getPinterestSettings(chatId) {
 // Ротация досок (Фаза 6)
 // ============================================
 
-function selectNextBoard(chatId) {
+async function selectNextBoard(chatId) {
   const cfg = manageStore.getPinterestConfig(chatId);
   if (!cfg) return null;
 
-  const boards = Array.isArray(cfg.boards) ? cfg.boards : [];
+  // Сначала пробуем получить доски из БД (с настройками)
+  try {
+    const dbBoards = await pinterestRepo.getBoards(chatId);
+    if (dbBoards && dbBoards.length > 0) {
+      const boards = dbBoards.map(b => ({
+        board_id: b.board_id,
+        board_name: b.board_name,
+        idea: b.idea,
+        focus: b.focus,
+        purpose: b.purpose,
+        keywords: b.keywords,
+        link: b.link
+      }));
 
-  if (boards.length === 0) {
-    if (cfg.board_id) {
-      return { board_id: cfg.board_id, board_name: cfg.board_name || '', keywords: '', link: cfg.website_url || '' };
+      if (cfg.board_rotation === 'round_robin') {
+        const idx = (cfg.last_board_index || 0) % boards.length;
+        manageStore.setPinterestConfig(chatId, { last_board_index: idx + 1 });
+        return boards[idx];
+      }
+
+      // random
+      const idx = Math.floor(Math.random() * boards.length);
+      return boards[idx];
     }
-    return null;
+  } catch (e) {
+    console.error(`[PINTEREST-MVP] Error loading boards from DB:`, e.message);
   }
 
-  if (cfg.board_rotation === 'round_robin') {
-    const idx = (cfg.last_board_index || 0) % boards.length;
-    manageStore.setPinterestConfig(chatId, { last_board_index: idx + 1 });
-    return boards[idx];
+  // Fallback: если в БД нет досок, используем фиксированную из конфига
+  if (cfg.board_id) {
+    return { board_id: cfg.board_id, board_name: cfg.board_name || '', keywords: '', link: cfg.website_url || '' };
   }
-
-  // random
-  const idx = Math.floor(Math.random() * boards.length);
-  return boards[idx];
+  return null;
 }
 
 // ============================================
@@ -311,7 +326,7 @@ async function handlePinterestGenerateJob(chatId, queueJob, bot, correlationId) 
   }
 
   // Выбор доски
-  const board = selectNextBoard(chatId);
+  const board = await selectNextBoard(chatId);
   if (!board) {
     return { success: false, error: 'Нет настроенных досок Pinterest', retry: false };
   }

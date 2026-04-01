@@ -338,6 +338,83 @@ async function importTopicsFromGoogleSheet(chatId, data = {}) {
   return importContentFromGoogleSheet(chatId, { ...data, mode: 'topics' });
 }
 
+// ============================================
+// Pinterest Boards Import
+// ============================================
+
+async function previewPinterestBoardsImport(chatId, data = {}) {
+  const { rows, sheetId, gid } = await loadGoogleSheetRows(data);
+  const existing = await getBoardsFromDb(chatId);
+
+  const preview = [];
+  let skippedEmpty = 0;
+  let skippedDuplicates = 0;
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const boardId = String(row.board_id || '').trim();
+    const boardName = String(row.board_name || '').trim();
+    const idea = row.idea || null;
+    const focus = row.focus || null;
+    const purpose = row.purpose || null;
+    const keywords = row.keywords || null;
+    const link = row.link || null;
+
+    if (!boardId) {
+      skippedEmpty++;
+      continue;
+    }
+
+    const duplicate = existing.some(b => b.board_id && b.board_id.toLowerCase() === boardId.toLowerCase());
+    if (duplicate) skippedDuplicates++;
+
+    preview.push({
+      row: i + 1,
+      board_id: boardId,
+      board_name: boardName,
+      idea,
+      focus,
+      purpose,
+      keywords,
+      link,
+      duplicate
+    });
+  }
+
+  return { mode: 'boards', sheetId, gid, totalRows: rows.length, preview, skippedEmpty, skippedDuplicates };
+}
+
+async function importPinterestBoardsFromSheet(chatId, data = {}) {
+  await repository.ensureSchema(chatId);
+  const previewData = await previewPinterestBoardsImport(chatId, data);
+  const mode = previewData.mode;
+  const { preview } = previewData;
+
+  let imported = 0;
+  for (const item of preview) {
+    if (item.duplicate) continue;
+
+    await pinterestRepo.saveBoards(chatId, [{
+      board_id: item.board_id,
+      board_name: item.board_name,
+      idea: item.idea,
+      focus: item.focus,
+      purpose: item.purpose,
+      keywords: item.keywords,
+      link: item.link
+    }]);
+    imported++;
+  }
+
+  return {
+    mode,
+    imported,
+    skippedDuplicates: previewData.skippedDuplicates,
+    skippedEmpty: previewData.skippedEmpty,
+    totalRows: previewData.totalRows
+  };
+}
+
 async function loadGoogleSheetRows(data = {}) {
   const sheetUrl = String(data.sheet_url || data.sheetUrl || '').trim();
   if (!sheetUrl) {
@@ -2006,6 +2083,9 @@ module.exports = {
   previewContentImport,
   importContentFromGoogleSheet,
   importTopicsFromGoogleSheet,
+  // Pinterest Boards
+  previewPinterestBoardsImport,
+  importPinterestBoardsFromSheet,
   listJobs,
   getJobById,
   getMetrics,

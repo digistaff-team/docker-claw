@@ -610,6 +610,37 @@ function onPinterestBoardSelect() {
     const boardIdInput = document.getElementById('pinterestBoardId');
     if (boardSelect && boardIdInput) {
         boardIdInput.value = boardSelect.value;
+        // Загружаем настройки выбранной доски
+        loadSelectedPinterestBoardSettings(boardSelect.value);
+    }
+}
+
+async function loadSelectedPinterestBoardSettings(boardId) {
+    const chatId = getChatId();
+    if (!chatId || !boardId) return;
+
+    try {
+        const res = await fetch(`${API_CONTENT}/channels/pinterest/boards`);
+        const boards = await res.json();
+        const board = boards.find(b => b.board_id === boardId);
+        if (board) {
+            const boardIdInput = document.getElementById('pinterestBoardId');
+            if (boardIdInput) boardIdInput.value = board.board_id;
+        const websiteUrlInput = document.getElementById('pinterestWebsiteUrl');
+            if (websiteUrlInput) websiteUrlInput.value = board.link || '';
+        } else {
+            // Очищаем если не сохранена
+            const ideaInput = document.getElementById('pinterestBoardIdea');
+            const focusInput = document.getElementById('pinterestBoardFocus');
+            const purposeInput = document.getElementById('pinterestBoardPurpose');
+            const keywordsInput = document.getElementById('pinterestBoardKeywords');
+            if (ideaInput) ideaInput.value = '';
+            if (focusInput) focusInput.value = '';
+            if (purposeInput) purposeInput.value = '';
+            if (keywordsInput) keywordsInput.value = '';
+        }
+    } catch (e) {
+        console.error('Error loading Pinterest board settings:', e);
     }
 }
 
@@ -622,6 +653,10 @@ async function savePinterestConfig() {
     const websiteUrl = (document.getElementById('pinterestWebsiteUrl')?.value || '').trim();
     const isActive = !!document.getElementById('pinterestIsActive')?.checked;
     const autoPublish = !!document.getElementById('pinterestAutoPublish')?.checked;
+    const idea = (document.getElementById('pinterestBoardIdea')?.value || '').trim();
+    const focus = (document.getElementById('pinterestBoardFocus')?.value || '').trim();
+    const purpose = (document.getElementById('pinterestBoardPurpose')?.value || '').trim();
+    const keywords = (document.getElementById('pinterestBoardKeywords')?.value || '').trim();
 
     if (!websiteUrl) {
         showToast('Укажите Website URL', 'error');
@@ -638,7 +673,11 @@ async function savePinterestConfig() {
                 board_name: boardName,
                 website_url: websiteUrl,
                 is_active: isActive,
-                auto_publish: autoPublish
+                auto_publish: autoPublish,
+                idea,
+                focus,
+                purpose,
+                keywords
             })
         });
         const data = await res.json().catch(() => ({}));
@@ -673,6 +712,114 @@ async function disconnectPinterest() {
     } catch (e) {
         showToast('Ошибка сети', 'error');
     }
+}
+
+// === Pinterest Boards Import ===
+
+async function previewPinterestBoardsImport() {
+    const chatId = getChatId();
+    if (!chatId) return;
+
+    const statusEl = document.getElementById('pinterestBoardsImportStatus');
+    if (statusEl) {
+        statusEl.textContent = 'Собираем предпросмотр...';
+        statusEl.className = 'content-status-line';
+    }
+    const wrap = document.getElementById('pinterestBoardsPreviewWrap');
+    if (wrap) wrap.style.display = 'none';
+
+    try {
+        const payload = {
+            sheet_url: document.getElementById('pinterestSheetUrl')?.value || '',
+            id: document.getElementById('pinterestSheetGid')?.value || ''
+        };
+        const data = await fetchJson(`${API_CONTENT}/import-pinterest-boards/preview`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        renderPinterestBoardsPreview(data);
+        if (statusEl) {
+            statusEl.textContent = `Предпросмотр готов: ${data.preview?.length || 0} строк`;
+            statusEl.className = 'content-status-line ok';
+        }
+    } catch (e) {
+        if (statusEl) {
+            statusEl.textContent = e.message;
+            statusEl.className = 'content-status-line error';
+        }
+        showToast(e.message, 'error');
+    }
+}
+
+async function applyPinterestBoardsImport() {
+    const chatId = getChatId();
+    if (!chatId) return;
+
+    const statusEl = document.getElementById('pinterestBoardsImportStatus');
+    if (statusEl) {
+        statusEl.textContent = 'Импортируем данные...';
+        statusEl.className = 'content-status-line';
+    }
+
+    try {
+        const payload = {
+            sheet_url: document.getElementById('pinterestSheetUrl')?.value || '',
+            id: document.getElementById('pinterestSheetGid')?.value || ''
+        };
+        const data = await fetchJson(`${API_CONTENT}/import-pinterest-boards`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (data.imported > 0) {
+            showToast(`Импортировано ${data.imported} досок`, 'success');
+            await loadPinterestConfig();
+        } else {
+            showToast(data.skippedDuplicates || data.skippedEmpty > 0 ?
+                'Есть дубликаты или пустые строки' : 'Нет строк для импорта', 'error');
+        }
+        await previewPinterestBoardsImport();
+    } catch (e) {
+        if (statusEl) {
+            statusEl.textContent = e.message;
+            statusEl.className = 'content-status-line error';
+        }
+        showToast(e.message, 'error');
+    }
+}
+
+function renderPinterestBoardsPreview(data) {
+    const head = document.getElementById('pinterestBoardsPreviewHead');
+    const body = document.getElementById('pinterestBoardsPreviewBody');
+    const meta = document.getElementById('pinterestBoardsPreviewMeta');
+    const wrap = document.getElementById('pinterestBoardsPreviewWrap');
+
+    if (!head || !body || !meta) return;
+
+    if (!data.preview || data.preview.length === 0) {
+        head.innerHTML = '<tr><th>Row</th><th>Board ID</th><th>Название доски</th><th>Идея</th><th>Фокус</th><th>Дубликат</th></tr>';
+        body.innerHTML = '<tr><td colspan="6" class="content-empty-cell">Нет строк для предпросмотра</td></tr>';
+        if (meta) {
+            meta.textContent = `rows: 0, duplicates: 0, empty: 0`;
+        }
+    } else {
+        head.innerHTML = '<tr><th>Row</th><th>Board ID</th><th>Название доски</th><th>Идея</th><th>Фокус</th><th>Дубликат</th></tr>';
+        body.innerHTML = data.preview.map((item) => `
+            <tr>
+                <td>${item.row}</td>
+                <td>${escapeHtml(item.board_id || '')}</td>
+                <td>${escapeHtml(item.board_name || '')}</td>
+                <td>${escapeHtml(item.idea || '')}</td>
+                <td>${escapeHtml(item.focus || '')}</td>
+                <td>${item.duplicate ? 'yes' : 'no'}</td>
+            </tr>
+        `).join('');
+        if (meta) {
+            meta.textContent = `rows: ${data.totalRows}, duplicates: ${data.skippedDuplicates}, empty: ${data.skippedEmpty}`;
+        }
+    }
+    wrap.style.display = 'block';
 }
 
 // === Instagram ===

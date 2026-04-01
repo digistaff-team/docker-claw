@@ -1,5 +1,5 @@
 /**
- * Репозиторий для pinterest_jobs и pinterest_publish_logs
+ * Репозиторий для pinterest_jobs, pinterest_publish_logs и boards
  */
 const { Client } = require('pg');
 const config = require('../../config');
@@ -169,6 +169,122 @@ async function countPublishedToday(chatId, tz = 'Europe/Moscow') {
   });
 }
 
+// ============================================
+// Pinterest Boards
+// ============================================
+
+async function ensureBoardsSchema(chatId) {
+  return withClient(chatId, async (client) => {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pinterest_boards (
+        id SERIAL PRIMARY KEY,
+        board_id VARCHAR(100) NOT NULL UNIQUE,
+        board_name VARCHAR(500) NOT NULL,
+        idea TEXT,
+        focus TEXT,
+        purpose TEXT,
+        keywords TEXT,
+        link TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_pinterest_boards_board_id ON pinterest_boards(board_id)
+    `);
+  });
+}
+
+async function saveBoards(chatId, boards) {
+  return withClient(chatId, async (client) => {
+    await ensureBoardsSchema(chatId);
+    const result = await client.query(`
+      INSERT INTO pinterest_boards (board_id, board_name, idea, focus, purpose, keywords, link)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT (board_id) DO UPDATE SET
+        board_name = EXCLUDED.board_name,
+        idea = EXCLUDED.idea,
+        focus = EXCLUDED.focus,
+        purpose = EXCLUDED.purpose,
+        keywords = EXCLUDED.keywords,
+        link = EXCLUDED.link,
+        updated_at = NOW()
+      RETURNING *
+    `, boards.map(b => [
+      b.id,
+      b.name,
+      b.description || null,
+      null,  // idea
+      null,  // focus
+      null,  // purpose
+      null,  // keywords
+      b.link || null
+    ]).flat());
+    return result.rows;
+  });
+}
+
+async function getBoards(chatId) {
+  return withClient(chatId, async (client) => {
+    await ensureBoardsSchema(chatId);
+    const result = await client.query(`
+      SELECT id, board_id, board_name, idea, focus, purpose, keywords, link, created_at, updated_at
+      FROM pinterest_boards
+      ORDER BY created_at DESC
+    `);
+    return result.rows;
+  });
+}
+
+async function getBoard(chatId, boardId) {
+  return withClient(chatId, async (client) => {
+    await ensureBoardsSchema(chatId);
+    const result = await client.query(`
+      SELECT * FROM pinterest_boards WHERE board_id = $1
+    `, [boardId]);
+    return result.rows[0] || null;
+  });
+}
+
+async function updateBoard(chatId, boardId, data) {
+  return withClient(chatId, async (client) => {
+    const fields = [];
+    const values = [];
+    let idx = 1;
+
+    const map = {
+      idea: 'idea', focus: 'focus', purpose: 'purpose',
+      keywords: 'keywords', link: 'link'
+    };
+
+    for (const [jsKey, dbCol] of Object.entries(map)) {
+      if (data[jsKey] !== undefined) {
+        fields.push(`${dbCol} = $${idx++}`);
+        values.push(data[jsKey]);
+      }
+    }
+
+    if (fields.length === 0) return;
+
+    fields.push('updated_at = NOW()');
+    values.push(boardId);
+
+    await client.query(
+      `UPDATE pinterest_boards SET ${fields.join(', ')} WHERE board_id = $${idx}`,
+      values
+    );
+  });
+}
+
+async function deleteBoard(chatId, boardId) {
+  return withClient(chatId, async (client) => {
+    const result = await client.query(`
+      DELETE FROM pinterest_boards WHERE board_id = $1 RETURNING id
+    `, [boardId]);
+    return result.rows[0]?.id || null;
+  });
+}
+
 module.exports = {
   withClient,
   createJob,
@@ -176,5 +292,12 @@ module.exports = {
   getJobById,
   listJobs,
   addPublishLog,
-  countPublishedToday
+  countPublishedToday,
+  // Boards
+  ensureBoardsSchema,
+  saveBoards,
+  getBoards,
+  getBoard,
+  updateBoard,
+  deleteBoard
 };

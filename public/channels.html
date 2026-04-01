@@ -259,11 +259,36 @@
                                 <label for="pinterestWebsiteUrl">Website URL (ссылка для пинов)</label>
                                 <input type="text" id="pinterestWebsiteUrl" placeholder="https://example.com" />
                             </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div>
+                                    <label for="pinterestBoardIdea">Идея</label>
+                                    <input type="text" id="pinterestBoardIdea" placeholder="Например: Продукты для бизнеса, Рецепты, Дизайн..." />
+                                </div>
+                                <div>
+                                    <label for="pinterestBoardFocus">Фокус</label>
+                                    <input type="text" id="pinterestBoardFocus" placeholder="Например: Визуальный стиль, Минимализм, Классика..." />
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div>
+                                    <label for="pinterestBoardPurpose">Зачем</label>
+                                    <input type="text" id="pinterestBoardPurpose" placeholder="Например: Привлечь внимания, Вдохновение, Практика..." />
+                                </div>
+                                <div>
+                                    <label for="pinterestBoardKeywords">Ключи</label>
+                                    <input type="text" id="pinterestBoardKeywords" placeholder="через запятую" />
+                                </div>
+                            </div>
                             <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 12px;">
                                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                     <input type="checkbox" id="pinterestIsActive" checked />
                                     <span>Канал активен</span>
                                 </label>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="pinterestAutoPublish" />
+                                    <span>Автопубликация</span>
+                                </label>
+                            </div>
                                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                     <input type="checkbox" id="pinterestAutoPublish" />
                                     <span>Автопубликация</span>
@@ -275,6 +300,43 @@
                         </div>
                     </div>
                 </div>
+
+                        <!-- Импорт досок из Google Sheets -->
+                        <div class="content-card" style="margin-top: 20px;">
+                            <h3 style="margin-bottom: 12px;">📋 Импорт досок</h3>
+                            <p style="margin-bottom: 10px; font-size: 13px; color: #666;">
+	                                Загрузите доски из Google таблицы. Первый столбец — ID доски (Board ID), второй — Название доски.
+	                                Дополнительные столбцы (по названию): Идея, Фокус, Зачем, Ключи, Ссылка.
+                            </p>
+                            <div class="content-form-grid content-form-grid-single">
+	                                <div>
+		                                    <label for="pinterestSheetUrl">Ссылка на таблицу</label>
+		                                    <input type="text" id="pinterestSheetUrl" placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=0" />
+	                                </div>
+	                                <div>
+		                                    <label for="pinterestSheetGid">GID листа</label>
+		                                    <input type="text" id="pinterestSheetGid" placeholder="Необязательно, можно оставить пустым" />
+	                                </div>
+                            </div>
+                            <p class="content-inline-help">Для досок: Board ID (обязателен), Название доски. Дополнительные поля необязательны.</p>
+                            <div class="content-actions">
+	                                <button class="btn btn-secondary" onclick="previewPinterestBoardsImport()">👁 Предпросмотр</button>
+	                                <button class="btn btn-success" onclick="applyPinterestBoardsImport()">📥 Импортировать</button>
+                            </div>
+                            <div class="content-status-line" id="pinterestBoardsImportStatus"></div>
+                            <div id="pinterestBoardsPreviewWrap" class="content-preview-wrap" style="display:none;">
+	                                <div class="content-preview-head">
+		                                    <strong>Предпросмотр импорта</strong>
+		                                    <span id="pinterestBoardsPreviewMeta" class="content-inline-help" style="margin:0;"></span>
+	                                </div>
+	                                <div class="content-jobs-table-wrap">
+		                                    <table class="content-jobs-table">
+		                                        <thead id="pinterestBoardsPreviewHead"></thead>
+		                                        <tbody id="pinterestBoardsPreviewBody"></tbody>
+		                                    </table>
+	                                </div>
+                            </div>
+                        </div>
 
                 <!-- Instagram -->
                 <div class="channel-panel" id="channelPanel-instagram" style="display: none;">

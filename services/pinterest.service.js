@@ -4,6 +4,7 @@
  */
 const https = require('https');
 const manageStore = require('../manage/store');
+const { getBoards: getBoardsFromDb, saveBoards, updateBoard, deleteBoard } = require('./content/pinterest.repository');
 
 const PINTEREST_API = 'https://api.pinterest.com/v5';
 const TOKEN_URL = 'https://api.pinterest.com/v5/oauth/token';
@@ -159,22 +160,33 @@ async function getValidToken(chatId, config) {
 
 // --- Boards ---
 
-async function getBoards(accessToken) {
-    const res = await retryRequest(`${PINTEREST_API}/boards?page_size=100`, {
-        headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
-
-    if (res.status !== 200) {
-        throw new Error(`Pinterest getBoards failed (${res.status}): ${res.body}`);
+/**
+ * Получить доски Pinterest для chatId
+ * Сначала берём из БД (сохранённые с настройками), затем из API
+ */
+async function getBoards(chatId, accessToken) {
+    // Сначала пробуем получить из локальной БД
+    try {
+        const dbBoards = await getBoardsFromDb(chatId);
+        if (dbBoards && dbBoards.length > 0) {
+            console.log(`[PINTEREST] Loaded ${dbBoards.length} boards from DB`);
+            return dbBoards.map(b => ({
+                id: b.board_id,
+                name: b.board_name,
+                description: b.idea || b.focus || b.purpose || '',
+                privacy: 'public',
+                _dbId: b.id,
+                idea: b.idea,
+                focus: b.focus,
+                purpose: b.purpose,
+                keywords: b.keywords,
+                link: b.link
+            }));
+        }
+    } catch (e) {
+        console.error(`[PINTEREST] Error loading boards from DB:`, e.message);
+        return [];
     }
-
-    const items = res.json?.items || [];
-    return items.map(b => ({
-        id: b.id,
-        name: b.name,
-        description: b.description || '',
-        privacy: b.privacy
-    }));
 }
 
 // --- Pins ---
@@ -233,5 +245,10 @@ module.exports = {
     getValidToken,
     getBoards,
     createPin,
-    getOAuthUrl
+    getOAuthUrl,
+    // Board CRUD from DB
+    saveBoardsToDb: saveBoards,
+    getBoardsFromDb: getBoardsFromDb,
+    updateBoard,
+    deleteBoard
 };
