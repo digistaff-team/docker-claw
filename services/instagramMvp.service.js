@@ -74,6 +74,7 @@ function getIgSettings(chatId) {
     scheduleTz: isValidTz(cfg?.schedule_tz) ? cfg.schedule_tz : SCHEDULE_TZ,
     dailyLimit: cfg?.daily_limit || DAILY_IG_LIMIT,
     publishIntervalHours: Number.isFinite(cfg?.publish_interval_hours) ? cfg.publish_interval_hours : 4,
+    randomPublish: !!cfg?.random_publish,
     premoderationEnabled: cfg?.premoderation_enabled !== false, // по умолчанию включена
     contentType: cfg?.is_reel ? 'reel' : 'photo',
     autoPublish: !!cfg?.auto_publish,
@@ -707,22 +708,63 @@ async function tickIgSchedule(chatId, bot) {
 
   const data = manageStore.getState(chatId) || {};
 
-  // Проверка слота
-  let isSlot = false;
-  for (let slot = startMinutes; slot < 24 * 60; slot += intervalMinutes) {
-    if (nowMinutes === slot) { isSlot = true; break; }
+  if (settings.randomPublish) {
+    // Рандомный режим: при наступлении каждого слота генерируем случайное
+    // время следующей публикации в диапазоне 85%-100% от интервала.
+    // Слот используется как «окно», внутри которого срабатывает одна публикация.
+
+    // Определяем текущий слот (ближайший прошедший)
+    let currentSlot = -1;
+    for (let slot = startMinutes; slot < 24 * 60; slot += intervalMinutes) {
+      if (nowMinutes >= slot) currentSlot = slot;
+    }
+    if (currentSlot < 0) return;
+
+    const slotKey = `igRandomSlot:${currentSlot}`;
+    const runKey = `igRandomRun:${currentSlot}`;
+
+    // Если в этом слоте сегодня уже публиковали — пропускаем
+    if (data[runKey] === now.date) return;
+
+    // Генерируем случайную минуту для этого слота, если ещё не сгенерирована
+    if (!data[slotKey] || data[slotKey].split('|')[0] !== now.date) {
+      const minOffset = Math.round(intervalMinutes * 0.85);
+      const randomOffset = minOffset + Math.floor(Math.random() * (intervalMinutes - minOffset + 1));
+      const targetMinute = currentSlot + randomOffset;
+      data[slotKey] = `${now.date}|${targetMinute}`;
+      const states = manageStore.getAllStates();
+      if (!states[chatId]) states[chatId] = data;
+      await manageStore.persist(chatId);
+    }
+
+    const targetMinute = parseInt(data[slotKey].split('|')[1], 10);
+    if (nowMinutes < targetMinute) return;
+
+    // Время наступило — публикуем
+    data[runKey] = now.date;
+    const states2 = manageStore.getAllStates();
+    if (!states2[chatId]) states2[chatId] = data;
+    await manageStore.persist(chatId);
+
+    console.log(`[IG-SCHEDULE-RANDOM] ${chatId} random time reached ${now.time}, enqueueing ig_generate`);
+  } else {
+    // Фиксированный режим: публикация строго по слотам
+    let isSlot = false;
+    for (let slot = startMinutes; slot < 24 * 60; slot += intervalMinutes) {
+      if (nowMinutes === slot) { isSlot = true; break; }
+    }
+    if (!isSlot) return;
+
+    const key = `igLastRun:${now.time}`;
+    if (data[key] === now.date) return;
+
+    data[key] = now.date;
+    const states = manageStore.getAllStates();
+    if (!states[chatId]) states[chatId] = data;
+    await manageStore.persist(chatId);
+
+    console.log(`[IG-SCHEDULE] ${chatId} slot matched ${now.time}, enqueueing ig_generate`);
   }
-  if (!isSlot) return;
-
-  const key = `igLastRun:${now.time}`;
-  if (data[key] === now.date) return;
-
-  data[key] = now.date;
-  const states = manageStore.getAllStates();
-  if (!states[chatId]) states[chatId] = data;
-  await manageStore.persist(chatId);
-
-  console.log(`[IG-SCHEDULE] ${chatId} slot matched ${now.time}, enqueueing ig_generate`);
 
   await queueRepo.ensureQueueSchema(chatId);
   await queueRepo.enqueue(chatId, {
