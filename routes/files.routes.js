@@ -40,23 +40,24 @@ router.get('/:chat_id', async (req, res) => {
     try {
         // Сначала получаем корневые папки (глубина 1), потом содержимое каждой папки отдельно
         // Это гарантирует что input/output/work будут в списке первыми
-        
+        // Используем -printf вместо -exec sh -c для избежания проблем с экранированием
+
         // 1. Корневые папки и файлы (глубина 1)
         const rootResult = await dockerService.executeInContainer(
             session.containerId,
-            `find ${directory} -maxdepth 1 \\( -type d -o -type f \\) -exec sh -c 'if [ -d "$1" ]; then echo "d|$1"; else echo "f|$1"; fi' _ {} \\; 2>/dev/null`
+            `find ${directory} -maxdepth 1 \\( -type d -o -type f \\) -printf '%y|%p\\n' 2>/dev/null`
         );
-        
+
         // 2. Содержимое рабочих папок (input, output, work, log, tmp, apps, plans)
         const foldersResult = await dockerService.executeInContainer(
             session.containerId,
-            `for dir in input output work log tmp apps plans; do find ${directory}/$dir -maxdepth 4 \\( -type d -o -type f \\) -exec sh -c 'if [ -d "$1" ]; then echo "d|$1"; else echo "f|$1"; fi' _ {} \\; 2>/dev/null; done`
+            `find /workspace/input /workspace/output /workspace/work /workspace/log /workspace/tmp /workspace/apps /workspace/plans -maxdepth 4 \\( -type d -o -type f \\) -printf '%y|%p\\n' 2>/dev/null`
         );
-        
+
         // 3. Модули - только первый уровень
         const modulesResult = await dockerService.executeInContainer(
             session.containerId,
-            `find ${directory}/modules -maxdepth 2 -type d -exec echo "d|{}" \\; 2>/dev/null`
+            `find ${directory}/modules -maxdepth 2 -type d -printf 'd|%p\\n' 2>/dev/null`
         );
         
         // Объединяем результаты
