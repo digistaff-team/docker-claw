@@ -69,6 +69,9 @@ function getPinterestSettings(chatId) {
     publishIntervalHours: Number.isFinite(cfg?.publish_interval_hours) ? cfg.publish_interval_hours : 4,
     randomPublish: !!cfg?.random_publish,
     moderatorUserId: cfg?.moderator_user_id || null,
+    scheduleTz: cfg?.schedule_tz || SCHEDULE_TZ,
+    dailyLimit: Number.isFinite(cfg?.daily_limit) ? cfg.daily_limit : DAILY_PIN_LIMIT,
+    allowedWeekdays: Array.isArray(cfg?.allowed_weekdays) ? cfg.allowed_weekdays : [0, 1, 2, 3, 4, 5, 6],
     stats: cfg?.stats || { total_pins: 0, pins_today: 0, last_pin_date: null }
   };
 }
@@ -660,11 +663,15 @@ async function tickPinterestSchedule(chatId, bot) {
   if (!cfg || !cfg.is_active) return;
 
   const settings = getPinterestSettings(chatId);
-  const now = getNowInTz(SCHEDULE_TZ);
+  const now = getNowInTz(settings.scheduleTz);
+
+  // Проверка разрешённых дней недели
+  const dayOfWeek = new Date().getDay();
+  if (!settings.allowedWeekdays.includes(dayOfWeek)) return;
 
   // Дневной лимит
-  const publishedToday = await pinterestRepo.countPublishedToday(chatId, SCHEDULE_TZ);
-  if (publishedToday >= DAILY_PIN_LIMIT) return;
+  const publishedToday = await pinterestRepo.countPublishedToday(chatId, settings.scheduleTz);
+  if (publishedToday >= settings.dailyLimit) return;
 
   const [startH, startM] = (settings.scheduleTime || '10:00').split(':').map(Number);
   const [nowH, nowM] = now.time.split(':').map(Number);
@@ -693,7 +700,17 @@ async function tickPinterestSchedule(chatId, bot) {
     if (data[runKey] === now.date) return;
 
     // Генерируем случайную минуту для этого слота, если ещё не сгенерирована
-    if (!data[slotKey] || data[slotKey].split('|')[0] !== now.date) {
+    // Также пересчитываем если интервал изменился (targetMinute выходит за пределы допустимого диапазона)
+    let needRegenerate = !data[slotKey] || data[slotKey].split('|')[0] !== now.date;
+    if (!needRegenerate && data[slotKey]) {
+      const existingTarget = parseInt(data[slotKey].split('|')[1], 10);
+      const minAllowed = currentSlot + Math.round(intervalMinutes * 0.85);
+      const maxAllowed = currentSlot + intervalMinutes;
+      if (existingTarget < minAllowed || existingTarget > maxAllowed) {
+        needRegenerate = true;
+      }
+    }
+    if (needRegenerate) {
       const minOffset = Math.round(intervalMinutes * 0.85);
       const randomOffset = minOffset + Math.floor(Math.random() * (intervalMinutes - minOffset + 1));
       const targetMinute = currentSlot + randomOffset;
@@ -701,10 +718,22 @@ async function tickPinterestSchedule(chatId, bot) {
       const states = manageStore.getAllStates();
       if (!states[chatId]) states[chatId] = data;
       await manageStore.persist(chatId);
+      const tgtH = Math.floor(targetMinute / 60);
+      const tgtM = targetMinute % 60;
+      console.log(`[PINTEREST-SCHEDULE-RANDOM] ${chatId} target set to ${String(tgtH).padStart(2,'0')}:${String(tgtM).padStart(2,'0')} for slot ${currentSlot}`);
     }
 
     const targetMinute = parseInt(data[slotKey].split('|')[1], 10);
-    if (nowMinutes < targetMinute) return;
+
+    // Логируем ожидание раз в 10 минут (аналогично фиксированному режиму)
+    if (nowMinutes < targetMinute) {
+      if (nowMinutes % 10 === 0) {
+        const tgtH = Math.floor(targetMinute / 60);
+        const tgtM = targetMinute % 60;
+        console.log(`[PINTEREST-SCHEDULE-RANDOM] ${chatId} waiting: now=${now.time}, target=${String(tgtH).padStart(2,'0')}:${String(tgtM).padStart(2,'0')}, interval=${settings.publishIntervalHours}h`);
+      }
+      return;
+    }
 
     // Время наступило — публикуем
     data[runKey] = now.date;
@@ -719,7 +748,12 @@ async function tickPinterestSchedule(chatId, bot) {
     for (let slot = startMinutes; slot < 24 * 60; slot += intervalMinutes) {
       if (nowMinutes === slot) { isSlot = true; break; }
     }
-    if (!isSlot) return;
+    if (!isSlot) {
+      if (nowMinutes % 10 === 0) {
+        console.log(`[PINTEREST-SCHEDULE] ${chatId} waiting: now=${now.time}, start=${settings.scheduleTime}, interval=${settings.publishIntervalHours}h`);
+      }
+      return;
+    }
 
     const key = `pinterestLastRun:${now.time}`;
     if (data[key] === now.date) return;
@@ -728,6 +762,8 @@ async function tickPinterestSchedule(chatId, bot) {
     const states = manageStore.getAllStates();
     if (!states[chatId]) states[chatId] = data;
     await manageStore.persist(chatId);
+
+    console.log(`[PINTEREST-SCHEDULE] ${chatId} slot matched ${now.time}, enqueueing pinterest_generate`);
   }
 
   // Ставим в очередь
@@ -743,9 +779,10 @@ async function tickPinterestSchedule(chatId, bot) {
 async function runNow(chatId, bot, reason = 'manual') {
   await repository.ensureSchema(chatId);
 
-  const publishedToday = await pinterestRepo.countPublishedToday(chatId, SCHEDULE_TZ);
-  if (publishedToday >= DAILY_PIN_LIMIT) {
-    return { ok: false, message: `Дневной лимит пинов исчерпан (${publishedToday}/${DAILY_PIN_LIMIT}).` };
+  const settings = getPinterestSettings(chatId);
+  const publishedToday = await pinterestRepo.countPublishedToday(chatId, settings.scheduleTz);
+  if (publishedToday >= settings.dailyLimit) {
+    return { ok: false, message: `Дневной лимит пинов исчерпан (${publishedToday}/${settings.dailyLimit}).` };
   }
 
   const correlationId = generateCorrelationId();
@@ -806,7 +843,11 @@ function startScheduler(getBots) {
     try {
       const bots = getBots();
       for (const [chatId, entry] of bots.entries()) {
-        await tickPinterestSchedule(chatId, entry.bot);
+        try {
+          await tickPinterestSchedule(chatId, entry.bot);
+        } catch (e) {
+          console.error(`[PINTEREST-MVP-SCHEDULER] Error for ${chatId}:`, e.message);
+        }
       }
     } catch (e) {
       console.error('[PINTEREST-MVP-SCHEDULER]', e.message);

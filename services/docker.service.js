@@ -41,6 +41,14 @@ async function execDocker(args, options) {
     return execFileCommand('bash', ['-lc', cmd], options);
 }
 
+/**
+ * Выполняет docker команду с прямой передачей аргументов (без shEscape/join)
+ * Это важно для команд с complex quoting (find -printf, etc.)
+ */
+async function execDockerDirect(args, options) {
+    return execFileCommand('docker', args, options);
+}
+
 async function isContainerAlive(containerId) {
     try {
         const res = await execDocker(['inspect', '-f', '{{.State.Running}}', containerId]);
@@ -247,7 +255,8 @@ async function executeInContainer(containerId, command, timeout) {
 
     const start = Date.now();
     try {
-        const res = await execDocker(['exec', containerId, 'bash', '-c', command], {
+        // Используем прямую передачу аргументов для правильной работы с quoting
+        const res = await execDockerDirect(['exec', containerId, 'bash', '-c', command], {
             timeout: (timeout || 30) * 1000,
             maxBuffer: 10 * 1024 * 1024
         });

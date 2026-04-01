@@ -727,7 +727,17 @@ async function tickIgSchedule(chatId, bot) {
     if (data[runKey] === now.date) return;
 
     // Генерируем случайную минуту для этого слота, если ещё не сгенерирована
-    if (!data[slotKey] || data[slotKey].split('|')[0] !== now.date) {
+    // Также пересчитываем если интервал изменился (targetMinute выходит за пределы допустимого диапазона)
+    let needRegenerate = !data[slotKey] || data[slotKey].split('|')[0] !== now.date;
+    if (!needRegenerate && data[slotKey]) {
+      const existingTarget = parseInt(data[slotKey].split('|')[1], 10);
+      const minAllowed = currentSlot + Math.round(intervalMinutes * 0.85);
+      const maxAllowed = currentSlot + intervalMinutes;
+      if (existingTarget < minAllowed || existingTarget > maxAllowed) {
+        needRegenerate = true;
+      }
+    }
+    if (needRegenerate) {
       const minOffset = Math.round(intervalMinutes * 0.85);
       const randomOffset = minOffset + Math.floor(Math.random() * (intervalMinutes - minOffset + 1));
       const targetMinute = currentSlot + randomOffset;
@@ -735,10 +745,22 @@ async function tickIgSchedule(chatId, bot) {
       const states = manageStore.getAllStates();
       if (!states[chatId]) states[chatId] = data;
       await manageStore.persist(chatId);
+      const tgtH = Math.floor(targetMinute / 60);
+      const tgtM = targetMinute % 60;
+      console.log(`[IG-SCHEDULE-RANDOM] ${chatId} target set to ${String(tgtH).padStart(2,'0')}:${String(tgtM).padStart(2,'0')} for slot ${currentSlot}`);
     }
 
     const targetMinute = parseInt(data[slotKey].split('|')[1], 10);
-    if (nowMinutes < targetMinute) return;
+
+    // Логируем ожидание раз в 10 минут (аналогично фиксированному режиму)
+    if (nowMinutes < targetMinute) {
+      if (nowMinutes % 10 === 0) {
+        const tgtH = Math.floor(targetMinute / 60);
+        const tgtM = targetMinute % 60;
+        console.log(`[IG-SCHEDULE-RANDOM] ${chatId} waiting: now=${now.time}, target=${String(tgtH).padStart(2,'0')}:${String(tgtM).padStart(2,'0')}, interval=${settings.publishIntervalHours}h`);
+      }
+      return;
+    }
 
     // Время наступило — публикуем
     data[runKey] = now.date;
@@ -753,7 +775,12 @@ async function tickIgSchedule(chatId, bot) {
     for (let slot = startMinutes; slot < 24 * 60; slot += intervalMinutes) {
       if (nowMinutes === slot) { isSlot = true; break; }
     }
-    if (!isSlot) return;
+    if (!isSlot) {
+      if (nowMinutes % 10 === 0) {
+        console.log(`[IG-SCHEDULE] ${chatId} waiting: now=${now.time}, start=${settings.scheduleTime}, interval=${settings.publishIntervalHours}h`);
+      }
+      return;
+    }
 
     const key = `igLastRun:${now.time}`;
     if (data[key] === now.date) return;
@@ -827,7 +854,11 @@ function startScheduler(getBots) {
     try {
       const bots = getBots();
       for (const [chatId, entry] of bots.entries()) {
-        await tickIgSchedule(chatId, entry.bot);
+        try {
+          await tickIgSchedule(chatId, entry.bot);
+        } catch (e) {
+          console.error(`[IG-MVP-SCHEDULER] Error for ${chatId}:`, e.message);
+        }
       }
     } catch (e) {
       console.error('[IG-MVP-SCHEDULER]', e.message);
