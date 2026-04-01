@@ -1667,7 +1667,7 @@ async function tickScheduleForChat(chatId, bot) {
 
   if (settings.randomPublish) {
     // Рандомный режим: при наступлении каждого слота генерируем случайное
-    // время следующей публикации в диапазоне 25%-100% от интервала.
+    // время следующей публикации в диапазоне 85%-100% от интервала.
     // Слот используется как «окно», внутри которого срабатывает одна публикация.
 
     // Определяем текущий слот (ближайший прошедший)
@@ -1685,7 +1685,7 @@ async function tickScheduleForChat(chatId, bot) {
 
     // Генерируем случайную минуту для этого слота, если ещё не сгенерирована
     if (!data[slotKey] || data[slotKey].split('|')[0] !== now.date) {
-      const minOffset = Math.round(intervalMinutes * 0.25);
+      const minOffset = Math.round(intervalMinutes * 0.85);
       const randomOffset = minOffset + Math.floor(Math.random() * (intervalMinutes - minOffset + 1));
       const targetMinute = currentSlot + randomOffset;
       data[slotKey] = `${now.date}|${targetMinute}`;
