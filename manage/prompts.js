@@ -17,10 +17,10 @@ function getSystemInstruction(mode, structuredContext, channel = 'telegram', ena
     systemPrompt += `=== МОЯ ИНФРАСТРУКТУРА ===\n`;
     systemPrompt += `Я работаю в изолированном Docker-контейнере. Рабочая директория: /workspace\n\n`;
     systemPrompt += `МОИ АДРЕСА:\n`;
-    systemPrompt += `  Входящий хук (внешние системы → я): https://claw.pro-talk.ru/hook/${structuredContext.chatId}/<любой_путь>\n`;
-    systemPrompt += `  Вебхук агента (самовызов из кода): https://claw.pro-talk.ru/${structuredContext.chatId}/webhook\n`;
-    systemPrompt += `  Веб-файлы (статика): https://claw.pro-talk.ru/sandbox/${structuredContext.chatId}/<файл>.html\n`;
-    systemPrompt += `  Приложения (Node.js): https://claw.pro-talk.ru/sandbox/${structuredContext.chatId}/app/<имя>/\n\n`;
+    systemPrompt += `  Входящий хук (внешние системы → я): https://clientzavod.ru/hook/${structuredContext.chatId}/<любой_путь>\n`;
+    systemPrompt += `  Вебхук агента (самовызов из кода): https://clientzavod.ru/${structuredContext.chatId}/webhook\n`;
+    systemPrompt += `  Веб-файлы (статика): https://clientzavod.ru/sandbox/${structuredContext.chatId}/<файл>.html\n`;
+    systemPrompt += `  Приложения (Node.js): https://clientzavod.ru/sandbox/${structuredContext.chatId}/app/<имя>/\n\n`;
     systemPrompt += `МОЙ ТОКЕН (для самовызова):\n`;
     systemPrompt += `  Хранится в /workspace/.env как AI_TOKEN\n`;
     systemPrompt += `  Node.js: require('dotenv').config(); const token = process.env.AI_TOKEN;\n`;
@@ -181,21 +181,21 @@ function getSystemInstruction(mode, structuredContext, channel = 'telegram', ena
     // Веб-хостинг
     systemPrompt += `=== ВЕБ-ХОСТИНГ (статика) ===\n`;
     systemPrompt += `Статические файлы сохранять в /workspace/output/web/\n`;
-    systemPrompt += `Ссылка: https://claw.pro-talk.ru/sandbox/${structuredContext.chatId}/имя_файла.html\n\n`;
+    systemPrompt += `Ссылка: https://clientzavod.ru/sandbox/${structuredContext.chatId}/имя_файла.html\n\n`;
 
     // Входящие вебхуки
     systemPrompt += `=== ВХОДЯЩИЕ ВЕБХУКИ ===\n`;
     systemPrompt += `Для приёма входящих HTTP-запросов создать: /workspace/webhook_handler.js или webhook_handler.py\n`;
-    systemPrompt += `URL хука: https://claw.pro-talk.ru/hook/${structuredContext.chatId}/<любой_путь>\n`;
+    systemPrompt += `URL хука: https://clientzavod.ru/hook/${structuredContext.chatId}/<любой_путь>\n`;
     systemPrompt += `Данные запроса (method, path, query, headers, body) — в JSON-файле, путь = process.argv[2] / sys.argv[1]\n`;
     systemPrompt += `Вывод через console.log() / print() отправляется клиенту как HTTP-ответ.\n`;
     systemPrompt += `После создания — тестировать:\n`;
-    systemPrompt += `  curl -s -X POST https://claw.pro-talk.ru/hook/${structuredContext.chatId}/test -H 'Content-Type: application/json' -d '{"test":true}'\n\n`;
+    systemPrompt += `  curl -s -X POST https://clientzavod.ru/hook/${structuredContext.chatId}/test -H 'Content-Type: application/json' -d '{"test":true}'\n\n`;
 
     // Node.js приложения
     systemPrompt += `=== NODE.JS ИНТЕРАКТИВНЫЕ ПРИЛОЖЕНИЯ ===\n`;
     systemPrompt += `Для чатов, todo-листов, дашбордов, API — создавать через create_nodejs_app.\n`;
-    systemPrompt += `После создания говорить пользователю ссылку: https://claw.pro-talk.ru/sandbox/${structuredContext.chatId}/app/ИМЯ\n\n`;
+    systemPrompt += `После создания говорить пользователю ссылку: https://clientzavod.ru/sandbox/${structuredContext.chatId}/app/ИМЯ\n\n`;
     systemPrompt += `АЛГОРИТМ СОЗДАНИЯ (строго 0→1→2→3→4→5):\n`;
     systemPrompt += `0. create_nodejs_app — scaffold\n`;
     systemPrompt += `1. create_task_plan — ОБЯЗАТЕЛЕН. Без него задача не попадёт в трекер.\n`;
@@ -211,12 +211,12 @@ function getSystemInstruction(mode, structuredContext, channel = 'telegram', ena
     systemPrompt += `Приложения открываются через прокси /sandbox/${structuredContext.chatId}/app/ИМЯ/\n`;
     systemPrompt += `  ПРАВИЛЬНО:   fetch('api/data')    fetch('api/ping')\n`;
     systemPrompt += `  НЕПРАВИЛЬНО: fetch('/api/data')   fetch('/api/ping')  → 404\n`;
-    systemPrompt += `WebSocket — всегда полный URL: wss://claw.pro-talk.ru/sandbox/${structuredContext.chatId}/app/ИМЯ/ws\n\n`;
+    systemPrompt += `WebSocket — всегда полный URL: wss://clientzavod.ru/sandbox/${structuredContext.chatId}/app/ИМЯ/ws\n\n`;
 
     // ИИ внутри приложений
     systemPrompt += `=== ИИ ВНУТРИ NODE.JS ПРИЛОЖЕНИЙ ===\n`;
     systemPrompt += `Когда приложение должно использовать меня (чат-бот, ИИ-ассистент) — встраивать без вопросов:\n\n`;
-    systemPrompt += `const AI_WEBHOOK = 'https://claw.pro-talk.ru/${structuredContext.chatId}/webhook';\n`;
+    systemPrompt += `const AI_WEBHOOK = 'https://clientzavod.ru/${structuredContext.chatId}/webhook';\n`;
     systemPrompt += `const AI_TOKEN   = process.env.AI_TOKEN; // читать из .env\n\n`;
     systemPrompt += `// Вариант A — синхронный (CHAT, быстрые ответы):\n`;
     systemPrompt += `async function askAI(text, mode = 'CHAT', appName = 'my-app') {\n`;
@@ -295,7 +295,7 @@ function getSystemInstruction(mode, structuredContext, channel = 'telegram', ena
         systemPrompt += `Уже созданы. НЕ пересоздавать — улучшать через patch_file или exec_command.\n\n`;
         structuredContext.apps.forEach((app, idx) => {
             systemPrompt += `${idx + 1}. ${app.name} (${app.type || 'custom'})\n`;
-            systemPrompt += `   URL: https://claw.pro-talk.ru/sandbox/${structuredContext.chatId}/app/${app.name}/\n`;
+            systemPrompt += `   URL: https://clientzavod.ru/sandbox/${structuredContext.chatId}/app/${app.name}/\n`;
             systemPrompt += `   Порт: ${app.port}  Статус: ${app.status || 'unknown'}\n`;
             if (app.description) systemPrompt += `   Описание: ${app.description}\n`;
             systemPrompt += `\n`;
@@ -346,7 +346,7 @@ function getSystemInstruction(mode, structuredContext, channel = 'telegram', ena
         const handlerFile = `webhook_handler.${structuredContext.webhookHandlerExists}`;
         systemPrompt += `=== WEBHOOK HANDLER АКТИВЕН ===\n`;
         systemPrompt += `Файл /workspace/${handlerFile} существует и обрабатывает запросы.\n`;
-        systemPrompt += `URL: https://claw.pro-talk.ru/hook/${structuredContext.chatId}/<путь>\n\n`;
+        systemPrompt += `URL: https://clientzavod.ru/hook/${structuredContext.chatId}/<путь>\n\n`;
     }
 
     // ══════════════════════════════════════════════════════════════

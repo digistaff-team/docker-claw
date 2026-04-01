@@ -382,4 +382,35 @@ router.get('/:chat_id/cache', async (req, res) => {
     }
 });
 
+// Публичный endpoint для Buffer/внешних сервисов — без авторизации
+// Отдаёт сгенерированные изображения из output/content пользователя
+router.get('/public/:chatId/:filename', async (req, res) => {
+    const { chatId, filename } = req.params;
+
+    // Защита от path traversal
+    if (!filename || filename.includes('..') || filename.includes('/')) {
+        return res.status(400).json({ error: 'Invalid filename' });
+    }
+
+    // Разрешаем только изображения
+    const ext = path.extname(filename).toLowerCase();
+    if (!['.png', '.jpg', '.jpeg'].includes(ext)) {
+        return res.status(400).json({ error: 'Only image files allowed' });
+    }
+
+    const dataDir = storageService.getDataDir(chatId);
+    const filePath = path.join(dataDir, 'output', 'content', filename);
+
+    try {
+        await fs.access(filePath);
+        const contentType = ext === '.png' ? 'image/png' : 'image/jpeg';
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        const fileBuffer = await fs.readFile(filePath);
+        res.send(fileBuffer);
+    } catch (e) {
+        res.status(404).json({ error: 'Image not found' });
+    }
+});
+
 module.exports = router;

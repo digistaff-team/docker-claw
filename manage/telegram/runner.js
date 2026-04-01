@@ -723,7 +723,7 @@ function startBot(chatId, token) {
 
         try {
             // Вызываем API авторизации
-            const apiUrl = process.env.API_URL || 'https://claw.pro-talk.ru';
+            const apiUrl = process.env.API_URL || 'https://clientzavod.ru';
             const response = await fetch(`${apiUrl}/api/auth/telegram-login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

@@ -310,9 +310,9 @@ router.post('/telegram-login', async (req, res) => {
                     if (firstName) state.verifiedFirstName = firstName;
                     if (lastName) state.verifiedLastName = lastName;
                     // Если токен не задан и есть CW_BOT_TOKEN — используем центральный бот
-                    if (!state.token && process.env.CW_BOT_TOKEN) {
-                        state.token = process.env.CW_BOT_TOKEN;
-                        telegramRunner.startBot(telegramId, process.env.CW_BOT_TOKEN);
+                    if (!state.token && config.CW_BOT_TOKEN) {
+                        state.token = config.CW_BOT_TOKEN;
+                        telegramRunner.startBot(telegramId, config.CW_BOT_TOKEN);
                     }
                     await manageStore.persist(telegramId);
                 } else if (state.verifiedUsername !== username) {
@@ -391,9 +391,9 @@ router.post('/telegram-login', async (req, res) => {
         state.verifiedTelegramId = telegramId;
         state.verifiedUsername = username;
         // Если CW_BOT_TOKEN задан — сразу регистрируем пользователя на центральный бот
-        if (!state.token && process.env.CW_BOT_TOKEN) {
-            state.token = process.env.CW_BOT_TOKEN;
-            telegramRunner.startBot(telegramId, process.env.CW_BOT_TOKEN);
+        if (!state.token && config.CW_BOT_TOKEN) {
+            state.token = config.CW_BOT_TOKEN;
+            telegramRunner.startBot(telegramId, config.CW_BOT_TOKEN);
         }
         await manageStore.persist(telegramId);
         

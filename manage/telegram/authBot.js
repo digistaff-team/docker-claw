@@ -57,7 +57,7 @@ function startAuthBot(token) {
 
         try {
             // Вызываем API авторизации
-            const apiUrl = process.env.API_URL || 'https://claw.pro-talk.ru';
+            const apiUrl = process.env.API_URL || 'https://clientzavod.ru';
             console.log(`[AUTH-BOT] Using API URL: ${apiUrl}`);
 
             const response = await fetch(`${apiUrl}/api/auth/telegram-login`, {
@@ -163,7 +163,7 @@ function startAuthBot(token) {
                 console.error(`[AUTH-BOT] Login failed for ${fromId}:`, errorMsg);
             }
         } catch (e) {
-            const apiUrl = process.env.API_URL || 'https://claw.pro-talk.ru';
+            const apiUrl = process.env.API_URL || 'https://clientzavod.ru';
             console.error('[AUTH-BOT] Login error:', e.message);
             console.error('[AUTH-BOT] API URL:', apiUrl);
             console.error('[AUTH-BOT] Full error:', e);
@@ -288,7 +288,7 @@ function startAuthBot(token) {
         
         try {
             // Вызываем API авторизации
-            const apiUrl = process.env.API_URL || 'https://claw.pro-talk.ru';
+            const apiUrl = process.env.API_URL || 'https://clientzavod.ru';
             console.log(`[AUTH-BOT] Using API URL: ${apiUrl}`);
             
             const response = await fetch(`${apiUrl}/api/auth/telegram-login`, {
@@ -393,7 +393,7 @@ function startAuthBot(token) {
                 console.error(`[AUTH-BOT] Login failed for ${fromId}:`, errorMsg);
             }
         } catch (e) {
-            const apiUrl = process.env.API_URL || 'https://claw.pro-talk.ru';
+            const apiUrl = process.env.API_URL || 'https://clientzavod.ru';
             console.error('[AUTH-BOT] Login error:', e.message);
             console.error('[AUTH-BOT] API URL:', apiUrl);
             console.error('[AUTH-BOT] Full error:', e);

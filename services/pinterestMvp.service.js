@@ -15,6 +15,7 @@ const storageService = require('./storage.service');
 const pinterestService = require('./pinterest.service');
 const imageService = require('./image.service');
 const pinterestRepo = require('./content/pinterest.repository');
+const bufferService = require('./buffer.service');
 
 const contentModules = require('./content/index');
 const {
@@ -435,22 +436,15 @@ async function publishPin(chatId, bot, jobId, correlationId) {
     console.log(`[PINTEREST-MVP] Watermark skipped: ${e.message}`);
   }
 
-  // Получаем токен
-  const accessToken = await pinterestService.getValidToken(chatId, cfg);
-
-  // Создаём пин через API
-  const imageBase64 = imageBuffer.toString('base64');
-  const result = await pinterestService.createPin(accessToken, {
-    boardId: job.board_id,
-    title: job.pin_title,
-    description: job.pin_description,
-    link: job.link || undefined,
-    mediaSource: {
-      source_type: 'image_base64',
-      content_type: 'image/png',
-      data: imageBase64
-    }
-  });
+  // Публикация через Buffer GraphQL API (единственный режим)
+  if (!cfg.buffer_api_key || !cfg.buffer_channel_id) {
+    throw new Error('Buffer API key или channel_id не настроены');
+  }
+  const imageUrl = `${config.APP_URL}/api/files/public/${chatId}/pin_${jobId}.png`;
+  const text = [job.pin_title, '', job.pin_description].filter(Boolean).join('\n');
+  const bufferResult = await bufferService.createPost(cfg.buffer_api_key, cfg.buffer_channel_id, { text, imageUrl });
+  const result = { id: bufferResult.postId };
+  console.log(`[PINTEREST-MVP] Published via Buffer, postId=${bufferResult.postId}`);
 
   // Запись в лог
   await pinterestRepo.addPublishLog(chatId, {
@@ -458,7 +452,8 @@ async function publishPin(chatId, bot, jobId, correlationId) {
     boardId: job.board_id,
     pinId: result.id || null,
     status: 'published',
-    correlationId: corrId
+    correlationId: corrId,
+    method: 'buffer'
   });
 
   // Обновить статус джобы

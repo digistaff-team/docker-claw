@@ -67,7 +67,7 @@ module.exports = {
     // App URL (для Telegram inline keyboard — должен быть https://)
     // Используйте ngrok или другой туннель для локальной разработки:
     // ngrok http 3015 -> получаете https://xxx.ngrok-free.app
-    APP_URL: process.env.APP_URL || 'https://claw.pro-talk.ru',
+    APP_URL: process.env.APP_URL || 'https://clientzavod.ru',
 
     // Project Cache (постоянная карта проекта)
     PROJECT_CACHE_DIR: process.env.PROJECT_CACHE_DIR || '.project',
@@ -90,4 +90,11 @@ module.exports = {
     OK_GROUP_ID: process.env.OK_GROUP_ID || '',
     OK_DAILY_LIMIT: parseInt(process.env.OK_DAILY_LIMIT) || 5,
     OK_MODERATION_TIMEOUT_HOURS: parseInt(process.env.OK_MODERATION_TIMEOUT_HOURS) || 24,
+
+    // Central Moderation Bot (CW Bot) — один на всю систему
+    CW_BOT_TOKEN: process.env.CW_BOT_TOKEN || '',
+    CW_BOT_USERNAME: process.env.CW_BOT_USERNAME || '',
+
+    // Telegram Bot Webhook URL
+    WEBHOOK_URL: process.env.WEBHOOK_URL || '',
 };

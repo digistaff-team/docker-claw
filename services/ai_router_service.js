@@ -108,8 +108,8 @@ async function callAI(chatId, authToken, model, messages, tools, userEmail) {
 
         // Добавляем дополнительные заголовки для OpenRouter
         if (provider === 'openrouter') {
-            headers['HTTP-Referer'] = 'https://docker-claw.pro-talk.ru';
-            headers['X-Title'] = 'Docker-Claw';
+            headers['HTTP-Referer'] = 'https://clientzavod.ru';
+            headers['X-Title'] = 'ClientZavod';
         }
 
         // Для ProTalk используем их API, для OpenRouter - напрямую

@@ -184,7 +184,24 @@ function clearMessages() {
 }
 
 // Инициализация при загрузке страницы
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Сначала проверяем, если пользователь уже прошёл онбординг — перенаправляем
+    if (currentChatId) {
+        try {
+            const res = await fetch(`${API_MANAGE}/setup?chat_id=${encodeURIComponent(currentChatId)}`);
+            if (res.ok) {
+                const setup = await res.json();
+                if (setup.onboardingComplete) {
+                    // Пользователь уже прошёл онбординг — перенаправляем
+                    window.location.href = '/channels.html';
+                    return;
+                }
+            }
+        } catch (e) {
+            console.error('Error checking onboarding status:', e);
+        }
+    }
+
     // Кнопка "Подключить"
     document.getElementById('connectBotBtn').addEventListener('click', connectBot);
 

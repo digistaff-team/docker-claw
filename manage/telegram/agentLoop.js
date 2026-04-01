@@ -224,7 +224,7 @@ async function handleTaskCompleted(messages, toolCall, toolArgs, pendingFiles, c
             if (connectivity.hasWebhookHandler) {
                 baseChecks.push(
                     '5. [CONNECTIVITY] webhook_handler создан — протестируй его через exec_command:',
-                    `   curl -s -X POST https://claw.pro-talk.ru/hook/${chatId}/test -H 'Content-Type: application/json' -d '{"test":true}'`,
+                    `   curl -s -X POST https://clientzavod.ru/hook/${chatId}/test -H 'Content-Type: application/json' -d '{"test":true}'`,
                     '   Если ответ содержит твой вывод — хук работает. Если ошибка — исправь и повтори.'
                 );
             }
@@ -298,7 +298,7 @@ async function handleTaskCompleted(messages, toolCall, toolArgs, pendingFiles, c
             
             if (connectivity.hasWebhookHandler) {
                 forceChecks.push(
-                    `- curl -s -X POST https://claw.pro-talk.ru/hook/${chatId}/test -H 'Content-Type: application/json' -d '{"test":true}'`,
+                    `- curl -s -X POST https://clientzavod.ru/hook/${chatId}/test -H 'Content-Type: application/json' -d '{"test":true}'`,
                     '  Убедись что ответ содержит вывод твоего handler.'
                 );
             }

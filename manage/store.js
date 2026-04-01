@@ -580,6 +580,8 @@ function setPinterestConfig(chatId, patch = {}) {
     if (patch.is_active !== undefined) next.is_active = !!patch.is_active;
     if (patch.auto_publish !== undefined) next.auto_publish = !!patch.auto_publish;
     if (patch.boards !== undefined && Array.isArray(patch.boards)) next.boards = patch.boards;
+    if (patch.buffer_api_key !== undefined) next.buffer_api_key = patch.buffer_api_key || null;
+    if (patch.buffer_channel_id !== undefined) next.buffer_channel_id = String(patch.buffer_channel_id || '').trim() || null;
     if (patch.board_rotation !== undefined) next.board_rotation = patch.board_rotation || 'random';
     if (patch.last_board_index !== undefined) next.last_board_index = parseInt(patch.last_board_index, 10) || 0;
     if (patch.stats !== undefined) next.stats = { ...(next.stats || {}), ...patch.stats };
@@ -949,7 +951,7 @@ function removeApp(chatId, name) {
 }
 
 function getAppUrl(chatId, name) {
-    return `https://claw.pro-talk.ru/sandbox/${chatId}/app/${name}`;
+    return `https://clientzavod.ru/sandbox/${chatId}/app/${name}`;
 }
 
 function cleanupDeletedApps(chatId) {

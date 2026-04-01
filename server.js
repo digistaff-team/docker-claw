@@ -136,38 +136,68 @@ async function startServer() {
     }
 
     // Запуск центрального бота премодерации контента (единый для всех пользователей)
-    const cwBotToken = process.env.CW_BOT_TOKEN;
+    const cwBotToken = config.CW_BOT_TOKEN;
     let cwBot = null;
-    let cwBotUsername = null;
+    // Сначала берём username из конфига, fallback на асинхронный getMe
+    let cwBotUsername = config.CW_BOT_USERNAME || null;
 
     if (cwBotToken) {
         // Создаём отдельного бота для премодерации
         const { Telegraf } = require('telegraf');
         cwBot = new Telegraf(cwBotToken);
 
-        // Получаем username бота для deep link'а
-        cwBot.telegram.getMe().then(info => {
-            cwBotUsername = info.username;
-            console.log(`[CW-BOT] Username: @${cwBotUsername}`);
-        }).catch(err => {
-            console.error(`[CW-BOT] Failed to get bot info:`, err.message);
-        });
+        // Получаем username бота для deep link'а (только если не задан в конфиге)
+        if (!cwBotUsername) {
+            cwBot.telegram.getMe().then(info => {
+                cwBotUsername = info.username;
+                console.log(`[CW-BOT] Username: @${cwBotUsername}`);
+            }).catch(err => {
+                console.error(`[CW-BOT] Failed to get bot info:`, err.message);
+            });
+        } else {
+            console.log(`[CW-BOT] Username (from config): @${cwBotUsername}`);
+        }
 
         // Обработчик текстовых сообщений для верификации через код
         cwBot.on('text', async (ctx) => {
             const fromId = String(ctx.from?.id || '');
             const username = ctx.from?.username ? `@${ctx.from.username}` : null;
-            const data = manageStore.getState(fromId);
+            const text = ctx.message?.text || '';
+
+            console.log(`[CW-BOT] Received message from: ${fromId} (@${username}), text: ${text}`);
+
+            // Сначала ищем прямую сессию (chatId = telegramId)
+            let data = manageStore.getState(fromId);
+            let chatId = fromId;
+
+            // Если не нашли — ищем по verifiedTelegramId
             if (!data) {
-                await ctx.reply('Вы не найдены в системе. Авторизуйтесь на сайте.').catch(() => {});
+                const allStates = manageStore.getAllStates();
+                for (const [cid, state] of Object.entries(allStates)) {
+                    if (state.verifiedTelegramId === fromId) {
+                        data = state;
+                        chatId = cid;
+                        break;
+                    }
+                }
+            }
+
+            if (!data) {
+                console.log(`[CW-BOT] User ${fromId} not found in manageStore`);
+                await ctx.reply('Вы не найдены в системе. Сначала авторизуйтесь через бота @clientzavod_bot').catch(() => {});
                 return;
             }
-            if (data.verifiedTelegramId) {
-                await ctx.reply('Аккаунт уже подтверждён.').catch(() => {});
+
+            // Проверяем, прошёл ли пользователь онбординг (а не только авторизацию)
+            if (data.onboardingComplete) {
+                console.log(`[CW-BOT] User ${fromId} already completed onboarding`);
+                await ctx.reply('Вы уже прошли настройку аккаунта. Перейдите в раздел "Каналы".').catch(() => {});
                 return;
             }
+
             const code = String(Math.floor(100000 + Math.random() * 900000));
-            manageStore.setPending(fromId, code, fromId, username);
+            console.log(`[CW-BOT] Generated code ${code} for chatId ${chatId}`);
+            manageStore.setPending(chatId, code, fromId, username);
             await ctx.reply(`Код подтверждения: <b>${code}</b>\n\nВведите этот код на странице настройки. Код действителен 10 минут.`, { parse_mode: 'HTML' }).catch(() => {});
         });
 
@@ -344,8 +374,8 @@ async function startServer() {
         });
 
         // Запускаем с webhook если WEBHOOK_URL установлен
-        if (process.env.WEBHOOK_URL) {
-            const webhookUrl = `${process.env.WEBHOOK_URL}/cw`;
+        if (config.WEBHOOK_URL) {
+            const webhookUrl = `${config.WEBHOOK_URL}/cw`;
             cwBot.telegram.setWebhook(webhookUrl).then(() => {
                 console.log(`🤖 Content bot: ✅ WEBHOOK SET (${webhookUrl})`);
             }).catch((err) => {
@@ -360,7 +390,12 @@ async function startServer() {
                 console.error('[CW-BOT] Launch error:', err.message);
             });
         }
-        
+
+        // Добавим обработчик всех ошибок cwBot
+        cwBot.catch((err, ctx) => {
+            console.error(`[CW-BOT] Error: ${err.message}`, err);
+        });
+
         console.log('🤖 Content bot: ✅ STARTED (CW_BOT_TOKEN)');
     } else {
         console.log('🤖 Content bot: ⏸️  SKIPPED (CW_BOT_TOKEN not set)');

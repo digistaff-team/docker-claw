@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir documents:*)",
+      "Bash(\"documents/PINTEREST_VIA_BUFFER_INTEGRATION_PLAN\")"
+    ]
+  }
+}

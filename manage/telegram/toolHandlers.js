@@ -763,7 +763,7 @@ curl -sf http://localhost:${appPort}/api/ping && echo "OK: port ${appPort} respo
     if (!isNaN(parsed) && parsed > 0) realPort = parsed;
   } catch (_) { /* используем appPort */ }
 
-  const url = `https://claw.pro-talk.ru/sandbox/${chatId}/app/${safeName}`;
+  const url = `https://clientzavod.ru/sandbox/${chatId}/app/${safeName}`;
 
   // Регистрируем приложение (сохраняем порт для прокси)
   manageStore.addOrUpdateApp(chatId, {
@@ -1825,7 +1825,7 @@ except Exception as e:
       }
       
       // Формируем curl-запрос на внутренний webhook
-      const webhookUrl = `https://claw.pro-talk.ru/${chatId}/internal_cron`;
+      const webhookUrl = `https://clientzavod.ru/${chatId}/internal_cron`;
       
       // Экранируем prompt для JSON
       const safePrompt = prompt.replace(/"/g, '\\"').replace(/\n/g, '\\n');
