@@ -23,6 +23,10 @@ __pycache__/
 *.log
 documents/
 
+# Playwright
+playwright-report/
+test-results/
+
 # Файлы кодеров
 CLAUDE.md
 QWEN.md
