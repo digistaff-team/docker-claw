@@ -1018,31 +1018,38 @@ function startBot(chatId, token) {
             return;
         }
 
+        console.log(`[VK-MOD-CALLBACK] ${action} job ${jobId} (fromId=${fromId}, tgChatId=${tgChatId})`);
+
         // Находим правильный chatId: ищем сессию где есть черновик с этим jobId
         let resolvedChatId = null;
         const allStates = manageStore.getAllStates();
+        console.log(`[VK-MOD-CALLBACK] Searching in ${Object.keys(allStates).length} states for jobId=${jobId}`);
         for (const [cid, data] of Object.entries(allStates)) {
             const drafts = data.vkDrafts || {};
+            console.log(`[VK-MOD-CALLBACK] cid=${cid}, vkDrafts keys=${Object.keys(drafts)}`);
             if (!drafts[String(jobId)]) continue;
-            
+
             // Проверяем доступ через модератора VK канала
             const vkSettings = manageStore.getVkSettings?.(cid) || {};
             const globalSettings = data.contentSettings || {};
-            const channelModeratorId = vkSettings.moderatorUserId || 
-                                       globalSettings.moderatorUserId || 
+            const channelModeratorId = vkSettings.moderatorUserId ||
+                                       globalSettings.moderatorUserId ||
                                        process.env.CONTENT_MVP_MODERATOR_USER_ID;
-            
+
             const ownerTgId = String(data.verifiedTelegramId || '');
             const allowedIds = new Set([ownerTgId, channelModeratorId].filter(Boolean));
-            
+
+            console.log(`[VK-MOD-CALLBACK] cid=${cid} has draft, checking access: fromId=${fromId}, ownerTgId=${ownerTgId}, channelModeratorId=${channelModeratorId}`);
             if (allowedIds.has(fromId)) {
                 resolvedChatId = cid;
+                console.log(`[VK-MOD-CALLBACK] Access granted for cid=${cid}`);
                 break;
             }
         }
 
         if (!resolvedChatId) resolvedChatId = manageStore.getByVerifiedTelegramId(fromId);
         if (!resolvedChatId) resolvedChatId = chatId;
+        console.log(`[VK-MOD-CALLBACK] resolvedChatId=${resolvedChatId}`);
 
         const settings = contentMvpService.getContentSettings
             ? contentMvpService.getContentSettings(resolvedChatId)

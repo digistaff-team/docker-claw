@@ -517,18 +517,34 @@ async function publishVkPost(chatId, bot, jobId, correlationId) {
 async function sendVkToModerator(chatId, bot, draft) {
   const vkSettings = getVkSettings(chatId);
   const globalSettings = manageStore.getContentSettings?.(chatId);
-  
+
   console.log(`[VK-MODERATION] DEBUG: chatId=${chatId}`);
   console.log(`[VK-MODERATION] DEBUG: vkSettings=${JSON.stringify(vkSettings)}`);
   console.log(`[VK-MODERATION] DEBUG: globalSettings=${JSON.stringify(globalSettings)}`);
-  
+
   // Иерархия: модератор канала → глобальный модератор → chatId
-  const moderatorId = vkSettings?.moderatorUserId || 
-                      globalSettings?.moderatorUserId || 
+  const moderatorId = vkSettings?.moderatorUserId ||
+                      globalSettings?.moderatorUserId ||
                       chatId;
 
   console.log(`[VK-MODERATION] Sending draft to moderator ${moderatorId}, jobId=${draft.jobId}, corr=${draft.correlationId || 'n/a'}`);
   console.log(`[VK-MODERATION] vkSettings.moderatorUserId=${vkSettings?.moderatorUserId}, globalSettings.moderatorUserId=${globalSettings?.moderatorUserId}`);
+  
+  // Логирование выбора бота
+  let selectedBotName = 'unknown';
+  if (!bot || !bot.telegram) {
+    selectedBotName = 'cwBot (user bot unavailable)';
+  } else if (cwBot && cwBot.token !== bot.token) {
+    const userState = manageStore.getState(chatId);
+    if (userState?.token === cwBot.token) {
+      selectedBotName = 'cwBot (user uses CW_BOT_TOKEN)';
+    } else {
+      selectedBotName = 'user personal bot';
+    }
+  } else {
+    selectedBotName = 'user personal bot (default)';
+  }
+  console.log(`[VK-MODERATION] Using bot: ${selectedBotName}`);
 
   const caption = [
     `📢 Черновик для ВКонтакте #${draft.jobId}`,
@@ -608,16 +624,20 @@ async function sendVkToModerator(chatId, bot, draft) {
 }
 
 async function handleVkModerationAction(chatId, bot, jobId, action) {
+  console.log(`[VK-MODERATION-ACTION] chatId=${chatId}, jobId=${jobId}, action=${action}`);
   const draft = getDrafts(chatId)[String(jobId)];
+  console.log(`[VK-MODERATION-ACTION] draft found: ${!!draft}`);
   if (!draft) return { ok: false, message: 'Черновик VK-поста не найден.' };
 
   const correlationId = draft.correlationId || generateCorrelationId();
 
   if (action === 'approve') {
+    console.log(`[VK-MODERATION-ACTION] Starting approval process for jobId=${jobId}`);
     try {
       await publishVkPost(chatId, bot, jobId, correlationId);
       return { ok: true, message: `📢 VK пост #${jobId} опубликован.` };
     } catch (e) {
+      console.error(`[VK-MODERATION-ACTION] Approval failed:`, e);
       await vkRepo.addPublishLog(chatId, {
         jobId, groupId: draft.groupId || '', status: 'failed',
         errorText: e.message, correlationId
@@ -739,28 +759,69 @@ async function tickVkSchedule(chatId, bot) {
 
   const data = manageStore.getState(chatId) || {};
 
-  // Проверка слота
-  let isSlot = false;
-  for (let slot = startMinutes; slot < 24 * 60; slot += intervalMinutes) {
-    if (nowMinutes === slot) { isSlot = true; break; }
-  }
-  if (!isSlot) {
-    // Логируем раз в 10 минут, чтобы не засорять
-    if (nowMinutes % 10 === 0) {
-      console.log(`[VK-SCHEDULE] ${chatId} waiting: now=${now.time}, start=${settings.scheduleTime}, interval=${settings.publishIntervalHours}h`);
+  if (settings.randomPublish) {
+    // Рандомный режим: при наступлении каждого слота генерируем случайное
+    // время следующей публикации в диапазоне 25%-100% от интервала.
+    // Слот используется как «окно», внутри которого срабатывает одна публикация.
+
+    // Определяем текущий слот (ближайший прошедший)
+    let currentSlot = -1;
+    for (let slot = startMinutes; slot < 24 * 60; slot += intervalMinutes) {
+      if (nowMinutes >= slot) currentSlot = slot;
     }
-    return;
+    if (currentSlot < 0) return;
+
+    const slotKey = `vkRandomSlot:${currentSlot}`;
+    const runKey = `vkRandomRun:${currentSlot}`;
+
+    // Если в этом слоте сегодня уже публиковали — пропускаем
+    if (data[runKey] === now.date) return;
+
+    // Генерируем случайную минуту для этого слота, если ещё не сгенерирована
+    if (!data[slotKey] || data[slotKey].split('|')[0] !== now.date) {
+      const minOffset = Math.round(intervalMinutes * 0.25);
+      const randomOffset = minOffset + Math.floor(Math.random() * (intervalMinutes - minOffset + 1));
+      const targetMinute = currentSlot + randomOffset;
+      data[slotKey] = `${now.date}|${targetMinute}`;
+      const states = manageStore.getAllStates();
+      if (!states[chatId]) states[chatId] = data;
+      await manageStore.persist(chatId);
+    }
+
+    const targetMinute = parseInt(data[slotKey].split('|')[1], 10);
+    if (nowMinutes < targetMinute) return;
+
+    // Время наступило — публикуем
+    data[runKey] = now.date;
+    const states2 = manageStore.getAllStates();
+    if (!states2[chatId]) states2[chatId] = data;
+    await manageStore.persist(chatId);
+
+    console.log(`[VK-SCHEDULE-RANDOM] ${chatId} random time reached ${now.time}, enqueueing vk_generate`);
+  } else {
+    // Фиксированный режим: публикация строго по слотам
+    let isSlot = false;
+    for (let slot = startMinutes; slot < 24 * 60; slot += intervalMinutes) {
+      if (nowMinutes === slot) { isSlot = true; break; }
+    }
+    if (!isSlot) {
+      // Логируем раз в 10 минут, чтобы не засорять
+      if (nowMinutes % 10 === 0) {
+        console.log(`[VK-SCHEDULE] ${chatId} waiting: now=${now.time}, start=${settings.scheduleTime}, interval=${settings.publishIntervalHours}h`);
+      }
+      return;
+    }
+
+    const key = `vkLastRun:${now.time}`;
+    if (data[key] === now.date) return;
+
+    data[key] = now.date;
+    const states = manageStore.getAllStates();
+    if (!states[chatId]) states[chatId] = data;
+    await manageStore.persist(chatId);
+
+    console.log(`[VK-SCHEDULE] ${chatId} slot matched ${now.time}, enqueueing vk_generate`);
   }
-
-  const key = `vkLastRun:${now.time}`;
-  if (data[key] === now.date) return;
-
-  data[key] = now.date;
-  const states = manageStore.getAllStates();
-  if (!states[chatId]) states[chatId] = data;
-  await manageStore.persist(chatId);
-
-  console.log(`[VK-SCHEDULE] ${chatId} slot matched ${now.time}, enqueueing vk_generate`);
 
   // Ставим в очередь
   await queueRepo.ensureQueueSchema(chatId);

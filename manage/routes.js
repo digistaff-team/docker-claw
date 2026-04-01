@@ -729,7 +729,10 @@ router.post('/channels/vk/settings', async (req, res) => {
             moderator_user_id
         } = req.body;
 
+        console.log(`[VK-SETTINGS] POST /api/manage/channels/vk/settings received: chat_id=${chat_id}, moderator_user_id=${moderator_user_id}`);
+
         if (!chat_id) {
+            console.error('[VK-SETTINGS] Missing chat_id');
             return res.status(400).json({ error: 'chat_id is required' });
         }
 
