@@ -251,7 +251,7 @@ async function startServer() {
                 if (result?.ok) {
                     await ctx.reply(result.message || 'Операция выполнена.').catch(() => {});
                 } else {
-                    await ctx.reply(`❌ ${result?.error || 'Ошибка модерации'}`).catch(() => {});
+                    await ctx.reply(`❌ ${result?.message || 'Ошибка модерации'}`).catch(() => {});
                 }
             } catch (e) {
                 console.error(`[CW-BOT] Error:`, e);
@@ -265,31 +265,36 @@ async function startServer() {
             const fromId = String(ctx.from?.id || '');
             const jobId = Number(ctx.match?.[1]);
             const action = ctx.match?.[2];
-            
+
             console.log(`[CW-BOT-VK] ${action} job ${jobId} (fromId=${fromId})`);
-            
+
             // Находим chatId по черновику
             let resolvedChatId = null;
             const allStates = manageStore.getAllStates();
+            console.log(`[CW-BOT-VK] Searching in ${Object.keys(allStates).length} states for jobId=${jobId}`);
             for (const [cid, data] of Object.entries(allStates)) {
                 const drafts = data.vkDrafts || {};
+                console.log(`[CW-BOT-VK] cid=${cid}, vkDrafts keys=${Object.keys(drafts)}`);
                 if (!drafts[String(jobId)]) continue;
-                
+
                 const vkSettings = manageStore.getVkSettings?.(cid) || {};
                 const globalSettings = data.contentSettings || {};
-                const channelModeratorId = vkSettings.moderatorUserId || 
-                                           globalSettings.moderatorUserId || 
+                const channelModeratorId = vkSettings.moderatorUserId ||
+                                           globalSettings.moderatorUserId ||
                                            process.env.CONTENT_MVP_MODERATOR_USER_ID;
                 const ownerTgId = String(data.verifiedTelegramId || '');
                 const allowedIds = new Set([ownerTgId, channelModeratorId].filter(Boolean));
-                
+
+                console.log(`[CW-BOT-VK] cid=${cid} has draft, checking access: fromId=${fromId}, ownerTgId=${ownerTgId}, channelModeratorId=${channelModeratorId}`);
                 if (allowedIds.has(fromId)) {
                     resolvedChatId = cid;
+                    console.log(`[CW-BOT-VK] Access granted for cid=${cid}`);
                     break;
                 }
             }
-            
+
             if (!resolvedChatId) {
+                console.log(`[CW-BOT-VK] Draft not found or access denied for jobId=${jobId}, fromId=${fromId}`);
                 await ctx.answerCbQuery('Черновик не найден').catch(() => {});
                 return;
             }
@@ -373,15 +378,33 @@ async function startServer() {
             res.json({ username: cwBotUsername || null });
         });
 
-        // Запускаем с webhook если WEBHOOK_URL установлен
-        if (config.WEBHOOK_URL) {
+        // Запускаем с webhook если CW_BOT_WEBHOOK_URL установлен
+        // Используем отдельную переменную чтобы избежать конфликтов с webhook.routes.js
+        if (config.CW_BOT_WEBHOOK_URL) {
+            const webhookUrl = config.CW_BOT_WEBHOOK_URL;
+            cwBot.telegram.setWebhook(webhookUrl).then(() => {
+                console.log(`🤖 Content bot: ✅ WEBHOOK SET (${webhookUrl})`);
+            }).catch((err) => {
+                console.error('🤖 Content bot: ⚠️  WEBHOOK ERROR:', err.message);
+            });
+            // Извлекаем путь из URL для регистрации роута
+            const urlParts = new URL(webhookUrl);
+            const webhookPath = urlParts.pathname;
+            app.use(webhookPath, async (req, res) => {
+                await cwBot.handleUpdate(req.body);
+                res.status(200).send('OK');
+            });
+        } else if (config.WEBHOOK_URL) {
+            // Fallback: используем WEBHOOK_URL с суффиксом /cw
             const webhookUrl = `${config.WEBHOOK_URL}/cw`;
             cwBot.telegram.setWebhook(webhookUrl).then(() => {
                 console.log(`🤖 Content bot: ✅ WEBHOOK SET (${webhookUrl})`);
             }).catch((err) => {
                 console.error('🤖 Content bot: ⚠️  WEBHOOK ERROR:', err.message);
             });
-            app.use('/telegram/webhook/cw', async (req, res) => {
+            const urlParts = new URL(webhookUrl);
+            const webhookPath = urlParts.pathname;  // e.g. '/telegram/webhook/cw'
+            app.use(webhookPath, async (req, res) => {
                 await cwBot.handleUpdate(req.body);
                 res.status(200).send('OK');
             });

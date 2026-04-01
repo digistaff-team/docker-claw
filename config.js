@@ -94,6 +94,7 @@ module.exports = {
     // Central Moderation Bot (CW Bot) — один на всю систему
     CW_BOT_TOKEN: process.env.CW_BOT_TOKEN || '',
     CW_BOT_USERNAME: process.env.CW_BOT_USERNAME || '',
+    CW_BOT_WEBHOOK_URL: process.env.CW_BOT_WEBHOOK_URL || '',
 
     // Telegram Bot Webhook URL
     WEBHOOK_URL: process.env.WEBHOOK_URL || '',

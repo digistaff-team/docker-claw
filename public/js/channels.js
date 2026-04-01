@@ -1078,7 +1078,8 @@ async function saveVkSettings() {
             showToast(data.error || 'Ошибка сохранения', 'error');
         }
     } catch (e) {
-        showToast('Ошибка сети', 'error');
+        console.error('VK settings save error:', e);
+        showToast(`Ошибка сети: ${e.message || 'Неизвестная ошибка'}`, 'error');
     }
 }
 

@@ -21,7 +21,8 @@
       "Bash(pgrep *)",
       "Bash(docker cp *)",
       "Bash(docker stop *)",
-      "Bash(docker start *)"
+      "Bash(docker start *)",
+      "Bash(grep *)"
     ]
   },
   "$version": 3
