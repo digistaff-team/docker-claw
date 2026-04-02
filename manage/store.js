@@ -569,11 +569,6 @@ function setPinterestConfig(chatId, patch = {}) {
     const current = statesCache[chatId].pinterestConfig || {};
     const next = { ...current };
 
-    if (patch.app_id !== undefined) next.app_id = String(patch.app_id || '').trim() || null;
-    if (patch.app_secret !== undefined) next.app_secret = String(patch.app_secret || '').trim() || null;
-    if (patch.access_token !== undefined) next.access_token = patch.access_token || null;
-    if (patch.refresh_token !== undefined) next.refresh_token = patch.refresh_token || null;
-    if (patch.access_token_expires !== undefined) next.access_token_expires = patch.access_token_expires || null;
     if (patch.board_id !== undefined) next.board_id = String(patch.board_id || '').trim() || null;
     if (patch.board_name !== undefined) next.board_name = String(patch.board_name || '').trim() || null;
     if (patch.website_url !== undefined) next.website_url = String(patch.website_url || '').trim() || null;

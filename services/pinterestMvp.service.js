@@ -12,7 +12,6 @@ const manageStore = require('../manage/store');
 const sessionService = require('./session.service');
 const dockerService = require('./docker.service');
 const storageService = require('./storage.service');
-const pinterestService = require('./pinterest.service');
 const imageService = require('./image.service');
 const pinterestRepo = require('./content/pinterest.repository');
 const bufferService = require('./buffer.service');
@@ -91,6 +90,7 @@ async function selectNextBoard(chatId) {
       const boards = dbBoards.map(b => ({
         board_id: b.board_id,
         board_name: b.board_name,
+        service_id: b.service_id,
         idea: b.idea,
         focus: b.focus,
         purpose: b.purpose,
@@ -179,14 +179,16 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
 
 Ответь строго в формате JSON:
 {
-  "pinTitle": "заголовок пина (максимум 100 символов, привлекательный, с ключевыми словами)",
-  "pinDescription": "описание пина (максимум 500 символов, с CTA и ключевыми словами для SEO)",
+  "pinTitle": "заголовок пина (максимум 80 символов, привлекательный, с ключевыми словами)",
+  "pinDescription": "описание пина (максимум 380 символов, с CTA и ключевыми словами для SEO)",
   "seoKeywords": ["ключевое1", "ключевое2", "ключевое3"]
 }
 
+ВАЖНО: общая длина pinTitle + pinDescription НЕ ДОЛЖНА превышать 480 символов (лимит Pinterest).
+
 Требования:
-- pinTitle: до 100 символов, цепляющий, содержит основное ключевое слово
-- pinDescription: до 500 символов, информативный, содержит призыв к действию
+- pinTitle: до 80 символов, цепляющий, содержит основное ключевое слово
+- pinDescription: до 380 символов, информативный, содержит призыв к действию
 - seoKeywords: 3-5 релевантных ключевых слов для Pinterest SEO
 - Язык: русский
 - Не используй эмодзи в заголовке`;
@@ -207,9 +209,16 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
   }
 
   const parsed = JSON.parse(jsonMatch[0]);
+  let pinTitle = String(parsed.pinTitle || '').slice(0, 80);
+  let pinDescription = String(parsed.pinDescription || '').slice(0, 380);
+  // Гарантируем общий лимит 480 символов (title + \n\n + description)
+  const total = pinTitle.length + 2 + pinDescription.length;
+  if (total > 480) {
+    pinDescription = pinDescription.slice(0, 480 - pinTitle.length - 2);
+  }
   return {
-    pinTitle: String(parsed.pinTitle || '').slice(0, 100),
-    pinDescription: String(parsed.pinDescription || '').slice(0, 500),
+    pinTitle,
+    pinDescription,
     seoKeywords: Array.isArray(parsed.seoKeywords) ? parsed.seoKeywords.slice(0, 5) : []
   };
 }
@@ -455,13 +464,29 @@ async function publishPin(chatId, bot, jobId, correlationId) {
     console.log(`[PINTEREST-MVP] Watermark skipped: ${e.message}`);
   }
 
+  // Сохраняем финальное изображение на хост для публичного доступа
+  const hostDir = path.join(storageService.getDataDir(chatId), 'output', 'content');
+  await fs.mkdir(hostDir, { recursive: true });
+  await fs.writeFile(path.join(hostDir, `pin_${jobId}.png`), imageBuffer);
+
   // Публикация через Buffer GraphQL API (единственный режим)
   if (!cfg.buffer_api_key || !cfg.buffer_channel_id) {
     throw new Error('Buffer API key или channel_id не настроены');
   }
   const imageUrl = `${config.APP_URL}/api/files/public/${chatId}/pin_${jobId}.png`;
-  const text = [job.pin_title, '', job.pin_description].filter(Boolean).join('\n');
-  const bufferResult = await bufferService.createPost(cfg.buffer_api_key, cfg.buffer_channel_id, { text, imageUrl });
+  let text = [job.pin_title, '', job.pin_description].filter(Boolean).join('\n');
+  if (text.length > 500) {
+    text = text.slice(0, 497) + '...';
+  }
+
+  // Получаем service_id доски для Buffer Pinterest API
+  let boardServiceId = null;
+  if (job.board_id) {
+    const board = await pinterestRepo.getBoard(chatId, job.board_id);
+    boardServiceId = board?.service_id || null;
+  }
+
+  const bufferResult = await bufferService.createPost(cfg.buffer_api_key, cfg.buffer_channel_id, { text, imageUrl, boardServiceId });
   const result = { id: bufferResult.postId };
   console.log(`[PINTEREST-MVP] Published via Buffer, postId=${bufferResult.postId}`);
 

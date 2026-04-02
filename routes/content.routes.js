@@ -5,6 +5,7 @@ const { Telegraf } = require('telegraf');
 const contentMvpService = require('../services/contentMvp.service');
 const vkMvpService = require('../services/vkMvp.service');
 const okMvpService = require('../services/okMvp.service');
+const pinterestMvpService = require('../services/pinterestMvp.service');
 const telegramRunner = require('../manage/telegram/runner');
 const manageStore = require('../manage/store');
 
@@ -239,6 +240,25 @@ router.post('/import-pinterest-boards', async (req, res) => {
     return res.json(result);
   } catch (e) {
     return res.status(400).json({ error: e.message });
+  }
+});
+
+// POST /api/content/pinterest/run-now — генерация Pinterest-пина
+router.post('/pinterest/run-now', async (req, res) => {
+  const chatId = normalizeChatId(req.body.chat_id);
+  const reason = String(req.body.reason || 'api').trim() || 'api';
+  if (!chatId) {
+    return res.status(400).json({ error: 'chat_id is required' });
+  }
+  const bot = resolveBotFacade(chatId);
+  if (!bot) {
+    return res.status(409).json({ error: 'Telegram bot is not running for chat_id' });
+  }
+  try {
+    const result = await pinterestMvpService.runNow(chatId, bot, reason);
+    return res.json(result);
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
   }
 });
 

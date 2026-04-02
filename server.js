@@ -369,8 +369,44 @@ async function startServer() {
             const fromId = String(ctx.from?.id || '');
             const jobId = Number(ctx.match?.[1]);
             const action = ctx.match?.[2];
+
             console.log(`[CW-BOT-PIN] ${action} job ${jobId} (fromId=${fromId})`);
-            await ctx.answerCbQuery('В разработке').catch(() => {});
+
+            // Находим chatId по черновику
+            let resolvedChatId = null;
+            const allStatesPin = manageStore.getAllStates();
+            for (const [cid, data] of Object.entries(allStatesPin)) {
+                const drafts = data.pinterestDrafts || {};
+                if (!drafts[String(jobId)]) continue;
+
+                const pinSettings = manageStore.getPinterestConfig?.(cid) || {};
+                const globalSettings = data.contentSettings || {};
+                const channelModeratorId = pinSettings.moderatorUserId ||
+                                           globalSettings.moderatorUserId ||
+                                           process.env.CONTENT_MVP_MODERATOR_USER_ID;
+                const ownerTgId = String(data.verifiedTelegramId || '');
+                const allowedIds = new Set([ownerTgId, channelModeratorId].filter(Boolean));
+
+                if (allowedIds.has(fromId)) {
+                    resolvedChatId = cid;
+                    break;
+                }
+            }
+
+            if (!resolvedChatId) {
+                await ctx.answerCbQuery('Черновик не найден').catch(() => {});
+                return;
+            }
+
+            try {
+                const result = await pinterestMvpService.handlePinModerationAction(resolvedChatId, { telegram: ctx.telegram }, jobId, action);
+                await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
+                await ctx.reply(result?.message || 'Операция выполнена.').catch(() => {});
+            } catch (e) {
+                console.error(`[CW-BOT-PIN] Error:`, e);
+                await ctx.answerCbQuery('Ошибка').catch(() => {});
+                await ctx.reply(`Ошибка модерации Pinterest: ${e.message}`).catch(() => {});
+            }
         });
 
         // API endpoint для получения username CW бота

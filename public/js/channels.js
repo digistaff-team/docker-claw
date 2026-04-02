@@ -503,27 +503,57 @@ async function saveContentSettings() {
 
 // === Pinterest ===
 
-async function connectPinterest() {
+async function connectPinterestBuffer() {
     const chatId = getChatId();
     if (!chatId) return;
-    const appId = (document.getElementById('pinterestAppId')?.value || '').trim();
-    const appSecret = (document.getElementById('pinterestAppSecret')?.value || '').trim();
-    if (!appId || !appSecret) {
-        showToast('Введите App ID и App Secret', 'error');
+    const bufferApiKey = (document.getElementById('bufferApiKey')?.value || '').trim();
+    const bufferChannelId = (document.getElementById('bufferChannelId')?.value || '').trim();
+    if (!bufferApiKey || !bufferChannelId) {
+        showToast('Введите Buffer API Token и Channel ID', 'error');
         return;
     }
     try {
         const res = await fetch(`${API_MANAGE}/channels/pinterest`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: chatId, app_id: appId, app_secret: appSecret })
+            body: JSON.stringify({ chat_id: chatId, buffer_api_key: bufferApiKey, buffer_channel_id: bufferChannelId })
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
-            showToast('Pinterest подключён', 'success');
+            showToast('Pinterest подключён через Buffer', 'success');
             await loadPinterestConfig();
         } else {
             showToast(data.error || 'Ошибка подключения', 'error');
+        }
+    } catch (e) {
+        showToast('Ошибка сети', 'error');
+    }
+}
+
+async function testPinterestBufferConnection() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    const bufferApiKey = (document.getElementById('bufferApiKey')?.value || '').trim();
+    const bufferChannelId = (document.getElementById('bufferChannelId')?.value || '').trim();
+    if (!bufferApiKey || !bufferChannelId) {
+        showToast('Введите Buffer API Token и Channel ID', 'error');
+        return;
+    }
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/pinterest/test-buffer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, buffer_api_key: bufferApiKey, buffer_channel_id: bufferChannelId })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) {
+            if (data.rateLimited) {
+                showToast('Ключ принят (Buffer подтвердил авторизацию, но сейчас rate limit — детали канала будут доступны позже)', 'success');
+            } else {
+                showToast(`Соединение OK: ${data.channelName || 'канал'} (${data.service || 'pinterest'})`, 'success');
+            }
+        } else {
+            showToast(data.error || 'Ошибка проверки соединения', 'error');
         }
     } catch (e) {
         showToast('Ошибка сети', 'error');
@@ -547,14 +577,39 @@ async function loadPinterestConfig() {
             if (settingsBlock) settingsBlock.style.display = 'block';
             // Заполняем поля
             const cfg = data.config || {};
-            if (cfg.app_id) document.getElementById('pinterestAppId').value = cfg.app_id;
-            if (cfg.app_secret) document.getElementById('pinterestAppSecret').value = cfg.app_secret;
+            if (cfg.buffer_api_key) document.getElementById('bufferApiKey').value = cfg.buffer_api_key;
+            if (cfg.buffer_channel_id) document.getElementById('bufferChannelId').value = cfg.buffer_channel_id;
             if (cfg.board_id) document.getElementById('pinterestBoardId').value = cfg.board_id;
             if (cfg.website_url) document.getElementById('pinterestWebsiteUrl').value = cfg.website_url;
             const isActiveEl = document.getElementById('pinterestIsActive');
             if (isActiveEl) isActiveEl.checked = cfg.is_active !== false;
             const autoPublishEl = document.getElementById('pinterestAutoPublish');
             if (autoPublishEl) autoPublishEl.checked = !!cfg.auto_publish;
+            // Планировщик
+            if (cfg.schedule_time) {
+                const [h, m] = cfg.schedule_time.split(':');
+                const hourEl = document.getElementById('pinterestScheduleHour');
+                const minEl = document.getElementById('pinterestScheduleMinute');
+                if (hourEl) hourEl.value = (h || '09').padStart(2, '0');
+                if (minEl) minEl.value = (m || '00').padStart(2, '0');
+            }
+            if (cfg.schedule_tz) {
+                const tzEl = document.getElementById('pinterestScheduleTz');
+                if (tzEl) tzEl.value = cfg.schedule_tz;
+            }
+            if (cfg.daily_limit != null) {
+                const dlEl = document.getElementById('pinterestDailyLimit');
+                if (dlEl) dlEl.value = cfg.daily_limit;
+            }
+            if (cfg.publish_interval_hours != null) {
+                const piEl = document.getElementById('pinterestPublishInterval');
+                if (piEl) piEl.value = String(cfg.publish_interval_hours);
+            }
+            if (cfg.allowed_weekdays) {
+                document.querySelectorAll('.pinterestWeekday').forEach(cb => {
+                    cb.checked = cfg.allowed_weekdays.includes(parseInt(cb.value, 10));
+                });
+            }
             // Устанавливаем выбранную доску в select
             const boardSelect = document.getElementById('pinterestBoardSelect');
             if (boardSelect && cfg.board_id) {
@@ -605,6 +660,28 @@ async function loadPinterestBoards() {
     }
 }
 
+async function importBoardsFromBuffer() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    try {
+        showToast('Загрузка досок из Buffer...', 'info');
+        const res = await fetch(`${API_MANAGE}/channels/pinterest/boards/import-buffer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            showToast(data.error || 'Ошибка импорта досок', 'error');
+            return;
+        }
+        showToast(`Импортировано досок из Buffer: ${data.count}`, 'success');
+        await loadPinterestBoards();
+    } catch (e) {
+        showToast('Ошибка сети при импорте досок', 'error');
+    }
+}
+
 function onPinterestBoardSelect() {
     const boardSelect = document.getElementById('pinterestBoardSelect');
     const boardIdInput = document.getElementById('pinterestBoardId');
@@ -644,6 +721,34 @@ async function loadSelectedPinterestBoardSettings(boardId) {
     }
 }
 
+function updatePinterestScheduleTime() {
+    // Вспомогательная — вызывается при смене часа в select
+}
+
+async function runPinterestNow() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    const btn = event?.target;
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Генерация...'; }
+    try {
+        const res = await fetch(`${API_CONTENT}/pinterest/run-now`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, reason: 'ui_manual' })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            showToast(data.message || 'Пин сгенерирован', 'success');
+        } else {
+            showToast(data.error || data.message || 'Ошибка генерации', 'error');
+        }
+    } catch (e) {
+        showToast('Ошибка сети', 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '▶️ Сгенерировать сейчас'; }
+    }
+}
+
 async function savePinterestConfig() {
     const chatId = getChatId();
     if (!chatId) return;
@@ -657,6 +762,17 @@ async function savePinterestConfig() {
     const focus = (document.getElementById('pinterestBoardFocus')?.value || '').trim();
     const purpose = (document.getElementById('pinterestBoardPurpose')?.value || '').trim();
     const keywords = (document.getElementById('pinterestBoardKeywords')?.value || '').trim();
+    const bufferApiKey = (document.getElementById('bufferApiKey')?.value || '').trim();
+    const bufferChannelId = (document.getElementById('bufferChannelId')?.value || '').trim();
+
+    // Планировщик
+    const scheduleHour = document.getElementById('pinterestScheduleHour')?.value || '09';
+    const scheduleMinute = (document.getElementById('pinterestScheduleMinute')?.value || '00').padStart(2, '0');
+    const scheduleTime = `${scheduleHour}:${scheduleMinute}`;
+    const scheduleTz = document.getElementById('pinterestScheduleTz')?.value || 'Europe/Moscow';
+    const dailyLimit = parseInt(document.getElementById('pinterestDailyLimit')?.value, 10) || 5;
+    const publishInterval = document.getElementById('pinterestPublishInterval')?.value || '3';
+    const allowedWeekdays = Array.from(document.querySelectorAll('.pinterestWeekday:checked')).map(cb => parseInt(cb.value, 10));
 
     if (!websiteUrl) {
         showToast('Укажите Website URL', 'error');
@@ -664,10 +780,7 @@ async function savePinterestConfig() {
     }
 
     try {
-        const res = await fetch(`${API_MANAGE}/channels/pinterest`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+        const body = {
                 chat_id: chatId,
                 board_id: boardId,
                 board_name: boardName,
@@ -677,8 +790,21 @@ async function savePinterestConfig() {
                 idea,
                 focus,
                 purpose,
-                keywords
-            })
+                keywords,
+                schedule_time: scheduleTime,
+                schedule_tz: scheduleTz,
+                daily_limit: dailyLimit,
+                publish_interval_hours: parseFloat(publishInterval),
+                allowed_weekdays: allowedWeekdays
+        };
+        // Отправляем Buffer credentials только если они не замаскированы
+        if (bufferApiKey && !bufferApiKey.includes('***')) body.buffer_api_key = bufferApiKey;
+        if (bufferChannelId) body.buffer_channel_id = bufferChannelId;
+
+        const res = await fetch(`${API_MANAGE}/channels/pinterest`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
@@ -699,8 +825,8 @@ async function disconnectPinterest() {
         const res = await fetch(`${API_MANAGE}/channels/pinterest?chat_id=${encodeURIComponent(chatId)}`, { method: 'DELETE' });
         if (res.ok) {
             showToast('Pinterest отключён', 'success');
-            document.getElementById('pinterestAppId').value = '';
-            document.getElementById('pinterestAppSecret').value = '';
+            document.getElementById('bufferApiKey').value = '';
+            document.getElementById('bufferChannelId').value = '';
             document.getElementById('pinterestBoardId').value = '';
             document.getElementById('pinterestWebsiteUrl').value = '';
             const boardSelect = document.getElementById('pinterestBoardSelect');
@@ -712,114 +838,6 @@ async function disconnectPinterest() {
     } catch (e) {
         showToast('Ошибка сети', 'error');
     }
-}
-
-// === Pinterest Boards Import ===
-
-async function previewPinterestBoardsImport() {
-    const chatId = getChatId();
-    if (!chatId) return;
-
-    const statusEl = document.getElementById('pinterestBoardsImportStatus');
-    if (statusEl) {
-        statusEl.textContent = 'Собираем предпросмотр...';
-        statusEl.className = 'content-status-line';
-    }
-    const wrap = document.getElementById('pinterestBoardsPreviewWrap');
-    if (wrap) wrap.style.display = 'none';
-
-    try {
-        const payload = {
-            sheet_url: document.getElementById('pinterestSheetUrl')?.value || '',
-            id: document.getElementById('pinterestSheetGid')?.value || ''
-        };
-        const data = await fetchJson(`${API_CONTENT}/import-pinterest-boards/preview`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        renderPinterestBoardsPreview(data);
-        if (statusEl) {
-            statusEl.textContent = `Предпросмотр готов: ${data.preview?.length || 0} строк`;
-            statusEl.className = 'content-status-line ok';
-        }
-    } catch (e) {
-        if (statusEl) {
-            statusEl.textContent = e.message;
-            statusEl.className = 'content-status-line error';
-        }
-        showToast(e.message, 'error');
-    }
-}
-
-async function applyPinterestBoardsImport() {
-    const chatId = getChatId();
-    if (!chatId) return;
-
-    const statusEl = document.getElementById('pinterestBoardsImportStatus');
-    if (statusEl) {
-        statusEl.textContent = 'Импортируем данные...';
-        statusEl.className = 'content-status-line';
-    }
-
-    try {
-        const payload = {
-            sheet_url: document.getElementById('pinterestSheetUrl')?.value || '',
-            id: document.getElementById('pinterestSheetGid')?.value || ''
-        };
-        const data = await fetchJson(`${API_CONTENT}/import-pinterest-boards`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        if (data.imported > 0) {
-            showToast(`Импортировано ${data.imported} досок`, 'success');
-            await loadPinterestConfig();
-        } else {
-            showToast(data.skippedDuplicates || data.skippedEmpty > 0 ?
-                'Есть дубликаты или пустые строки' : 'Нет строк для импорта', 'error');
-        }
-        await previewPinterestBoardsImport();
-    } catch (e) {
-        if (statusEl) {
-            statusEl.textContent = e.message;
-            statusEl.className = 'content-status-line error';
-        }
-        showToast(e.message, 'error');
-    }
-}
-
-function renderPinterestBoardsPreview(data) {
-    const head = document.getElementById('pinterestBoardsPreviewHead');
-    const body = document.getElementById('pinterestBoardsPreviewBody');
-    const meta = document.getElementById('pinterestBoardsPreviewMeta');
-    const wrap = document.getElementById('pinterestBoardsPreviewWrap');
-
-    if (!head || !body || !meta) return;
-
-    if (!data.preview || data.preview.length === 0) {
-        head.innerHTML = '<tr><th>Row</th><th>Board ID</th><th>Название доски</th><th>Идея</th><th>Фокус</th><th>Дубликат</th></tr>';
-        body.innerHTML = '<tr><td colspan="6" class="content-empty-cell">Нет строк для предпросмотра</td></tr>';
-        if (meta) {
-            meta.textContent = `rows: 0, duplicates: 0, empty: 0`;
-        }
-    } else {
-        head.innerHTML = '<tr><th>Row</th><th>Board ID</th><th>Название доски</th><th>Идея</th><th>Фокус</th><th>Дубликат</th></tr>';
-        body.innerHTML = data.preview.map((item) => `
-            <tr>
-                <td>${item.row}</td>
-                <td>${escapeHtml(item.board_id || '')}</td>
-                <td>${escapeHtml(item.board_name || '')}</td>
-                <td>${escapeHtml(item.idea || '')}</td>
-                <td>${escapeHtml(item.focus || '')}</td>
-                <td>${item.duplicate ? 'yes' : 'no'}</td>
-            </tr>
-        `).join('');
-        if (meta) {
-            meta.textContent = `rows: ${data.totalRows}, duplicates: ${data.skippedDuplicates}, empty: ${data.skippedEmpty}`;
-        }
-    }
-    wrap.style.display = 'block';
 }
 
 // === Instagram ===

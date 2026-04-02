@@ -180,6 +180,7 @@ async function ensureBoardsSchema(chatId) {
         id SERIAL PRIMARY KEY,
         board_id VARCHAR(100) NOT NULL UNIQUE,
         board_name VARCHAR(500) NOT NULL,
+        service_id VARCHAR(200),
         idea TEXT,
         focus TEXT,
         purpose TEXT,
@@ -192,35 +193,44 @@ async function ensureBoardsSchema(chatId) {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_pinterest_boards_board_id ON pinterest_boards(board_id)
     `);
+    // Миграция: добавить service_id если таблица уже существует
+    await client.query(`
+      ALTER TABLE pinterest_boards ADD COLUMN IF NOT EXISTS service_id VARCHAR(200)
+    `);
   });
 }
 
 async function saveBoards(chatId, boards) {
   return withClient(chatId, async (client) => {
     await ensureBoardsSchema(chatId);
-    const result = await client.query(`
-      INSERT INTO pinterest_boards (board_id, board_name, idea, focus, purpose, keywords, link)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      ON CONFLICT (board_id) DO UPDATE SET
-        board_name = EXCLUDED.board_name,
-        idea = EXCLUDED.idea,
-        focus = EXCLUDED.focus,
-        purpose = EXCLUDED.purpose,
-        keywords = EXCLUDED.keywords,
-        link = EXCLUDED.link,
-        updated_at = NOW()
-      RETURNING *
-    `, boards.map(b => [
-      b.id,
-      b.name,
-      b.description || null,
-      null,  // idea
-      null,  // focus
-      null,  // purpose
-      null,  // keywords
-      b.link || null
-    ]).flat());
-    return result.rows;
+    const rows = [];
+    for (const b of boards) {
+      const res = await client.query(`
+        INSERT INTO pinterest_boards (board_id, board_name, service_id, idea, focus, purpose, keywords, link)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (board_id) DO UPDATE SET
+          board_name = EXCLUDED.board_name,
+          service_id = COALESCE(EXCLUDED.service_id, pinterest_boards.service_id),
+          idea = EXCLUDED.idea,
+          focus = EXCLUDED.focus,
+          purpose = EXCLUDED.purpose,
+          keywords = EXCLUDED.keywords,
+          link = EXCLUDED.link,
+          updated_at = NOW()
+        RETURNING *
+      `, [
+        b.id || b.board_id,
+        b.name || b.board_name,
+        b.serviceId || b.service_id || null,
+        b.idea || b.description || null,
+        b.focus || null,
+        b.purpose || null,
+        b.keywords || null,
+        b.link || b.url || null
+      ]);
+      if (res.rows[0]) rows.push(res.rows[0]);
+    }
+    return rows;
   });
 }
 
@@ -228,7 +238,7 @@ async function getBoards(chatId) {
   return withClient(chatId, async (client) => {
     await ensureBoardsSchema(chatId);
     const result = await client.query(`
-      SELECT id, board_id, board_name, idea, focus, purpose, keywords, link, created_at, updated_at
+      SELECT id, board_id, board_name, service_id, idea, focus, purpose, keywords, link, created_at, updated_at
       FROM pinterest_boards
       ORDER BY created_at DESC
     `);
@@ -254,7 +264,7 @@ async function updateBoard(chatId, boardId, data) {
 
     const map = {
       idea: 'idea', focus: 'focus', purpose: 'purpose',
-      keywords: 'keywords', link: 'link'
+      keywords: 'keywords', link: 'link', serviceId: 'service_id'
     };
 
     for (const [jsKey, dbCol] of Object.entries(map)) {

@@ -510,10 +510,16 @@ router.get('/channels/pinterest', (req, res) => {
     const chatId = req.query.chat_id;
     if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
     const config = manageStore.getPinterestConfig(chatId);
-    if (config && config.app_id) {
-        // Не отправляем секреты целиком
+    if (config && config.buffer_api_key && config.buffer_channel_id) {
         const safeConfig = { ...config };
-        if (safeConfig.app_secret) safeConfig.app_secret = safeConfig.app_secret.slice(0, 4) + '***';
+        // Маскируем Buffer API ключ
+        if (safeConfig.buffer_api_key) safeConfig.buffer_api_key = safeConfig.buffer_api_key.slice(0, 6) + '***';
+        // Убираем legacy OAuth-поля
+        delete safeConfig.app_id;
+        delete safeConfig.app_secret;
+        delete safeConfig.access_token;
+        delete safeConfig.refresh_token;
+        delete safeConfig.access_token_expires;
         res.json({ connected: true, config: safeConfig });
     } else {
         res.json({ connected: false, config: null });
@@ -521,12 +527,12 @@ router.get('/channels/pinterest', (req, res) => {
 });
 
 router.post('/channels/pinterest', async (req, res) => {
-    const { chat_id: chatId, app_id, app_secret, board_id, board_name, website_url, is_active, auto_publish, buffer_api_key, buffer_channel_id } = req.body;
+    const { chat_id: chatId, board_id, board_name, website_url, is_active, auto_publish,
+        buffer_api_key, buffer_channel_id,
+        schedule_time, schedule_tz, daily_limit, publish_interval_hours, allowed_weekdays } = req.body;
     if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
     try {
         const patch = {};
-        if (app_id !== undefined) patch.app_id = app_id;
-        if (app_secret !== undefined) patch.app_secret = app_secret;
         if (board_id !== undefined) patch.board_id = board_id;
         if (board_name !== undefined) patch.board_name = board_name;
         if (website_url !== undefined) patch.website_url = website_url;
@@ -534,6 +540,11 @@ router.post('/channels/pinterest', async (req, res) => {
         if (auto_publish !== undefined) patch.auto_publish = auto_publish;
         if (buffer_api_key !== undefined) patch.buffer_api_key = buffer_api_key;
         if (buffer_channel_id !== undefined) patch.buffer_channel_id = buffer_channel_id;
+        if (schedule_time !== undefined) patch.schedule_time = schedule_time;
+        if (schedule_tz !== undefined) patch.schedule_tz = schedule_tz;
+        if (daily_limit !== undefined) patch.daily_limit = daily_limit;
+        if (publish_interval_hours !== undefined) patch.publish_interval_hours = publish_interval_hours;
+        if (allowed_weekdays !== undefined) patch.allowed_weekdays = allowed_weekdays;
         await manageStore.setPinterestConfig(chatId, patch);
 
         // Создаём таблицы для Pinterest
@@ -559,16 +570,66 @@ router.delete('/channels/pinterest', async (req, res) => {
 router.get('/channels/pinterest/boards', async (req, res) => {
     const chatId = req.query.chat_id;
     if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
-    const config = manageStore.getPinterestConfig(chatId);
-    if (!config || !config.access_token) {
-        return res.status(400).json({ error: 'Pinterest не подключён или отсутствует access_token' });
-    }
     try {
-        const pinterestService = require('../services/pinterest.service');
-        const boards = await pinterestService.getBoards(chatId, config.access_token);
-        res.json({ boards });
+        const pinterestRepo = require('../services/content/pinterest.repository');
+        const boards = await pinterestRepo.getBoards(chatId);
+        res.json({ boards: (boards || []).map(b => ({
+            id: b.board_id,
+            name: b.board_name,
+            idea: b.idea,
+            focus: b.focus,
+            purpose: b.purpose,
+            keywords: b.keywords,
+            link: b.link
+        })) });
     } catch (e) {
         res.status(500).json({ error: e.message });
+    }
+});
+
+// Проверка соединения с Buffer API
+router.post('/channels/pinterest/test-buffer', async (req, res) => {
+    const { chat_id: chatId, buffer_api_key, buffer_channel_id } = req.body;
+    if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+    if (!buffer_api_key || !buffer_channel_id) {
+        return res.status(400).json({ error: 'buffer_api_key и buffer_channel_id обязательны' });
+    }
+    try {
+        const bufferService = require('../services/buffer.service');
+        const result = await bufferService.testConnection(buffer_api_key, buffer_channel_id);
+        res.json({ success: true, ...result });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// Загрузка досок Pinterest из Buffer API
+router.post('/channels/pinterest/boards/import-buffer', async (req, res) => {
+    const chatId = req.body.chat_id;
+    if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+    // Берём credentials из store (в UI они замаскированы)
+    const cfg = manageStore.getPinterestConfig(chatId) || {};
+    const apiKey = req.body.buffer_api_key || cfg.buffer_api_key;
+    const channelId = req.body.buffer_channel_id || cfg.buffer_channel_id;
+    if (!apiKey || !channelId) {
+        return res.status(400).json({ error: 'buffer_api_key и buffer_channel_id не настроены' });
+    }
+    try {
+        const bufferService = require('../services/buffer.service');
+        const pinterestRepo = require('../services/content/pinterest.repository');
+        const boards = await bufferService.getPinterestBoards(apiKey, channelId);
+        const mapped = boards.map(b => ({
+            id: b.serviceId || b.id,
+            name: b.name,
+            serviceId: b.serviceId,
+            description: b.description || '',
+            link: b.url || ''
+        }));
+        await pinterestRepo.ensureBoardsSchema(chatId);
+        const saved = await pinterestRepo.saveBoards(chatId, mapped);
+        res.json({ success: true, boards: saved, count: saved.length });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
     }
 });
 
