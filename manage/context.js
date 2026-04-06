@@ -130,6 +130,33 @@ async function getAutoInstagramCopywriterSkill() {
 }
 
 /**
+ * Проверяет, подключён ли канал YouTube
+ * @param {string} chatId - ID чата
+ * @returns {boolean}
+ */
+function isYoutubeChannelActive(chatId) {
+    const ytConfig = manageStore.getYoutubeConfig(chatId);
+    return !!(ytConfig?.is_active && ytConfig?.buffer_api_key && ytConfig?.buffer_channel_id);
+}
+
+/**
+ * Получает навык "Копирайтер для YouTube" автоматически
+ * @returns {Promise<Object|null>}
+ */
+async function getAutoYoutubeCopywriterSkill() {
+    try {
+        const skill = await mysqlService.getSkillBySlug('youtube-copywriter');
+        if (skill) {
+            console.log('[AUTO-SKILL-YT] Found YouTube copywriter skill:', skill.name);
+        }
+        return skill || null;
+    } catch (e) {
+        console.error('[AUTO-SKILL-YT] Error:', e.message);
+        return null;
+    }
+}
+
+/**
  * Собирает контекст окружения для ответа бота: последние команды, структура файлов, персона.
  */
 async function buildContext(chatId) {
@@ -356,6 +383,15 @@ async function buildFullContextStructured(chatId) {
         }
     }
 
+    // === АВТОМАТИЧЕСКОЕ ДОБАВЛЕНИЕ НАВЫКА ПРИ АКТИВНОМ КАНАЛЕ YOUTUBE ===
+    if (isYoutubeChannelActive(chatId)) {
+        const ytSkill = await getAutoYoutubeCopywriterSkill();
+        if (ytSkill && !skills.find(s => s.slug === 'youtube-copywriter')) {
+            skills.push(ytSkill);
+            console.log('[AUTO-SKILL-YT] Added YouTube copywriter skill for chat:', chatId);
+        }
+    }
+
     // Получаем информацию о персональной базе данных из сессии
     const session = sessionService.getSession(chatId);
     const database = session && session.database ? session.database : null;
@@ -424,5 +460,6 @@ module.exports = {
     buildFullContextStructured,
     getUserSkills,
     verifyAppsRegistry,
+    isYoutubeChannelActive,
     PERSONA_FILES
 };

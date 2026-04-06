@@ -1293,7 +1293,8 @@ async function ensureChannelSchema(chatId, channelName) {
       const igRepo = require('./instagram.repository');
       await igRepo.ensureSchema(chatId);
     } else if (channelName === 'youtube') {
-      // Stub: таблицы ещё не определены
+      const youtubeRepo = require('./youtube.repository');
+      await youtubeRepo.ensureSchema(chatId);
     } else if (channelName === 'email') {
       // Stub: таблицы ещё не определены
     }

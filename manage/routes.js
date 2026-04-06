@@ -1154,4 +1154,136 @@ router.post('/enabled-channels', async (req, res) => {
     }
 });
 
+// === YouTube Channel ===
+
+/**
+ * GET /api/manage/channels/youtube — чтение конфига
+ */
+router.get('/channels/youtube', async (req, res) => {
+    try {
+        const chatId = req.query.chat_id;
+        if (!chatId) return res.status(400).json({ error: 'chat_id required' });
+
+        const cfg = manageStore.getYoutubeConfig(chatId);
+        if (!cfg) return res.json({ connected: false });
+
+        // Маскируем API key
+        const masked = { ...cfg };
+        if (masked.buffer_api_key) {
+            masked.buffer_api_key = masked.buffer_api_key.substring(0, 6) + '***';
+        }
+        res.json({ connected: true, config: masked });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * POST /api/manage/channels/youtube — сохранение конфига
+ */
+router.post('/channels/youtube', async (req, res) => {
+    try {
+        const {
+            chat_id: chatId, buffer_api_key, buffer_channel_id,
+            is_active, auto_publish, schedule_time, schedule_tz,
+            daily_limit, publish_interval_hours, allowed_weekdays,
+            moderator_user_id, random_publish
+        } = req.body;
+
+        console.log(`[YOUTUBE] POST /channels/youtube chatId=${chatId}, is_active=${is_active}`);
+
+        if (!chatId) return res.status(400).json({ error: 'chat_id required' });
+
+        const patch = {};
+        if (buffer_api_key !== undefined) patch.buffer_api_key = buffer_api_key;
+        if (buffer_channel_id !== undefined) patch.buffer_channel_id = buffer_channel_id;
+        if (is_active !== undefined) patch.is_active = is_active;
+        if (auto_publish !== undefined) patch.auto_publish = auto_publish;
+        if (schedule_time !== undefined) patch.schedule_time = schedule_time;
+        if (schedule_tz !== undefined) patch.schedule_tz = schedule_tz;
+        if (daily_limit !== undefined) patch.daily_limit = daily_limit;
+        if (publish_interval_hours !== undefined) patch.publish_interval_hours = publish_interval_hours;
+        if (allowed_weekdays !== undefined) patch.allowed_weekdays = allowed_weekdays;
+        if (moderator_user_id !== undefined) patch.moderator_user_id = moderator_user_id;
+        if (random_publish !== undefined) patch.random_publish = random_publish;
+
+        manageStore.setYoutubeConfig(chatId, patch);
+
+        // Инициализация YouTube-схемы в БД пользователя (не критично, если БД недоступна)
+        try {
+            await ensureChannelSchema(chatId, 'youtube');
+        } catch (dbErr) {
+            console.warn(`[YOUTUBE] ensureChannelSchema skipped (DB unavailable): ${dbErr.message}`);
+        }
+
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * DELETE /api/manage/channels/youtube — удаление конфига
+ */
+router.delete('/channels/youtube', async (req, res) => {
+    try {
+        const chatId = req.query.chat_id;
+        if (!chatId) return res.status(400).json({ error: 'chat_id required' });
+        manageStore.clearYoutubeConfig(chatId);
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * POST /api/manage/channels/youtube/test-buffer — тест соединения
+ */
+router.post('/channels/youtube/test-buffer', async (req, res) => {
+    try {
+        const { buffer_api_key, buffer_channel_id } = req.body;
+        if (!buffer_api_key || !buffer_channel_id) {
+            return res.status(400).json({ ok: false, error: 'buffer_api_key и buffer_channel_id обязательны' });
+        }
+        const bufferService = require('../services/buffer.service');
+        const result = await bufferService.testConnection(buffer_api_key, buffer_channel_id);
+        if (result.service !== 'youtube') {
+            return res.status(400).json({ ok: false, error: `Канал является ${result.service}, а не YouTube` });
+        }
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ ok: false, error: e.message });
+    }
+});
+
+/**
+ * GET /api/manage/channels/youtube/jobs — список заданий
+ */
+router.get('/channels/youtube/jobs', async (req, res) => {
+    try {
+        const { chat_id: chatId, limit = 20, offset = 0, status } = req.query;
+        if (!chatId) return res.status(400).json({ error: 'chat_id required' });
+        const youtubeRepo = require('../services/content/youtube.repository');
+        const jobs = await youtubeRepo.listJobs(chatId, { limit, offset, status });
+        res.json(jobs);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * POST /api/manage/channels/youtube/run-now — немедленная генерация
+ */
+router.post('/channels/youtube/run-now', async (req, res) => {
+    try {
+        const { chat_id: chatId } = req.body;
+        if (!chatId) return res.status(400).json({ error: 'chat_id required' });
+        const youtubeMvp = require('../services/youtubeMvp.service');
+        const result = await youtubeMvp.runNow(chatId, null, 'manual');
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ ok: false, error: e.message });
+    }
+});
+
 module.exports = router;

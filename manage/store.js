@@ -630,6 +630,42 @@ function clearInstagramConfig(chatId) {
     }
 }
 
+// === YouTube Config ===
+
+function getYoutubeConfig(chatId) {
+    const data = statesCache[chatId];
+    return data?.youtubeConfig || null;
+}
+
+function setYoutubeConfig(chatId, patch = {}) {
+    if (!statesCache[chatId]) statesCache[chatId] = {};
+    const current = statesCache[chatId].youtubeConfig || {};
+    const next = { ...current };
+
+    if (patch.buffer_api_key !== undefined) next.buffer_api_key = patch.buffer_api_key || null;
+    if (patch.buffer_channel_id !== undefined) next.buffer_channel_id = String(patch.buffer_channel_id || '').trim() || null;
+    if (patch.is_active !== undefined) next.is_active = !!patch.is_active;
+    if (patch.auto_publish !== undefined) next.auto_publish = !!patch.auto_publish;
+    if (patch.schedule_time !== undefined) next.schedule_time = patch.schedule_time || null;
+    if (patch.schedule_tz !== undefined) next.schedule_tz = patch.schedule_tz || null;
+    if (patch.daily_limit !== undefined) next.daily_limit = parseInt(patch.daily_limit, 10) || 1;
+    if (patch.publish_interval_hours !== undefined) next.publish_interval_hours = parseInt(patch.publish_interval_hours, 10) || 24;
+    if (patch.allowed_weekdays !== undefined && Array.isArray(patch.allowed_weekdays)) next.allowed_weekdays = patch.allowed_weekdays;
+    if (patch.moderator_user_id !== undefined) next.moderator_user_id = String(patch.moderator_user_id || '').trim() || null;
+    if (patch.random_publish !== undefined) next.random_publish = !!patch.random_publish;
+    if (patch.stats !== undefined) next.stats = { ...(next.stats || {}), ...patch.stats };
+
+    statesCache[chatId].youtubeConfig = next;
+    return persist(chatId);
+}
+
+function clearYoutubeConfig(chatId) {
+    if (statesCache[chatId]) {
+        delete statesCache[chatId].youtubeConfig;
+        return persist(chatId);
+    }
+}
+
 // === VK Config ===
 
 function getVkConfig(chatId) {
@@ -1123,6 +1159,9 @@ module.exports = {
     getInstagramConfig,
     setInstagramConfig,
     clearInstagramConfig,
+    getYoutubeConfig,
+    setYoutubeConfig,
+    clearYoutubeConfig,
     getVkConfig,
     setVkConfig,
     getVkSettings,

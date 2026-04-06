@@ -417,10 +417,14 @@ function getSystemInstruction(mode, structuredContext, channel = 'telegram', ena
         // YouTube
         if (enabledChannels.includes('youtube')) {
             systemPrompt += `▶️ Навык "Копирайтер для YouTube":\n`;
-            systemPrompt += `  • Структура: название видео + описание + теги\n`;
-            systemPrompt += `  • Название: 50–60 символов, с ключевыми словами\n`;
-            systemPrompt += `  • Описание: 200–300 символов, призыв к подписке в конце\n`;
-            systemPrompt += `  • Теги: 5–10 релевантных\n\n`;
+            systemPrompt += `  • Структура: название видео + описание + теги + описание превью\n`;
+            systemPrompt += `  • Название (title): 50–60 символов, с ключевыми словами в начале\n`;
+            systemPrompt += `  • Описание (description): 200–500 символов, первые 2 строки — самые важные (видны без раскрытия)\n`;
+            systemPrompt += `  • Призыв к подписке и лайку в конце описания\n`;
+            systemPrompt += `  • Теги: 5–10 релевантных, через запятую\n`;
+            systemPrompt += `  • Превью (thumbnail): яркое, контрастное, текст крупным шрифтом, лицо/эмоция\n`;
+            systemPrompt += `  • Для Shorts: описание до 100 символов, 3–5 хэштегов, обязательно #Shorts\n`;
+            systemPrompt += `  • SEO: ключевое слово в title + description + тегах\n\n`;
         }
 
         // Facebook

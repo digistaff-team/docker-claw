@@ -62,7 +62,7 @@ const {
 
 const {
   VIDEO_STATUS,
-  MockVideoProvider,
+  KieVideoProvider,
   getProvider
 } = require('../services/content/video.service');
 
@@ -355,52 +355,39 @@ test('should be frozen', () => { assert.ok(Object.isFrozen(VIDEO_STATUS)); });
 
 group('getProvider factory');
 
-test('should return mock provider for "mock"', () => {
-  assert.strictEqual(getProvider('mock').getName(), 'mock');
-});
-
-test('should return runway provider for "runway"', () => {
-  assert.strictEqual(getProvider('runway').getName(), 'runway');
-});
-
-test('should return pika provider for "pika"', () => {
-  assert.strictEqual(getProvider('pika').getName(), 'pika');
-});
-
-test('should fall back to mock for unknown provider', () => {
-  assert.strictEqual(getProvider('unknown_xyz').getName(), 'mock');
+test('should return kie-veo3 provider', () => {
+  assert.strictEqual(getProvider().getName(), 'kie-veo3');
 });
 
 // ============================================
-// MockVideoProvider (async)
+// KieVideoProvider (unit tests, no API call)
 // ============================================
 
-group('MockVideoProvider (async)');
+group('KieVideoProvider (unit)');
 
-test('generate should return mock_ prefixed ID and PENDING status', async () => {
-  const provider = new MockVideoProvider();
-  const result = await provider.generate({ prompt: 'test prompt' });
-  assert.ok(result.generationId.startsWith('mock_'));
-  assert.strictEqual(result.status, VIDEO_STATUS.PENDING);
+test('getName should return "kie-veo3"', async () => {
+  const provider = new KieVideoProvider();
+  assert.strictEqual(provider.getName(), 'kie-veo3');
 });
 
-test('getStatus immediately after generate should be PENDING', async () => {
-  const provider = new MockVideoProvider();
-  const gen = await provider.generate({ prompt: 'test' });
-  const status = await provider.getStatus(gen.generationId);
-  assert.strictEqual(status.status, VIDEO_STATUS.PENDING);
-  assert.strictEqual(status.progress, 10);
+test('generate should throw if KIE_API_KEY is not set', async () => {
+  const originalKey = process.env.KIE_API_KEY;
+  delete process.env.KIE_API_KEY;
+  const provider = new KieVideoProvider();
+  try {
+    await provider.generate({ prompt: 'test' });
+    assert.fail('Expected error');
+  } catch (e) {
+    assert.ok(e.message.includes('KIE_API_KEY'));
+  } finally {
+    process.env.KIE_API_KEY = originalKey;
+  }
 });
 
-test('cancel should return true', async () => {
-  const provider = new MockVideoProvider();
-  const result = await provider.cancel('mock_123_abc');
-  assert.strictEqual(result, true);
-});
-
-test('getName should return "mock"', async () => {
-  const provider = new MockVideoProvider();
-  assert.strictEqual(provider.getName(), 'mock');
+test('cancel should return false (not supported)', async () => {
+  const provider = new KieVideoProvider();
+  const result = await provider.cancel('some_task_id');
+  assert.strictEqual(result, false);
 });
 
 // ============================================

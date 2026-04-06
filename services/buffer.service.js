@@ -1,6 +1,6 @@
 /**
  * Buffer GraphQL API — публикация через Buffer.com
- * Используется для Pinterest (и Instagram).
+ * Используется для Pinterest, Instagram и YouTube.
  * Документация: https://developers.buffer.com/guides/getting-started.html
  */
 const fetch = require('node-fetch');
@@ -10,15 +10,17 @@ const BUFFER_GRAPHQL_URL = 'https://api.buffer.com/graphql';
 /**
  * Создаёт пост в Buffer (режим shareNow).
  * @param {string} apiKey - Bearer токен Buffer API
- * @param {string} channelId - ID канала в Buffer (Pinterest/Instagram channel)
+ * @param {string} channelId - ID канала в Buffer (Pinterest/Instagram/YouTube channel)
  * @param {object} options
  * @param {string} options.text - Текст поста
- * @param {string} options.imageUrl - Публичный URL изображения
+ * @param {string} [options.imageUrl] - Публичный URL изображения (Pinterest, Instagram)
+ * @param {string} [options.videoUrl] - Публичный URL видео (YouTube)
+ * @param {string} [options.thumbnailUrl] - Публичный URL превью для YouTube
  * @param {string} [options.boardServiceId] - Pinterest board serviceId (обязателен для Pinterest)
  * @returns {Promise<{postId: string}>}
  * @throws {Error} если Buffer вернул ошибку
  */
-async function createPost(apiKey, channelId, { text, imageUrl, boardServiceId }) {
+async function createPost(apiKey, channelId, { text, imageUrl, videoUrl, thumbnailUrl, boardServiceId }) {
   const query = `
     mutation CreatePost($input: CreatePostInput!) {
       createPost(input: $input) {
@@ -44,10 +46,20 @@ async function createPost(apiKey, channelId, { text, imageUrl, boardServiceId })
     text,
     schedulingType: 'automatic',
     mode: 'shareNow',
-    assets: {
-      images: [{ url: imageUrl }]
-    }
+    assets: {}
   };
+
+  // Видео-ассет (YouTube)
+  if (videoUrl) {
+    input.assets.video = { url: videoUrl };
+    if (thumbnailUrl) {
+      input.assets.thumbnail = { url: thumbnailUrl };
+    }
+  }
+  // Изображения (Pinterest, Instagram)
+  else if (imageUrl) {
+    input.assets.images = [{ url: imageUrl }];
+  }
 
   if (boardServiceId) {
     input.metadata = { pinterest: { boardServiceId } };

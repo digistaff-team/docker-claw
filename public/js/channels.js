@@ -143,6 +143,7 @@ async function onLoginSuccess() {
     await loadInstagramConfig();
     await loadVkStatus();
     await loadOkStatus();
+    await loadYoutubeConfig();
 }
 
 // Специальная инициализация для страницы каналов
@@ -1533,6 +1534,185 @@ async function runTelegramNow() {
         }
     } catch (e) {
         showToast('Ошибка сети', 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '▶️ Сгенерировать сейчас'; }
+    }
+}
+
+// ============================================
+// YouTube Channel
+// ============================================
+
+async function loadYoutubeConfig(chatId) {
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/youtube?chat_id=${chatId}`);
+        const data = await res.json();
+        if (!data.connected) {
+            document.getElementById('youtubeStatus').innerHTML = '<span style="color:#888;">⚪ Не подключён</span>';
+            document.getElementById('youtubeSettingsBlock').style.display = 'none';
+            document.getElementById('disconnectYoutubeBtn').style.display = 'none';
+            return;
+        }
+        const cfg = data.config;
+        document.getElementById('youtubeStatus').innerHTML = '<span style="color:#0a0;">🟢 Подключён</span>';
+        document.getElementById('youtubeSettingsBlock').style.display = 'block';
+        document.getElementById('disconnectYoutubeBtn').style.display = 'inline-block';
+
+        if (cfg.buffer_api_key) document.getElementById('youtubeBufferApiKey').value = cfg.buffer_api_key;
+        if (cfg.buffer_channel_id) document.getElementById('youtubeBufferChannelId').value = cfg.buffer_channel_id;
+        document.getElementById('youtubeIsActive').checked = !!cfg.is_active;
+        document.getElementById('youtubeAutoPublish').checked = !!cfg.auto_publish;
+        if (cfg.schedule_time) {
+            const [h, m] = cfg.schedule_time.split(':');
+            document.getElementById('youtubeScheduleHour').value = h;
+            document.getElementById('youtubeScheduleMinute').value = m;
+        }
+        if (cfg.schedule_tz) document.getElementById('youtubeScheduleTz').value = cfg.schedule_tz;
+        if (cfg.daily_limit) document.getElementById('youtubeDailyLimit').value = cfg.daily_limit;
+        if (cfg.publish_interval_hours) document.getElementById('youtubePublishInterval').value = cfg.publish_interval_hours;
+        if (cfg.moderator_user_id) document.getElementById('youtubeModeratorUserId').value = cfg.moderator_user_id;
+        if (Array.isArray(cfg.allowed_weekdays)) {
+            document.querySelectorAll('.youtubeWeekday').forEach(cb => {
+                cb.checked = cfg.allowed_weekdays.includes(parseInt(cb.value, 10));
+            });
+        }
+    } catch (e) {
+        console.error('Failed to load YouTube config:', e);
+    }
+}
+
+async function saveYoutubeConfig() {
+    const chatId = getChatId();
+    if (!chatId) {
+        showToast('chatId не определён. Обновите страницу.', 'error');
+        return;
+    }
+    const statusEl = document.getElementById('youtubeSettingsStatus');
+    if (statusEl) statusEl.textContent = '⏳ Сохранение...';
+
+    const weekdays = [];
+    document.querySelectorAll('.youtubeWeekday').forEach(cb => {
+        if (cb.checked) weekdays.push(parseInt(cb.value, 10));
+    });
+
+    const scheduleHour = document.getElementById('youtubeScheduleHour').value;
+    const scheduleMinute = document.getElementById('youtubeScheduleMinute').value;
+
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/youtube`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: chatId,
+                buffer_api_key: document.getElementById('youtubeBufferApiKey').value,
+                buffer_channel_id: document.getElementById('youtubeBufferChannelId').value,
+                is_active: document.getElementById('youtubeIsActive').checked,
+                auto_publish: document.getElementById('youtubeAutoPublish').checked,
+                schedule_time: `${scheduleHour}:${scheduleMinute}`,
+                schedule_tz: document.getElementById('youtubeScheduleTz').value,
+                daily_limit: parseInt(document.getElementById('youtubeDailyLimit').value, 10),
+                publish_interval_hours: parseInt(document.getElementById('youtubePublishInterval').value, 10),
+                allowed_weekdays: weekdays,
+                moderator_user_id: document.getElementById('youtubeModeratorUserId').value
+            })
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+            if (statusEl) statusEl.innerHTML = '<span style="color:#0a0;">✅ Настройки сохранены</span>';
+            showToast('Настройки YouTube сохранены', 'success');
+            loadYoutubeConfig(chatId);
+        } else {
+            const errMsg = data.error || 'Ошибка сохранения';
+            if (statusEl) statusEl.innerHTML = '<span style="color:#c00;">❌ ' + errMsg + '</span>';
+            showToast(errMsg, 'error');
+            console.error('YouTube save error:', data);
+        }
+    } catch (e) {
+        const errMsg = 'Ошибка сети: ' + e.message;
+        if (statusEl) statusEl.innerHTML = '<span style="color:#c00;">❌ ' + errMsg + '</span>';
+        showToast(errMsg, 'error');
+        console.error('YouTube save network error:', e);
+    }
+}
+
+async function disconnectYoutube() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    if (!confirm('Отключить YouTube канал? Настройки будут удалены.')) return;
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/youtube?chat_id=${chatId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+            showToast('YouTube канал отключён', 'success');
+            loadYoutubeConfig(chatId);
+        } else {
+            showToast(data.error || 'Ошибка удаления', 'error');
+        }
+    } catch (e) {
+        showToast('Ошибка сети', 'error');
+    }
+}
+
+async function testYoutubeBufferConnection() {
+    const apiKey = document.getElementById('youtubeBufferApiKey').value;
+    const channelId = document.getElementById('youtubeBufferChannelId').value;
+    const statusEl = document.getElementById('youtubeStatus');
+
+    if (!apiKey || !channelId) {
+        if (statusEl) statusEl.innerHTML = '<span style="color:#c00;">❌ Заполните API Token и Channel ID</span>';
+        return;
+    }
+
+    if (statusEl) statusEl.innerHTML = '<span style="color:#888;">⏳ Проверка соединения...</span>';
+
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/youtube/test-buffer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ buffer_api_key: apiKey, buffer_channel_id: channelId })
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+            if (statusEl) statusEl.innerHTML = `<span style="color:#0a0;">✅ Подключено: ${data.channelName} (${data.service})</span>`;
+            showToast(`Соединение установлено: ${data.channelName}`, 'success');
+        } else {
+            if (statusEl) statusEl.innerHTML = '<span style="color:#c00;">❌ ' + (data.error || 'Ошибка соединения') + '</span>';
+            showToast(data.error || 'Ошибка соединения', 'error');
+        }
+    } catch (e) {
+        if (statusEl) statusEl.innerHTML = '<span style="color:#c00;">❌ Ошибка сети</span>';
+        showToast('Ошибка сети', 'error');
+    }
+}
+
+function updateYoutubeScheduleTime() {
+    // Helper: combine hour and minute into display (not strictly needed since we read both on save)
+}
+
+async function runYoutubeNow() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    const btn = document.getElementById('youtubeRunNowBtn');
+    const statusEl = document.getElementById('youtubeSettingsStatus');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Генерация...'; }
+
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/youtube/run-now`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId })
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+            showToast(data.message || 'YouTube задача в очереди', 'success');
+            if (statusEl) statusEl.innerHTML = '<span style="color:#0a0;">✅ ' + (data.message || 'Задача в очереди') + '</span>';
+        } else {
+            showToast(data.error || data.message || 'Ошибка', 'error');
+            if (statusEl) statusEl.innerHTML = '<span style="color:#c00;">❌ ' + (data.error || data.message || 'Ошибка') + '</span>';
+        }
+    } catch (e) {
+        showToast('Ошибка сети', 'error');
+        if (statusEl) statusEl.innerHTML = '<span style="color:#c00;">❌ Ошибка сети</span>';
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = '▶️ Сгенерировать сейчас'; }
     }

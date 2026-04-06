@@ -364,6 +364,52 @@ async function startServer() {
             await ctx.answerCbQuery('В разработке').catch(() => {});
         });
 
+        // YouTube moderation callbacks for CW_BOT_TOKEN users
+        cwBot.action(/^yt_mod:(\d+):(approve|reject|regen_text|regen_image)$/, async (ctx) => {
+            const fromId = String(ctx.from?.id || '');
+            const jobId = Number(ctx.match?.[1]);
+            const action = ctx.match?.[2];
+
+            console.log(`[CW-BOT-YT] ${action} job ${jobId} (fromId=${fromId})`);
+
+            // Находим chatId по черновику
+            let resolvedChatId = null;
+            const allStatesYt = manageStore.getAllStates();
+            for (const [cid, data] of Object.entries(allStatesYt)) {
+                const drafts = data.youtubeDrafts || {};
+                if (!drafts[String(jobId)]) continue;
+
+                const ytSettings = manageStore.getYoutubeConfig?.(cid) || {};
+                const globalSettings = data.contentSettings || {};
+                const channelModeratorId = ytSettings.moderator_user_id ||
+                                           globalSettings.moderatorUserId ||
+                                           process.env.CONTENT_MVP_MODERATOR_USER_ID;
+                const ownerTgId = String(data.verifiedTelegramId || '');
+                const allowedIds = new Set([ownerTgId, channelModeratorId].filter(Boolean));
+
+                if (allowedIds.has(fromId)) {
+                    resolvedChatId = cid;
+                    break;
+                }
+            }
+
+            if (!resolvedChatId) {
+                await ctx.answerCbQuery('Черновик не найден').catch(() => {});
+                return;
+            }
+
+            try {
+                const youtubeMvpService = require('./services/youtubeMvp.service');
+                const result = await youtubeMvpService.handleYtModerationAction(resolvedChatId, { telegram: ctx.telegram }, jobId, action);
+                await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
+                await ctx.reply(result?.message || 'Операция выполнена.').catch(() => {});
+            } catch (e) {
+                console.error(`[CW-BOT-YT] Error:`, e);
+                await ctx.answerCbQuery('Ошибка').catch(() => {});
+                await ctx.reply(`Ошибка модерации YouTube: ${e.message}`).catch(() => {});
+            }
+        });
+
         // Pinterest moderation callbacks for CW_BOT_TOKEN users
         cwBot.action(/^pin_mod:(\d+):(approve|reject|regen_text|regen_image)$/, async (ctx) => {
             const fromId = String(ctx.from?.id || '');
@@ -463,16 +509,18 @@ async function startServer() {
     // Делаем cwBot доступным для всех сервисов
     contentMvpService.setContentBot(cwBot);
 
-    // Передаём cwBot в другие сервисы (Pinterest, VK, OK, Instagram)
+    // Передаём cwBot в другие сервисы (Pinterest, VK, OK, Instagram, YouTube)
     const pinterestMvpService = require('./services/pinterestMvp.service');
     const vkMvpService = require('./services/vkMvp.service');
     const okMvpService = require('./services/okMvp.service');
     const instagramMvpService = require('./services/instagramMvp.service');
+    const youtubeMvpService = require('./services/youtubeMvp.service');
 
     pinterestMvpService.setPinterestCwBot(cwBot);
     vkMvpService.setVkCwBot(cwBot);
     okMvpService.setOkCwBot(cwBot);
     instagramMvpService.setIgCwBot(cwBot);
+    youtubeMvpService.setYtCwBot(cwBot);
 
     // Email processor - запуск cron для опроса почты
     let emailProcessor;
@@ -506,6 +554,9 @@ async function startServer() {
 
     // Запуск Instagram-планировщика
     instagramMvpService.startScheduler(() => telegramRunner.bots);
+
+    // Запуск YouTube-планировщика
+    youtubeMvpService.startScheduler(() => telegramRunner.bots);
 
     // Подключение Webhook API
     const webhookRoutes = require('./routes/webhook.routes');
@@ -581,6 +632,7 @@ async function gracefulShutdown() {
         }
         contentMvpService.stopScheduler();
         try { require('./services/pinterestMvp.service').stopScheduler(); } catch (_) {}
+        try { require('./services/youtubeMvp.service').stopScheduler(); } catch (_) {}
         await manageStore.persist();
     } catch (e) {
         // ignore

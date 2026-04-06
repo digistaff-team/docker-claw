@@ -1,10 +1,13 @@
 /**
- * TASK-015: Асинхронный video provider
- * 
+ * Video provider — KIE.ai Veo 3 API
+ *
+ * Генерация видео через KIE.ai (Veo 3 / Veo 3 Fast).
  * Поддерживает:
- * - Polling асинхронной генерации видео
- * - Настраиваемый timeout с fallback на image
+ * - Асинхронную генерацию с polling
+ * - Настраиваемый timeout с fallback
  * - Хранение состояния в БД
+ *
+ * API Docs: https://docs.kie.ai/veo3-api/
  */
 
 const fetch = require('node-fetch');
@@ -12,10 +15,11 @@ const { generateCorrelationId } = require('./status');
 const repository = require('./repository');
 
 // Конфигурация
-const VIDEO_TIMEOUT_SEC = parseInt(process.env.VIDEO_TIMEOUT_SEC || '300', 10); // 5 минут
-const VIDEO_POLL_INTERVAL_SEC = parseInt(process.env.VIDEO_POLL_INTERVAL_SEC || '10', 10);
+const KIE_API_URL = 'https://api.kie.ai';
+const VIDEO_TIMEOUT_SEC = parseInt(process.env.VIDEO_TIMEOUT_SEC || '600', 10); // 10 минут (Veo медленнее изображений)
+const VIDEO_POLL_INTERVAL_SEC = parseInt(process.env.VIDEO_POLL_INTERVAL_SEC || '25', 10);
 const VIDEO_FALLBACK_ENABLED = process.env.VIDEO_FALLBACK_ENABLED !== 'false';
-const VIDEO_PROVIDER = process.env.VIDEO_PROVIDER || 'runway';
+const VIDEO_MODEL = process.env.VIDEO_MODEL || 'veo3_fast'; // veo3 | veo3_fast
 
 /**
  * Статусы генерации видео
@@ -30,9 +34,19 @@ const VIDEO_STATUS = Object.freeze({
 });
 
 /**
- * Базовый интерфейс video-провайдера
+ * KIE.ai Veo 3 провайдер
  */
-class VideoProvider {
+class KieVideoProvider {
+  constructor() {
+    this.apiKey = process.env.KIE_API_KEY;
+    this.baseUrl = KIE_API_URL;
+    this.name = 'kie-veo3';
+  }
+
+  getName() {
+    return this.name;
+  }
+
   /**
    * Запустить генерацию видео
    * @param {object} options
@@ -41,227 +55,153 @@ class VideoProvider {
    * @returns {Promise<{generationId: string, status: string}>}
    */
   async generate(options) {
-    throw new Error('Not implemented');
-  }
-
-  /**
-   * Получить статус генерации
-   * @param {string} generationId
-   * @returns {Promise<{status: string, progress?: number, videoUrl?: string, error?: string}>}
-   */
-  async getStatus(generationId) {
-    throw new Error('Not implemented');
-  }
-
-  /**
-   * Отменить генерацию
-   * @param {string} generationId
-   * @returns {Promise<boolean>}
-   */
-  async cancel(generationId) {
-    throw new Error('Not implemented');
-  }
-
-  /**
-   * Получить имя провайдера
-   * @returns {string}
-   */
-  getName() {
-    return 'base';
-  }
-}
-
-/**
- * RunwayML провайдер
- * Docs: https://docs.runwayml.com/
- */
-class RunwayProvider extends VideoProvider {
-  constructor() {
-    super();
-    this.apiKey = process.env.RUNWAY_API_KEY;
-    this.baseUrl = 'https://api.runwayml.com/v1';
-  }
-
-  getName() {
-    return 'runway';
-  }
-
-  async generate(options) {
     if (!this.apiKey) {
-      throw new Error('RUNWAY_API_KEY is not set');
+      throw new Error('KIE_API_KEY is not set');
     }
 
-    const resp = await fetch(`${this.baseUrl}/generations`, {
+    const params = options.params || {};
+    const body = {
+      prompt: options.prompt,
+      model: params.model || VIDEO_MODEL,
+      aspect_ratio: params.aspectRatio || params.ratio || '9:16', // Shorts по умолчанию
+      generationType: params.generationType || 'TEXT_2_VIDEO',
+      enableTranslation: params.enableTranslation !== undefined ? params.enableTranslation : true
+    };
+
+    // Опциональные параметры
+    if (params.seed) body.seeds = params.seed;
+    if (params.imageUrls && Array.isArray(params.imageUrls)) body.imageUrls = params.imageUrls;
+    if (params.watermark) body.watermark = params.watermark;
+    if (params.callBackUrl) body.callBackUrl = params.callBackUrl;
+
+    const resp = await fetch(`${this.baseUrl}/api/v1/veo/generate`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        model: 'gen3a_turbo',
-        prompt: options.prompt,
-        duration: options.params?.duration || 5,
-        ratio: options.params?.ratio || '16:9',
-        seed: options.params?.seed
-      }),
+      body: JSON.stringify(body),
       timeout: 30000
     });
 
     if (!resp.ok) {
       const err = await resp.text();
-      throw new Error(`Runway API failed: ${resp.status} ${err.slice(0, 300)}`);
+      throw new Error(`KIE Veo API failed: ${resp.status} ${err.slice(0, 300)}`);
     }
 
     const data = await resp.json();
+
+    if (data.code !== 200) {
+      // Специфичные ошибки KIE
+      if (data.code === 402) throw new Error('KIE: Insufficient credits');
+      if (data.code === 422) throw new Error(`KIE: Validation error — ${data.msg}`);
+      if (data.code === 429) throw new Error('KIE: Rate limited');
+      throw new Error(`KIE Veo createTask error: ${data.msg} (code ${data.code})`);
+    }
+
+    const taskId = data?.data?.taskId;
+    if (!taskId) {
+      throw new Error('KIE Veo: no taskId in response');
+    }
+
     return {
-      generationId: data.id,
+      generationId: taskId,
       status: VIDEO_STATUS.PENDING
     };
   }
 
-  async getStatus(generationId) {
+  /**
+   * Получить статус генерации (проверяет готовность 1080p версии)
+   * @param {string} generationId - taskId
+   * @param {number} [index=0] - индекс видео (0-based)
+   * @returns {Promise<{status: string, progress?: number, videoUrl?: string, error?: string}>}
+   */
+  async getStatus(generationId, index = 0) {
     if (!this.apiKey) {
-      throw new Error('RUNWAY_API_KEY is not set');
+      throw new Error('KIE_API_KEY is not set');
     }
 
-    const resp = await fetch(`${this.baseUrl}/generations/${generationId}`, {
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-      timeout: 15000
-    });
-
-    if (!resp.ok) {
-      const err = await resp.text();
-      throw new Error(`Runway status check failed: ${resp.status} ${err.slice(0, 200)}`);
-    }
-
-    const data = await resp.json();
-    
-    // Маппинг статусов Runway -> наши статусы
-    const statusMap = {
-      'pending': VIDEO_STATUS.PENDING,
-      'queued': VIDEO_STATUS.PENDING,
-      'running': VIDEO_STATUS.PROCESSING,
-      'processing': VIDEO_STATUS.PROCESSING,
-      'succeeded': VIDEO_STATUS.COMPLETED,
-      'completed': VIDEO_STATUS.COMPLETED,
-      'failed': VIDEO_STATUS.FAILED,
-      'cancelled': VIDEO_STATUS.CANCELLED
-    };
-
-    const status = statusMap[data.status] || data.status;
-    
-    return {
-      status,
-      progress: data.progress || 0,
-      videoUrl: data.output?.[0] || data.videoUrl || null,
-      error: data.error || null
-    };
-  }
-
-  async cancel(generationId) {
-    if (!this.apiKey) return false;
-
-    try {
-      const resp = await fetch(`${this.baseUrl}/generations/${generationId}/cancel`, {
-        method: 'POST',
+    const resp = await fetch(
+      `${this.baseUrl}/api/v1/veo/get-1080p-video?taskId=${encodeURIComponent(generationId)}&index=${index}`,
+      {
         headers: {
           'Authorization': `Bearer ${this.apiKey}`
         },
-        timeout: 10000
-      });
-      return resp.ok;
-    } catch {
-      return false;
+        timeout: 30000
+      }
+    );
+
+    if (!resp.ok) {
+      // 400 = 1080p ещё обрабатывается, 500 = ошибка
+      if (resp.status === 400) {
+        return {
+          status: VIDEO_STATUS.PROCESSING,
+          progress: 50,
+          videoUrl: null,
+          error: null
+        };
+      }
+      const err = await resp.text();
+      throw new Error(`KIE Veo 1080p status check failed: ${resp.status} ${err.slice(0, 200)}`);
     }
-  }
-}
 
-/**
- * Pika Labs провайдер (заглушка для будущего расширения)
- */
-class PikaProvider extends VideoProvider {
-  constructor() {
-    super();
-    this.apiKey = process.env.PIKA_API_KEY;
-    this.baseUrl = 'https://api.pika.art/v1';
-  }
+    const data = await resp.json();
 
-  getName() {
-    return 'pika';
-  }
-
-  async generate(options) {
-    if (!this.apiKey) {
-      throw new Error('PIKA_API_KEY is not set');
-    }
-    // TODO: Реализовать при получении доступа к API
-    throw new Error('Pika provider not implemented yet');
-  }
-
-  async getStatus(generationId) {
-    throw new Error('Pika provider not implemented yet');
-  }
-
-  async cancel(generationId) {
-    return false;
-  }
-}
-
-/**
- * Mock провайдер для тестирования
- */
-class MockVideoProvider extends VideoProvider {
-  getName() {
-    return 'mock';
-  }
-
-  async generate(options) {
-    return {
-      generationId: `mock_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      status: VIDEO_STATUS.PENDING
-    };
-  }
-
-  async getStatus(generationId) {
-    // Имитируем прогресс
-    const parts = generationId.split('_');
-    const elapsed = Date.now() - parseInt(parts[1] || '0');
-    
-    if (elapsed < 5000) {
-      return { status: VIDEO_STATUS.PENDING, progress: 10 };
-    } else if (elapsed < 15000) {
-      return { status: VIDEO_STATUS.PROCESSING, progress: 50 };
-    } else {
+    // code: 200 = 1080p готово
+    if (data.code === 200 && data.data?.resultUrl) {
       return {
         status: VIDEO_STATUS.COMPLETED,
         progress: 100,
-        videoUrl: 'https://example.com/mock-video.mp4'
+        videoUrl: data.data.resultUrl,
+        error: null
       };
     }
+
+    // code 400 = "1080P is processing, check back shortly"
+    if (data.code === 400) {
+      return {
+        status: VIDEO_STATUS.PROCESSING,
+        progress: data.data?.progress || 50,
+        videoUrl: null,
+        error: null
+      };
+    }
+
+    // Ошибки
+    if (data.code === 500 || data.code === 501) {
+      return {
+        status: VIDEO_STATUS.FAILED,
+        videoUrl: null,
+        error: data.msg || '1080p generation failed'
+      };
+    }
+
+    // Неожиданный код — считаем processing
+    return {
+      status: VIDEO_STATUS.PROCESSING,
+      progress: 0,
+      videoUrl: null,
+      error: null
+    };
   }
 
+  /**
+   * Отменить генерацию
+   * KIE API не поддерживает отмену задач.
+   * @param {string} generationId
+   * @returns {Promise<boolean>}
+   */
   async cancel(generationId) {
-    return true;
+    // KIE не поддерживает отменой — просто помечаем локально
+    return false;
   }
 }
 
 /**
  * Фабрика провайдеров
  */
-function getProvider(providerName = VIDEO_PROVIDER) {
-  switch (providerName.toLowerCase()) {
-    case 'runway':
-      return new RunwayProvider();
-    case 'pika':
-      return new PikaProvider();
-    case 'mock':
-      return new MockVideoProvider();
-    default:
-      console.warn(`[VIDEO] Unknown provider "${providerName}", using mock`);
-      return new MockVideoProvider();
-  }
+function getProvider() {
+  return new KieVideoProvider();
 }
 
 /**
@@ -282,11 +222,11 @@ function getProvider(providerName = VIDEO_PROVIDER) {
  * @param {string} options.prompt - промпт для генерации
  * @param {string} [options.correlationId]
  * @param {object} [options.params] - параметры провайдера
- * @param {string} [options.provider] - имя провайдера (override)
+ * @param {string} [options.provider] - игнорируется (всегда KIE)
  * @returns {Promise<{generationId: string, status: string}>}
  */
 async function startVideoGeneration(chatId, options) {
-  const provider = getProvider(options.provider);
+  const provider = getProvider();
   const correlationId = options.correlationId || generateCorrelationId();
 
   console.log(`[VIDEO] Starting generation for chat ${chatId}, provider: ${provider.getName()}, corr: ${correlationId}`);
@@ -299,7 +239,7 @@ async function startVideoGeneration(chatId, options) {
   // Сохраняем состояние генерации
   await repository.withClient(chatId, async (client) => {
     await client.query(
-      `INSERT INTO video_generations 
+      `INSERT INTO video_generations
         (generation_id, chat_id, provider, prompt, status, correlation_id, params)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (generation_id) DO UPDATE SET
@@ -350,7 +290,7 @@ async function checkVideoStatus(chatId, generationId) {
   }
 
   // Опрашиваем провайдера
-  const provider = getProvider(dbStatus.provider);
+  const provider = getProvider();
   const status = await provider.getStatus(generationId);
 
   // Обновляем статус в БД
@@ -388,7 +328,7 @@ async function checkVideoStatus(chatId, generationId) {
  * @returns {Promise<Buffer>}
  */
 async function downloadVideo(videoUrl) {
-  const resp = await fetch(videoUrl, { timeout: 60000 });
+  const resp = await fetch(videoUrl, { timeout: 120000 });
   if (!resp.ok) {
     throw new Error(`Video download failed: ${resp.status}`);
   }
@@ -397,6 +337,7 @@ async function downloadVideo(videoUrl) {
 
 /**
  * Отменить генерацию видео
+ * KIE не поддерживает отмену, поэтому просто помечаем как cancelled локально.
  * @param {string} chatId
  * @param {string} generationId
  * @returns {Promise<boolean>}
@@ -417,19 +358,16 @@ async function cancelVideoGeneration(chatId, generationId) {
     return false;
   }
 
-  const provider = getProvider(dbStatus.provider);
-  const cancelled = await provider.cancel(generationId);
+  // KIE не поддерживает отмену задач на сервере
+  // Помечаем локально как cancelled
+  await repository.withClient(chatId, async (client) => {
+    await client.query(
+      `UPDATE video_generations SET status = $1, updated_at = NOW() WHERE generation_id = $2`,
+      [VIDEO_STATUS.CANCELLED, generationId]
+    );
+  });
 
-  if (cancelled) {
-    await repository.withClient(chatId, async (client) => {
-      await client.query(
-        `UPDATE video_generations SET status = $1, updated_at = NOW() WHERE generation_id = $2`,
-        [VIDEO_STATUS.CANCELLED, generationId]
-      );
-    });
-  }
-
-  return cancelled;
+  return true;
 }
 
 /**
@@ -440,7 +378,7 @@ async function cancelVideoGeneration(chatId, generationId) {
 async function getActiveGenerations(chatId) {
   return repository.withClient(chatId, async (client) => {
     const result = await client.query(
-      `SELECT * FROM video_generations 
+      `SELECT * FROM video_generations
        WHERE chat_id = $1 AND status IN ($2, $3)
        ORDER BY created_at DESC`,
       [chatId, VIDEO_STATUS.PENDING, VIDEO_STATUS.PROCESSING]
@@ -489,11 +427,11 @@ async function ensureVideoSchema(chatId) {
       );
     `);
     await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_video_generations_chat_status 
+      CREATE INDEX IF NOT EXISTS idx_video_generations_chat_status
       ON video_generations(chat_id, status);
     `);
     await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_video_generations_job 
+      CREATE INDEX IF NOT EXISTS idx_video_generations_job
       ON video_generations(job_id);
     `);
   });
@@ -535,10 +473,8 @@ module.exports = {
   VIDEO_TIMEOUT_SEC,
   VIDEO_POLL_INTERVAL_SEC,
   VIDEO_FALLBACK_ENABLED,
-  VideoProvider,
-  RunwayProvider,
-  PikaProvider,
-  MockVideoProvider,
+  VIDEO_MODEL,
+  KieVideoProvider,
   getProvider,
   startVideoGeneration,
   checkVideoStatus,
