@@ -15,6 +15,7 @@ const storageService = require('./storage.service');
 const vkService = require('./vk.service');
 const imageService = require('./image.service');
 const vkRepo = require('./content/vk.repository');
+const { databaseExists } = require('./postgres.service');
 
 const contentModules = require('./content/index');
 const {
@@ -732,6 +733,7 @@ async function handleVkModerationAction(chatId, bot, jobId, action) {
 async function tickVkSchedule(chatId, bot) {
   const cfg = manageStore.getVkConfig(chatId);
   if (!cfg || !cfg.is_active) return;
+  if (!await databaseExists(chatId)) return;
 
   const settings = getVkSettings(chatId);
   const tz = settings.scheduleTz;

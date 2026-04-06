@@ -384,7 +384,7 @@ router.get('/:chat_id/cache', async (req, res) => {
 });
 
 // Публичный endpoint для Buffer/внешних сервисов — без авторизации
-// Отдаёт сгенерированные изображения из output/content пользователя
+// Отдаёт сгенерированные медиафайлы (изображения, видео) из output/content пользователя
 router.get('/public/:chatId/:filename', async (req, res) => {
     const { chatId, filename } = req.params;
 
@@ -393,10 +393,17 @@ router.get('/public/:chatId/:filename', async (req, res) => {
         return res.status(400).json({ error: 'Invalid filename' });
     }
 
-    // Разрешаем только изображения
+    // Разрешаем изображения и видео
     const ext = path.extname(filename).toLowerCase();
-    if (!['.png', '.jpg', '.jpeg'].includes(ext)) {
-        return res.status(400).json({ error: 'Only image files allowed' });
+    const ALLOWED_TYPES = {
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.mp4': 'video/mp4',
+        '.webm': 'video/webm'
+    };
+    if (!ALLOWED_TYPES[ext]) {
+        return res.status(400).json({ error: 'File type not allowed' });
     }
 
     const dataDir = storageService.getDataDir(chatId);
@@ -404,13 +411,12 @@ router.get('/public/:chatId/:filename', async (req, res) => {
 
     try {
         await fs.access(filePath);
-        const contentType = ext === '.png' ? 'image/png' : 'image/jpeg';
-        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Type', ALLOWED_TYPES[ext]);
         res.setHeader('Cache-Control', 'public, max-age=3600');
         const fileBuffer = await fs.readFile(filePath);
         res.send(fileBuffer);
     } catch (e) {
-        res.status(404).json({ error: 'Image not found' });
+        res.status(404).json({ error: 'File not found' });
     }
 });
 

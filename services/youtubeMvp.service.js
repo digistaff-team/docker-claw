@@ -4,7 +4,6 @@
  *
  * Тип контента: только YouTube Shorts (9:16)
  * Видео: KIE.ai Veo 3 API (через video.service.js)
- * Превью: KIE.ai Image API (статическое изображение 16:9)
  * Публикация: Buffer GraphQL API
  */
 const path = require('path');
@@ -33,7 +32,6 @@ const {
 let cwBot = null; // Центральный бот премодерации (CW_BOT_TOKEN)
 
 const SCHEDULE_TZ = process.env.CONTENT_MVP_TZ || 'Europe/Moscow';
-const MAX_THUMBNAIL_ATTEMPTS = 3;
 const MAX_REJECT_ATTEMPTS = 3;
 const DAILY_YT_LIMIT = parseInt(process.env.YOUTUBE_DAILY_LIMIT || '5', 10);
 const VIDEO_POLL_TIMEOUT_SEC = parseInt(process.env.YOUTUBE_VIDEO_TIMEOUT_SEC || '900', 10); // 15 мин
@@ -116,8 +114,7 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
 {
   "videoTitle": "заголовок видео (максимум 60 символов, цепляющий, с ключевыми словами)",
   "videoDescription": "описание видео (максимум 300 символов, с CTA и ключевыми словами для SEO)",
-  "tags": ["тег1", "тег2", "тег3", "тег4", "тег5"],
-  "thumbnailPrompt": "описание превью-картинки для YouTube Shorts (яркое, контрастное, крупный текст)"
+  "tags": ["тег1", "тег2", "тег3", "тег4", "тег5"]
 }
 
 ВАЖНО: общая длина videoTitle + videoDescription НЕ ДОЛЖНА превышать 380 символов.
@@ -126,7 +123,6 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
 - videoTitle: до 60 символов, цепляющий, содержит основное ключевое слово в начале
 - videoDescription: до 300 символов, информативный, содержит призыв к подписке
 - tags: 5-10 релевантных хэштегов/тегов для YouTube SEO
-- thumbnailPrompt: детальное описание превью, 16:9, яркий текст крупным шрифтом
 - Язык: русский
 - Не используй эмодзи в заголовке`;
 
@@ -155,73 +151,8 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
   return {
     videoTitle,
     videoDescription,
-    tags: Array.isArray(parsed.tags) ? parsed.tags.slice(0, 10) : [],
-    thumbnailPrompt: String(parsed.thumbnailPrompt || '').slice(0, 500) ||
-      `YouTube Shorts thumbnail for: ${topic.videoTitle || topic.topic}. Bold text, vibrant colors, 16:9 aspect ratio.`
+    tags: Array.isArray(parsed.tags) ? parsed.tags.slice(0, 10) : []
   };
-}
-
-// ============================================
-// Генерация превью (thumbnail) через KIE Image API
-// ============================================
-
-async function generateThumbnail(chatId, prompt, jobId) {
-  const apiKey = process.env.KIE_API_KEY;
-  if (!apiKey) throw new Error('KIE_API_KEY is not set');
-
-  const fullPrompt = prompt.slice(0, 800);
-
-  const createResp = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'grok-imagine/text-to-image',
-      input: {
-        prompt: fullPrompt,
-        aspect_ratio: '16:9',
-        nsfw_checker: true
-      }
-    }),
-    timeout: 30000
-  });
-
-  if (!createResp.ok) {
-    const err = await createResp.text();
-    throw new Error(`Thumbnail API createTask failed: ${createResp.status} ${err.slice(0, 300)}`);
-  }
-  const createData = await createResp.json();
-  if (createData.code !== 200) {
-    throw new Error(`Thumbnail API createTask error: ${createData.msg}`);
-  }
-  const taskId = createData?.data?.taskId;
-  if (!taskId) throw new Error('Thumbnail API: no taskId');
-
-  // Polling (max 90 sec)
-  const pollUrl = `https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${taskId}`;
-  const pollHeaders = { Authorization: `Bearer ${apiKey}` };
-
-  for (let attempt = 0; attempt < 18; attempt++) {
-    await new Promise(r => setTimeout(r, 5000));
-    const pollResp = await fetch(pollUrl, { headers: pollHeaders, timeout: 15000 });
-    if (!pollResp.ok) continue;
-    const pollData = await pollResp.json();
-    const state = pollData?.data?.state;
-    if (state === 'success') {
-      const resultJson = JSON.parse(pollData.data.resultJson || '{}');
-      const imageUrl = resultJson?.resultUrls?.[0];
-      if (!imageUrl) throw new Error('Thumbnail API: no result URL');
-      const imgResp = await fetch(imageUrl, { timeout: 30000 });
-      if (!imgResp.ok) throw new Error(`Thumbnail download failed: ${imgResp.status}`);
-      return await imgResp.buffer();
-    }
-    if (state === 'fail') {
-      throw new Error(`Thumbnail generation failed: ${pollData.data.failMsg || 'unknown'}`);
-    }
-  }
-  throw new Error('Thumbnail generation timeout');
 }
 
 // ============================================
@@ -304,15 +235,6 @@ async function generateVideo(chatId, prompt, jobId) {
 // Сохранение файлов
 // ============================================
 
-async function saveThumbnailToHost(chatId, buffer, jobId) {
-  const hostDir = path.join(storageService.getDataDir(chatId), 'output', 'content');
-  await fs.mkdir(hostDir, { recursive: true });
-  const filename = `yt_thumb_${jobId}.png`;
-  const filepath = path.join(hostDir, filename);
-  await fs.writeFile(filepath, buffer);
-  return { filename, filepath };
-}
-
 async function saveVideoToHost(chatId, buffer, jobId) {
   const hostDir = path.join(storageService.getDataDir(chatId), 'output', 'content');
   await fs.mkdir(hostDir, { recursive: true });
@@ -385,7 +307,7 @@ async function handleYoutubeGenerateJob(chatId, queueJob, bot, correlationId) {
     loadUserPersona(chatId)
   ]);
 
-  // Генерация контента (title, description, tags, thumbnailPrompt)
+  // Генерация контента (title, description, tags)
   let ytContent;
   try {
     ytContent = await generateYoutubeContent(chatId, topic, materialsText, personaText);
@@ -394,32 +316,10 @@ async function handleYoutubeGenerateJob(chatId, queueJob, bot, correlationId) {
     return { success: false, error: `Content generation failed: ${e.message}`, retry: true };
   }
 
-  // Генерация превью
-  let thumbnailPath = '';
-  let thumbnailAttempts = 0;
-  let thumbErr = '';
-  for (let i = 1; i <= MAX_THUMBNAIL_ATTEMPTS; i++) {
-    try {
-      thumbnailAttempts = i;
-      const thumbnailBuffer = await generateThumbnail(chatId, ytContent.thumbnailPrompt, topic.sheetRow);
-      const tempId = `${topic.sheetRow}_${Date.now()}`;
-      const saved = await saveThumbnailToHost(chatId, thumbnailBuffer, tempId);
-      thumbnailPath = saved.filename;
-      thumbErr = '';
-      break;
-    } catch (e) {
-      thumbErr = e?.message || String(e);
-    }
-  }
-  if (!thumbnailPath) {
-    await repository.updateTopicStatus(chatId, topic.sheetRow, 'pending', `yt_thumb_failed: ${thumbErr}`);
-    return { success: false, error: `Thumbnail generation failed: ${thumbErr}`, retry: true };
-  }
-
   // Генерация видео (синхронно с polling)
   let videoPath = '';
   let videoErr = '';
-  const videoPrompt = `YouTube Shorts video. Topic: ${topic.topic}. Title: ${ytContent.videoTitle}. Description: ${ytContent.videoDescription}. Style: dynamic, engaging, vertical format (9:16), visually compelling, no text overlay, cinematic quality.`;
+  const videoPrompt = `YouTube Shorts video. Topic: ${topic.topic}. Title: ${ytContent.videoTitle}. Description: ${ytContent.videoDescription}. Style: dynamic, engaging, vertical format (9:16), visually compelling, no text, no logos, cinematic quality.`;
 
   try {
     const videoBuffer = await generateVideo(chatId, videoPrompt, topic.sheetRow);
@@ -440,13 +340,10 @@ async function handleYoutubeGenerateJob(chatId, queueJob, bot, correlationId) {
     videoTitle: ytContent.videoTitle,
     videoDescription: ytContent.videoDescription,
     tags: ytContent.tags,
-    thumbnailPrompt: ytContent.thumbnailPrompt,
-    thumbnailPath,
     videoPath,
     videoUrl: null, // будет заполнено при публикации
     link: '',
     status: 'ready',
-    thumbnailAttempts,
     correlationId
   });
 
@@ -456,7 +353,6 @@ async function handleYoutubeGenerateJob(chatId, queueJob, bot, correlationId) {
     videoTitle: ytContent.videoTitle,
     videoDescription: ytContent.videoDescription,
     tags: ytContent.tags,
-    thumbnailPath,
     videoPath,
     correlationId,
     rejectedCount: 0
@@ -489,10 +385,6 @@ async function publishYoutubePost(chatId, bot, jobId, correlationId) {
   }
 
   // Формируем публичные URL
-  const thumbnailUrl = job.thumbnail_path
-    ? `${config.APP_URL}/api/files/public/${chatId}/${job.thumbnail_path}`
-    : null;
-
   const videoUrl = job.video_path
     ? `${config.APP_URL}/api/files/public/${chatId}/${job.video_path}`
     : null;
@@ -515,7 +407,8 @@ async function publishYoutubePost(chatId, bot, jobId, correlationId) {
   const bufferResult = await bufferService.createPost(cfg.buffer_api_key, cfg.buffer_channel_id, {
     text,
     videoUrl,
-    thumbnailUrl
+    youtubeTitle: job.video_title || 'YouTube Short',
+    youtubeCategoryId: '24'
   });
 
   console.log(`[YOUTUBE-MVP] Published via Buffer, postId=${bufferResult.postId}`);
@@ -587,26 +480,25 @@ async function sendYtToModerator(chatId, bot, draft) {
         { text: '❌ Отклонить', callback_data: `${callbackBase}:reject` }
       ],
       [
-        { text: '🔁 Текст', callback_data: `${callbackBase}:regen_text` },
-        { text: '🖼 Превью', callback_data: `${callbackBase}:regen_image` }
+        { text: '🔁 Текст', callback_data: `${callbackBase}:regen_text` }
       ]
     ]
   };
 
-  // Отправляем превью как изображение
-  const thumbnailLocalPath = path.join(storageService.getDataDir(chatId), 'output', 'content', draft.thumbnailPath);
+  // Отправляем видео модератору
+  const videoLocalPath = path.join(storageService.getDataDir(chatId), 'output', 'content', draft.videoPath);
 
   const moderatorBot = cwBot && cwBot.token !== bot?.token ? cwBot : bot;
 
   try {
-    const sent = await moderatorBot.telegram.sendPhoto(moderatorId, { source: thumbnailLocalPath }, { caption, reply_markup: kb });
+    const sent = await moderatorBot.telegram.sendVideo(moderatorId, { source: videoLocalPath }, { caption, reply_markup: kb });
     await setYtDraft(chatId, String(draft.jobId), {
       ...draft,
       moderationMessageId: sent.message_id
     });
   } catch (e) {
-    // Если превью недоступно — отправляем только текст
-    console.warn(`[YOUTUBE-MVP] Thumbnail not found, sending text only: ${e.message}`);
+    // Если видео недоступ — отправляем только текст
+    console.warn(`[YOUTUBE-MVP] Video send failed, sending text only: ${e.message}`);
     const sent = await moderatorBot.telegram.sendMessage(moderatorId, caption, { reply_markup: kb });
     await setYtDraft(chatId, String(draft.jobId), {
       ...draft,
@@ -626,6 +518,17 @@ async function handleYtModerationAction(chatId, bot, jobId, action) {
       await publishYoutubePost(chatId, bot, jobId, correlationId);
       return { ok: true, message: `📹 YouTube Short #${jobId} опубликован.` };
     } catch (e) {
+      const isRateLimit = e.message && (e.message.includes('429') || e.message.includes('rate limited') || e.message.includes('Rate limited'));
+
+      if (isRateLimit) {
+        // Не помечаем как failed — оставляем в текущем статусе
+        await youtubeRepo.addPublishLog(chatId, {
+          jobId, status: 'rate_limited',
+          errorText: e.message, correlationId
+        });
+        return { ok: false, message: `⏳ Buffer API перегружен (rate limit). Попробуйте нажать "Опубликовать" через 15-30 минут. Ошибка: ${e.message}` };
+      }
+
       await youtubeRepo.addPublishLog(chatId, {
         jobId, status: 'failed',
         errorText: e.message, correlationId
@@ -657,19 +560,6 @@ async function handleYtModerationAction(chatId, bot, jobId, action) {
     }
   }
 
-  if (action === 'regen_image') {
-    try {
-      const thumbnailBuffer = await generateThumbnail(chatId, draft.thumbnailPrompt || `Thumbnail for: ${draft.videoTitle}`, jobId);
-      const saved = await saveThumbnailToHost(chatId, thumbnailBuffer, `${jobId}_regen_${Date.now()}`);
-      draft.thumbnailPath = saved.filename;
-      await youtubeRepo.updateJob(chatId, jobId, { thumbnailPath: saved.filename });
-      await sendYtToModerator(chatId, bot, draft);
-      return { ok: true, message: 'Превью YouTube перегенерировано.' };
-    } catch (e) {
-      return { ok: false, message: `Ошибка перегенерации превью: ${e.message}` };
-    }
-  }
-
   if (action === 'reject') {
     draft.rejectedCount = (draft.rejectedCount || 0) + 1;
     await setYtDraft(chatId, String(jobId), draft);
@@ -687,19 +577,15 @@ async function handleYtModerationAction(chatId, bot, jobId, action) {
         loadUserPersona(chatId)
       ]);
       const content = await generateYoutubeContent(chatId, draft.topic, materialsText, personaText);
-      const thumbnailBuffer = await generateThumbnail(chatId, content.thumbnailPrompt, `${jobId}_reject_${Date.now()}`);
-      const saved = await saveThumbnailToHost(chatId, thumbnailBuffer, `${jobId}_reject_${Date.now()}`);
 
       draft.videoTitle = content.videoTitle;
       draft.videoDescription = content.videoDescription;
       draft.tags = content.tags;
-      draft.thumbnailPath = saved.filename;
 
       await youtubeRepo.updateJob(chatId, jobId, {
         videoTitle: content.videoTitle,
         videoDescription: content.videoDescription,
         tags: content.tags,
-        thumbnailPath: saved.filename,
         rejectedCount: draft.rejectedCount
       });
 

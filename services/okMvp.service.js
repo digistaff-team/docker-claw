@@ -15,6 +15,7 @@ const storageService = require('./storage.service');
 const okService = require('./ok.service');
 const imageService = require('./image.service');
 const okRepo = require('./content/ok.repository');
+const { databaseExists } = require('./postgres.service');
 
 const contentModules = require('./content/index');
 const {
@@ -753,6 +754,7 @@ async function handleOkModerationAction(chatId, bot, jobId, action) {
 async function tickOkSchedule(chatId, bot) {
   const cfg = manageStore.getOkConfig(chatId);
   if (!cfg || !cfg.is_active) return;
+  if (!await databaseExists(chatId)) return;
 
   const settings = getOkSettings(chatId);
   const tz = settings.scheduleTz;

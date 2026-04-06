@@ -224,11 +224,17 @@
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                                 <div>
                                     <label for="bufferApiKey">Buffer API Token</label>
-                                    <input type="password" id="bufferApiKey" placeholder="Buffer API Token" autocomplete="off" />
+                                    <div style="display: flex; gap: 6px; align-items: flex-start;">
+                                        <input type="password" id="bufferApiKey" placeholder="Buffer API Token" autocomplete="off" style="flex: 1;" />
+                                        <button class="btn btn-secondary" onclick="fetchPinterestBufferChannels()" style="white-space: nowrap; padding: 12px 14px; margin-top: 0;" title="Загрузить каналы из Buffer">📥</button>
+                                    </div>
                                 </div>
                                 <div>
                                     <label for="bufferChannelId">Buffer Channel ID</label>
-                                    <input type="text" id="bufferChannelId" placeholder="ID канала Pinterest в Buffer" />
+                                    <select id="pinterestBufferChannelSelect" onchange="onPinterestChannelSelectChange()">
+                                        <option value="">— выберите канал —</option>
+                                    </select>
+                                    <input type="hidden" id="bufferChannelId" />
                                 </div>
                             </div>
                             <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
@@ -632,14 +638,20 @@
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                                 <div>
                                     <label for="youtubeBufferApiKey">Buffer API Token</label>
-                                    <input type="password" id="youtubeBufferApiKey" placeholder="Buffer API Token" autocomplete="off" />
+                                    <div style="display: flex; gap: 6px; align-items: flex-start;">
+                                        <input type="password" id="youtubeBufferApiKey" placeholder="Buffer API Token" autocomplete="off" style="flex: 1;" />
+                                        <button class="btn btn-secondary" onclick="fetchYoutubeBufferChannels()" style="white-space: nowrap; padding: 12px 14px; margin-top: 0;" title="Загрузить каналы из Buffer">📥</button>
+                                    </div>
                                 </div>
                                 <div>
                                     <label for="youtubeBufferChannelId">Buffer Channel ID</label>
-                                    <input type="text" id="youtubeBufferChannelId" placeholder="ID YouTube-канала в Buffer" />
+                                    <select id="youtubeBufferChannelSelect" onchange="onYoutubeChannelSelectChange()">
+                                        <option value="">— выберите канал —</option>
+                                    </select>
+                                    <input type="hidden" id="youtubeBufferChannelId" />
                                     <p style="color: #e67e22; font-size: 11px; margin-top: 4px;">
                                         ⚠️ Это <strong>внутренний ID Buffer</strong>, а не YouTube Channel ID (UC...).
-                                        Подключите YouTube в buffer.com, затем узнайте Channel ID через API.
+                                        Или нажмите «Загрузить каналы» 📥.
                                     </p>
                                 </div>
                             </div>

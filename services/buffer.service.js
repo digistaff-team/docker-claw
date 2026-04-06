@@ -17,10 +17,15 @@ const BUFFER_GRAPHQL_URL = 'https://api.buffer.com/graphql';
  * @param {string} [options.videoUrl] - Публичный URL видео (YouTube)
  * @param {string} [options.thumbnailUrl] - Публичный URL превью для YouTube
  * @param {string} [options.boardServiceId] - Pinterest board serviceId (обязателен для Pinterest)
+ * @param {string} [options.youtubeTitle] - Заголовок YouTube видео (обязателен для YouTube)
+ * @param {string} [options.youtubeCategoryId] - ID категории YouTube (обязателен для YouTube, default '24' Entertainment)
  * @returns {Promise<{postId: string}>}
  * @throws {Error} если Buffer вернул ошибку
  */
-async function createPost(apiKey, channelId, { text, imageUrl, videoUrl, thumbnailUrl, boardServiceId }) {
+const MAX_RETRIES = 3;
+const BACKOFF_MS = [15000, 30000, 60000];
+
+async function createPost(apiKey, channelId, { text, imageUrl, videoUrl, thumbnailUrl, boardServiceId, youtubeTitle, youtubeCategoryId }) {
   const query = `
     mutation CreatePost($input: CreatePostInput!) {
       createPost(input: $input) {
@@ -49,12 +54,13 @@ async function createPost(apiKey, channelId, { text, imageUrl, videoUrl, thumbna
     assets: {}
   };
 
-  // Видео-ассет (YouTube)
+  // Видео-ассет (YouTube) — Buffer API: videos: [VideoAssetInput!]
   if (videoUrl) {
-    input.assets.video = { url: videoUrl };
+    const videoAsset = { url: videoUrl };
     if (thumbnailUrl) {
-      input.assets.thumbnail = { url: thumbnailUrl };
+      videoAsset.thumbnailUrl = thumbnailUrl;
     }
+    input.assets.videos = [videoAsset];
   }
   // Изображения (Pinterest, Instagram)
   else if (imageUrl) {
@@ -65,44 +71,72 @@ async function createPost(apiKey, channelId, { text, imageUrl, videoUrl, thumbna
     input.metadata = { pinterest: { boardServiceId } };
   }
 
+  // YouTube metadata (title и categoryId обязательны)
+  if (youtubeTitle) {
+    input.metadata = {
+      ...input.metadata,
+      youtube: {
+        title: youtubeTitle,
+        categoryId: youtubeCategoryId || '24'
+      }
+    };
+  }
+
   const variables = { input };
   console.log('[BUFFER] createPost input:', JSON.stringify(input));
 
-  const response = await fetch(BUFFER_GRAPHQL_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ query, variables })
-  });
+  let lastError = null;
 
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(`Buffer API HTTP error ${response.status}: ${body}`);
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const response = await fetch(BUFFER_GRAPHQL_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ query, variables })
+    });
+
+    // Handle 429 Rate Limit with retry
+    if (response.status === 429 && attempt < MAX_RETRIES) {
+      const retryAfter = parseInt(response.headers.get('retry-after'), 10);
+      const delayMs = retryAfter ? retryAfter * 1000 : BACKOFF_MS[attempt];
+      console.log(`[BUFFER] Rate limited, retry ${attempt + 1}/${MAX_RETRIES} in ${delayMs}ms`);
+      await new Promise(r => setTimeout(r, delayMs));
+      lastError = new Error(`Buffer API rate limited (429), retried ${attempt + 1}/${MAX_RETRIES} times`);
+      continue;
+    }
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(`Buffer API HTTP error ${response.status}: ${body}`);
+    }
+
+    const data = await response.json();
+
+    // GraphQL ошибки на уровне схемы
+    if (data.errors && data.errors.length > 0) {
+      const msg = data.errors.map((e) => e.message).join('; ');
+      throw new Error(`Buffer GraphQL error: ${msg}`);
+    }
+
+    const result = data?.data?.createPost;
+    console.log('[BUFFER] createPost response:', JSON.stringify(result));
+
+    if (result?.__typename && result.__typename !== 'PostActionSuccess') {
+      throw new Error(`Buffer API: ${result.message || result.__typename}`);
+    }
+
+    const postId = result?.post?.id;
+    if (!postId) {
+      throw new Error('Buffer createPost: no post id in response');
+    }
+
+    return { postId };
   }
 
-  const data = await response.json();
-
-  // GraphQL ошибки на уровне схемы
-  if (data.errors && data.errors.length > 0) {
-    const msg = data.errors.map((e) => e.message).join('; ');
-    throw new Error(`Buffer GraphQL error: ${msg}`);
-  }
-
-  const result = data?.data?.createPost;
-  console.log('[BUFFER] createPost response:', JSON.stringify(result));
-
-  if (result?.__typename && result.__typename !== 'PostActionSuccess') {
-    throw new Error(`Buffer API: ${result.message || result.__typename}`);
-  }
-
-  const postId = result?.post?.id;
-  if (!postId) {
-    throw new Error('Buffer createPost: no post id in response');
-  }
-
-  return { postId };
+  // All retries exhausted
+  throw lastError || new Error('Buffer API rate limited, all retries exhausted');
 }
 
 /**
@@ -221,4 +255,56 @@ async function getPinterestBoards(apiKey, channelId) {
   return metadata.boards;
 }
 
-module.exports = { createPost, testConnection, getPinterestBoards };
+/**
+ * Получает список всех каналов из Buffer API.
+ * @param {string} apiKey - Bearer токен Buffer API
+ * @returns {Promise<Array<{id: string, name: string, service: string, serviceId: string}>>}
+ */
+async function getChannels(apiKey) {
+  if (!apiKey) {
+    throw new Error('buffer_api_key обязателен');
+  }
+
+  const query = `
+    query {
+      account {
+        channels {
+          id
+          name
+          service
+          serviceId
+        }
+      }
+    }
+  `;
+
+  const response = await fetch(BUFFER_GRAPHQL_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ query })
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`Buffer API HTTP error ${response.status}: ${body}`);
+  }
+
+  const data = await response.json();
+
+  if (data.errors && data.errors.length > 0) {
+    const msg = data.errors.map((e) => e.message).join('; ');
+    throw new Error(`Buffer GraphQL error: ${msg}`);
+  }
+
+  const channels = data?.data?.account?.channels;
+  if (!channels) {
+    throw new Error('Buffer API: не удалось получить список каналов');
+  }
+
+  return channels;
+}
+
+module.exports = { createPost, testConnection, getPinterestBoards, getChannels };

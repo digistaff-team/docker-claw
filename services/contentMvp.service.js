@@ -1883,11 +1883,11 @@ async function tickScheduleForChat(chatId, bot) {
     if (needRegenerate) {
       const minOffset = Math.round(intervalMinutes * 0.85);
       const randomOffset = minOffset + Math.floor(Math.random() * (intervalMinutes - minOffset + 1));
-      const targetMinute = currentSlot + randomOffset;
+      const targetMinute = (currentSlot + randomOffset) % 1440;
       data[slotKey] = `${now.date}|${targetMinute}`;
       const states = manageStore.getAllStates();
       if (!states[chatId]) states[chatId] = data;
-      await manageStore.persist(chatId);
+      if (chatId) await manageStore.persist(chatId);
       const tgtH = Math.floor(targetMinute / 60);
       const tgtM = targetMinute % 60;
       console.log(`[CONTENT-SCHEDULE-RANDOM] ${chatId} target set to ${String(tgtH).padStart(2,'0')}:${String(tgtM).padStart(2,'0')} for slot ${currentSlot}`);
@@ -1909,7 +1909,7 @@ async function tickScheduleForChat(chatId, bot) {
     data[runKey] = now.date;
     const states2 = manageStore.getAllStates();
     if (!states2[chatId]) states2[chatId] = data;
-    await manageStore.persist(chatId);
+    if (chatId) await manageStore.persist(chatId);
   } else {
     // Фиксированный режим: публикация строго по слотам
     let isSlot = false;
@@ -1930,7 +1930,7 @@ async function tickScheduleForChat(chatId, bot) {
     data[key] = now.date;
     const states3 = manageStore.getAllStates();
     if (!states3[chatId]) states3[chatId] = data;
-    await manageStore.persist(chatId);
+    if (chatId) await manageStore.persist(chatId);
   }
 
   console.log(`[TG-SCHEDULE] ${chatId} slot matched ${now.time}, enqueueing content_generate`);

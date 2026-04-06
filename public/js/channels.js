@@ -579,7 +579,17 @@ async function loadPinterestConfig() {
             // Заполняем поля
             const cfg = data.config || {};
             if (cfg.buffer_api_key) document.getElementById('bufferApiKey').value = cfg.buffer_api_key;
-            if (cfg.buffer_channel_id) document.getElementById('bufferChannelId').value = cfg.buffer_channel_id;
+            if (cfg.buffer_channel_id) {
+                document.getElementById('bufferChannelId').value = cfg.buffer_channel_id;
+                // Также пробуем выбрать нужный option в select (если он уже загружен)
+                const selectEl = document.getElementById('pinterestBufferChannelSelect');
+                if (selectEl) {
+                    const optionExists = Array.from(selectEl.options).some(opt => opt.value === cfg.buffer_channel_id);
+                    if (optionExists) {
+                        selectEl.value = cfg.buffer_channel_id;
+                    }
+                }
+            }
             if (cfg.board_id) document.getElementById('pinterestBoardId').value = cfg.board_id;
             if (cfg.website_url) document.getElementById('pinterestWebsiteUrl').value = cfg.website_url;
             const isActiveEl = document.getElementById('pinterestIsActive');
@@ -1543,9 +1553,11 @@ async function runTelegramNow() {
 // YouTube Channel
 // ============================================
 
-async function loadYoutubeConfig(chatId) {
+async function loadYoutubeConfig() {
+    const chatId = getChatId();
+    if (!chatId) return;
     try {
-        const res = await fetch(`${API_MANAGE}/channels/youtube?chat_id=${chatId}`);
+        const res = await fetch(`${API_MANAGE}/channels/youtube?chat_id=${encodeURIComponent(chatId)}`);
         const data = await res.json();
         if (!data.connected) {
             document.getElementById('youtubeStatus').innerHTML = '<span style="color:#888;">⚪ Не подключён</span>';
@@ -1559,7 +1571,18 @@ async function loadYoutubeConfig(chatId) {
         document.getElementById('disconnectYoutubeBtn').style.display = 'inline-block';
 
         if (cfg.buffer_api_key) document.getElementById('youtubeBufferApiKey').value = cfg.buffer_api_key;
-        if (cfg.buffer_channel_id) document.getElementById('youtubeBufferChannelId').value = cfg.buffer_channel_id;
+        if (cfg.buffer_channel_id) {
+            document.getElementById('youtubeBufferChannelId').value = cfg.buffer_channel_id;
+            // Также пробуем выбрать нужный option в select (если он уже загружен)
+            const selectEl = document.getElementById('youtubeBufferChannelSelect');
+            if (selectEl) {
+                // Пробуем найти option по значению
+                const optionExists = Array.from(selectEl.options).some(opt => opt.value === cfg.buffer_channel_id);
+                if (optionExists) {
+                    selectEl.value = cfg.buffer_channel_id;
+                }
+            }
+        }
         document.getElementById('youtubeIsActive').checked = !!cfg.is_active;
         document.getElementById('youtubeAutoPublish').checked = !!cfg.auto_publish;
         if (cfg.schedule_time) {
@@ -1575,6 +1598,17 @@ async function loadYoutubeConfig(chatId) {
             document.querySelectorAll('.youtubeWeekday').forEach(cb => {
                 cb.checked = cfg.allowed_weekdays.includes(parseInt(cb.value, 10));
             });
+        }
+
+        // Автозагрузка каналов Buffer для восстановления select
+        if (cfg.buffer_api_key && cfg.buffer_channel_id) {
+            loadBufferChannels(cfg.buffer_api_key, 'youtube', 'youtubeBufferChannelSelect').then(() => {
+                const selectEl = document.getElementById('youtubeBufferChannelSelect');
+                if (selectEl) {
+                    selectEl.value = cfg.buffer_channel_id;
+                }
+                document.getElementById('youtubeBufferChannelId').value = cfg.buffer_channel_id;
+            }).catch(() => {});
         }
     } catch (e) {
         console.error('Failed to load YouTube config:', e);
@@ -1598,6 +1632,9 @@ async function saveYoutubeConfig() {
     const scheduleHour = document.getElementById('youtubeScheduleHour').value;
     const scheduleMinute = document.getElementById('youtubeScheduleMinute').value;
 
+    // Channel ID берём из скрытого input (обновляется при выборе из select)
+    const bufferChannelId = document.getElementById('youtubeBufferChannelId')?.value?.trim();
+
     try {
         const res = await fetch(`${API_MANAGE}/channels/youtube`, {
             method: 'POST',
@@ -1605,7 +1642,7 @@ async function saveYoutubeConfig() {
             body: JSON.stringify({
                 chat_id: chatId,
                 buffer_api_key: document.getElementById('youtubeBufferApiKey').value,
-                buffer_channel_id: document.getElementById('youtubeBufferChannelId').value,
+                buffer_channel_id: bufferChannelId,
                 is_active: document.getElementById('youtubeIsActive').checked,
                 auto_publish: document.getElementById('youtubeAutoPublish').checked,
                 schedule_time: `${scheduleHour}:${scheduleMinute}`,
@@ -1620,7 +1657,7 @@ async function saveYoutubeConfig() {
         if (res.ok && data.ok) {
             if (statusEl) statusEl.innerHTML = '<span style="color:#0a0;">✅ Настройки сохранены</span>';
             showToast('Настройки YouTube сохранены', 'success');
-            loadYoutubeConfig(chatId);
+            loadYoutubeConfig();
         } else {
             const errMsg = data.error || 'Ошибка сохранения';
             if (statusEl) statusEl.innerHTML = '<span style="color:#c00;">❌ ' + errMsg + '</span>';
@@ -1644,7 +1681,7 @@ async function disconnectYoutube() {
         const data = await res.json();
         if (res.ok && data.ok) {
             showToast('YouTube канал отключён', 'success');
-            loadYoutubeConfig(chatId);
+            loadYoutubeConfig();
         } else {
             showToast(data.error || 'Ошибка удаления', 'error');
         }
@@ -1716,4 +1753,115 @@ async function runYoutubeNow() {
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = '▶️ Сгенерировать сейчас'; }
     }
+}
+
+// ============================================
+// Buffer Channels — загрузка списка каналов
+// ============================================
+
+/**
+ * Загружает каналы из Buffer API и заполняет <select>.
+ * @param {string} apiKey - Buffer API Token
+ * @param {string} service - Фильтр по сервису ('youtube', 'pinterest')
+ * @param {string} selectElementId - ID элемента <select>
+ */
+async function loadBufferChannels(apiKey, service, selectElementId) {
+    if (!apiKey) {
+        showToast('Введите Buffer API Token', 'error');
+        return;
+    }
+
+    const selectEl = document.getElementById(selectElementId);
+    if (!selectEl) {
+        console.error(`Select element #${selectElementId} not found`);
+        return;
+    }
+
+    // Показываем статус загрузки
+    selectEl.innerHTML = '<option value="">⏳ Загрузка...</option>';
+    selectEl.disabled = true;
+
+    try {
+        const url = service
+            ? `${API_MANAGE}/channels/buffer/channels?service=${encodeURIComponent(service)}`
+            : `${API_MANAGE}/channels/buffer/channels`;
+
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ buffer_api_key: apiKey })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+            throw new Error(data.error || 'Ошибка загрузки каналов');
+        }
+
+        const channels = data.channels || [];
+
+        if (channels.length === 0) {
+            selectEl.innerHTML = '<option value="">— каналы не найдены —</option>';
+            selectEl.disabled = false;
+            showToast('Каналы не найдены в Buffer', 'info');
+            return;
+        }
+
+        // Заполняем select
+        selectEl.innerHTML = '<option value="">— выберите канал —</option>';
+        channels.forEach(ch => {
+            const option = document.createElement('option');
+            option.value = ch.id;
+            option.textContent = `${ch.name} (${ch.serviceId || ch.service})`;
+            option.dataset.service = ch.service;
+            option.dataset.serviceId = ch.serviceId;
+            selectEl.appendChild(option);
+        });
+
+        selectEl.disabled = false;
+        showToast(`Загружено ${channels.length} канал(ов)`, 'success');
+    } catch (e) {
+        selectEl.innerHTML = '<option value="">— ошибка загрузки —</option>';
+        selectEl.disabled = false;
+        showToast('Ошибка: ' + e.message, 'error');
+        console.error('loadBufferChannels error:', e);
+    }
+}
+
+/**
+ * Обработчик выбора канала в YouTube select.
+ */
+function onYoutubeChannelSelectChange() {
+    const selectEl = document.getElementById('youtubeBufferChannelSelect');
+    const hiddenInput = document.getElementById('youtubeBufferChannelId');
+    if (selectEl && hiddenInput) {
+        hiddenInput.value = selectEl.value;
+    }
+}
+
+/**
+ * Обработчик кнопки загрузки YouTube каналов.
+ */
+function fetchYoutubeBufferChannels() {
+    const apiKey = document.getElementById('youtubeBufferApiKey')?.value?.trim();
+    loadBufferChannels(apiKey, 'youtube', 'youtubeBufferChannelSelect');
+}
+
+/**
+ * Обработчик выбора канала в Pinterest select.
+ */
+function onPinterestChannelSelectChange() {
+    const selectEl = document.getElementById('pinterestBufferChannelSelect');
+    const hiddenInput = document.getElementById('bufferChannelId');
+    if (selectEl && hiddenInput) {
+        hiddenInput.value = selectEl.value;
+    }
+}
+
+/**
+ * Обработчик кнопки загрузки Pinterest каналов.
+ */
+function fetchPinterestBufferChannels() {
+    const apiKey = document.getElementById('bufferApiKey')?.value?.trim();
+    loadBufferChannels(apiKey, 'pinterest', 'pinterestBufferChannelSelect');
 }

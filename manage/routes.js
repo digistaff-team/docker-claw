@@ -1167,12 +1167,7 @@ router.get('/channels/youtube', async (req, res) => {
         const cfg = manageStore.getYoutubeConfig(chatId);
         if (!cfg) return res.json({ connected: false });
 
-        // Маскируем API key
-        const masked = { ...cfg };
-        if (masked.buffer_api_key) {
-            masked.buffer_api_key = masked.buffer_api_key.substring(0, 6) + '***';
-        }
-        res.json({ connected: true, config: masked });
+        res.json({ connected: true, config: cfg });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -1195,7 +1190,7 @@ router.post('/channels/youtube', async (req, res) => {
         if (!chatId) return res.status(400).json({ error: 'chat_id required' });
 
         const patch = {};
-        if (buffer_api_key !== undefined) patch.buffer_api_key = buffer_api_key;
+        if (buffer_api_key !== undefined && !buffer_api_key.endsWith('***')) patch.buffer_api_key = buffer_api_key;
         if (buffer_channel_id !== undefined) patch.buffer_channel_id = buffer_channel_id;
         if (is_active !== undefined) patch.is_active = is_active;
         if (auto_publish !== undefined) patch.auto_publish = auto_publish;
@@ -1283,6 +1278,31 @@ router.post('/channels/youtube/run-now', async (req, res) => {
         res.json(result);
     } catch (e) {
         res.status(500).json({ ok: false, error: e.message });
+    }
+});
+
+/**
+ * POST /api/manage/channels/buffer/channels — получить список каналов из Buffer API
+ */
+router.post('/channels/buffer/channels', async (req, res) => {
+    try {
+        const { buffer_api_key } = req.body;
+        if (!buffer_api_key) {
+            return res.status(400).json({ error: 'buffer_api_key обязателен' });
+        }
+
+        const bufferService = require('../services/buffer.service');
+        const channels = await bufferService.getChannels(buffer_api_key);
+
+        // Опциональная фильтрация по сервису
+        const serviceFilter = req.query.service;
+        const filtered = serviceFilter
+            ? channels.filter(ch => ch.service === serviceFilter)
+            : channels;
+
+        res.json({ success: true, channels: filtered });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
     }
 });
 
