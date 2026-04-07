@@ -44,11 +44,11 @@
                     <button class="channel-tab" data-channel="instagram" style="display: none;">Instagram</button>
                     <button class="channel-tab" data-channel="vk" style="display: none;">VK</button>
                     <button class="channel-tab" data-channel="youtube">YouTube</button>
-                    <button class="channel-tab" data-channel="blog" style="display: none;">Blog/Website</button>
+                    <button class="channel-tab" data-channel="blog">WordPress</button>
                     <button class="channel-tab" data-channel="email" style="display: none;">Email</button>
                     <button class="channel-tab" data-channel="facebook" style="display: none;">Facebook</button>
                     <button class="channel-tab" data-channel="ok" style="display: none;">Одноклассники</button>
-                    <button class="channel-tab" data-channel="dzen" style="display: none;">Яндекс-Дзен</button>
+                    <button class="channel-tab" data-channel="dzen">Яндекс-Дзен</button>
                     <button class="channel-tab" data-channel="tiktok" style="display: none;">TikTok</button>
                     <button class="channel-tab channel-tab-add" id="addChannelBtn" title="Добавить канал">+</button>
                 </nav>
@@ -758,9 +758,186 @@
                 <!-- Blog/Website -->
                 <div class="channel-panel" id="channelPanel-blog" style="display: none;">
                     <div class="channel-card">
-                        <h3>🌐 Blog/Website</h3>
-                        <p>Публикация статей на сайт или блог. Поддержка WordPress, Ghost и других CMS.</p>
-                        <p style="color: #999; font-style: italic;">Скоро будет доступно. Канал находится в разработке.</p>
+                        <h3>🌐 WordPress блог</h3>
+                        <p>Автоматическая генерация и публикация статей в WordPress. Дзен подтянет статьи через RSS-фид WP. Анонс уходит в подключённый Telegram-канал.</p>
+
+                        <!-- Подключение -->
+                        <div id="wordpressAuthBlock">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div>
+                                    <label for="wordpressBaseUrl">URL сайта (https://...)</label>
+                                    <input type="text" id="wordpressBaseUrl" placeholder="https://example.com" />
+                                </div>
+                                <div>
+                                    <label for="wordpressUsername">Username WordPress</label>
+                                    <input type="text" id="wordpressUsername" placeholder="admin" />
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div>
+                                    <label for="wordpressAppPassword">Application Password</label>
+                                    <input type="password" id="wordpressAppPassword" placeholder="xxxx xxxx xxxx xxxx xxxx xxxx" autocomplete="off" />
+                                    <p style="color: #666; font-size: 12px; margin-top: 4px;">Создайте в WP: Пользователи → Профиль → Application Passwords. Требуется HTTPS на сайте.</p>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                                <button class="btn btn-primary" onclick="saveWordpressConnect()">💾 Подключить блог</button>
+                                <button class="btn btn-secondary" id="disconnectWordpressBtn" style="display: none;" onclick="disconnectWordpress()">Отключить</button>
+                            </div>
+                        </div>
+                        <div id="wordpressStatus" class="channel-status" style="margin-top: 14px; font-size: 14px;"></div>
+
+                        <!-- Настройки публикации -->
+                        <div id="wordpressSettingsBlock" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+                            <h3 style="margin-bottom: 12px;">Настройки публикации</h3>
+                            <p style="color: #666; margin-bottom: 16px; font-size: 13px;">Расписание генерации статей. Дзен подтягивает ленту через /feed/ автоматически (задержка до нескольких часов).</p>
+
+                            <!-- Чекбоксы режимов -->
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="wordpressEnabled" />
+                                    <span>Канал активен</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="wordpressAutoPublish" />
+                                    <span>Автопубликация (без модерации)</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="wordpressAnnounceTelegram" checked />
+                                    <span>Анонс в Telegram-канале</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="wordpressUseKnowledgeBase" checked />
+                                    <span>Использовать базу знаний</span>
+                                </label>
+                            </div>
+
+                            <!-- Расписание -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                                <div>
+                                    <label for="wordpressScheduleTime">Время публикации (HH:MM)</label>
+                                    <div style="display: flex; gap: 8px; align-items: center;">
+                                        <select id="wordpressScheduleHour" style="width: 80px; margin-bottom: 0;" onchange="updateWordpressScheduleTime()">
+                                            <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
+                                            <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
+                                            <option value="08">08</option><option value="09" selected>09</option><option value="10">10</option><option value="11">11</option>
+                                            <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                                            <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
+                                            <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                                        </select>
+                                        <span style="font-size: 18px; font-weight: 600;">:</span>
+                                        <input type="text" id="wordpressScheduleMinute" placeholder="00" value="00" style="width: 70px; margin-bottom: 0; text-align: center;" maxlength="2" oninput="validateWordpressMinutes()" />
+                                        <input type="hidden" id="wordpressScheduleTime" value="09:00" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label for="wordpressScheduleTz">Часовой пояс</label>
+                                    <select id="wordpressScheduleTz">
+                                        <option value="UTC">UTC</option>
+                                        <option value="Europe/Moscow" selected>Europe/Moscow (UTC+3)</option>
+                                        <option value="Europe/Kiev">Europe/Kiev (UTC+2)</option>
+                                        <option value="Europe/Minsk">Europe/Minsk (UTC+3)</option>
+                                        <option value="Europe/London">Europe/London (UTC+0)</option>
+                                        <option value="Europe/Berlin">Europe/Berlin (UTC+1)</option>
+                                        <option value="Asia/Almaty">Asia/Almaty (UTC+5)</option>
+                                        <option value="Asia/Yekaterinburg">Asia/Yekaterinburg (UTC+5)</option>
+                                        <option value="Asia/Novosibirsk">Asia/Novosibirsk (UTC+7)</option>
+                                        <option value="Asia/Vladivostok">Asia/Vladivostok (UTC+10)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="wordpressDailyLimit">Лимит статей в день</label>
+                                    <input type="number" id="wordpressDailyLimit" min="1" max="10" value="1" />
+                                </div>
+                                <div>
+                                    <label for="wordpressMinIntervalHours">Мин. интервал между статьями (часы)</label>
+                                    <input type="number" id="wordpressMinIntervalHours" min="1" max="48" value="6" />
+                                </div>
+                            </div>
+
+                            <!-- Дни недели -->
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                                <span style="font-size: 13px; font-weight: 600; color: #495057;">Дни недели:</span>
+                                <label><input type="checkbox" value="1" id="wordpressWeekday1" checked> Пн</label>
+                                <label><input type="checkbox" value="2" id="wordpressWeekday2" checked> Вт</label>
+                                <label><input type="checkbox" value="3" id="wordpressWeekday3" checked> Ср</label>
+                                <label><input type="checkbox" value="4" id="wordpressWeekday4" checked> Чт</label>
+                                <label><input type="checkbox" value="5" id="wordpressWeekday5" checked> Пт</label>
+                                <label><input type="checkbox" value="6" id="wordpressWeekday6"> Сб</label>
+                                <label><input type="checkbox" value="0" id="wordpressWeekday0"> Вс</label>
+                            </div>
+
+                            <!-- Категория WP -->
+                            <div style="margin-bottom: 12px;">
+                                <label for="wordpressDefaultCategoryId">Категория по умолчанию</label>
+                                <select id="wordpressDefaultCategoryId">
+                                    <option value="">— Сначала подключите блог —</option>
+                                </select>
+                            </div>
+
+                            <!-- Кнопки -->
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 16px;">
+                                <button class="btn btn-success" onclick="saveWordpressConfig()">💾 Сохранить настройки</button>
+                                <button class="btn btn-primary" onclick="runWordpressNow()">▶️ Сгенерировать сейчас</button>
+                            </div>
+                            <div id="wordpressSettingsStatus" style="margin-top: 10px; font-size: 13px;"></div>
+
+                            <!-- Темы -->
+                            <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #eee;">
+                                <h4 style="margin-bottom: 12px;">📚 Темы для генерации</h4>
+                                <p style="color: #666; font-size: 12px; margin-bottom: 12px;">Список тем, из которых планировщик будет последовательно создавать статьи. Каждая тема используется один раз.</p>
+                                <div style="display: grid; grid-template-columns: 2fr 2fr 1fr auto; gap: 8px; margin-bottom: 10px; align-items: end;">
+                                    <div>
+                                        <label for="wordpressNewTopic" style="font-size: 12px;">Тема</label>
+                                        <input type="text" id="wordpressNewTopic" placeholder="Как выбрать фрезер" />
+                                    </div>
+                                    <div>
+                                        <label for="wordpressNewKeywords" style="font-size: 12px;">Ключевые слова</label>
+                                        <input type="text" id="wordpressNewKeywords" placeholder="фрезер, выбор, инструмент" />
+                                    </div>
+                                    <div>
+                                        <label for="wordpressNewPriority" style="font-size: 12px;">Приоритет</label>
+                                        <select id="wordpressNewPriority">
+                                            <option value="0">Низкий</option>
+                                            <option value="1" selected>Обычный</option>
+                                            <option value="2">Высокий</option>
+                                        </select>
+                                    </div>
+                                    <button class="btn btn-primary" onclick="addWordpressTopic()" style="height: 38px;">➕ Добавить</button>
+                                </div>
+                                <div id="wordpressTopicsList" style="margin-top: 12px; font-size: 13px;">
+                                    <em style="color: #999;">Темы пока не добавлены</em>
+                                </div>
+                            </div>
+
+                            <!-- База знаний -->
+                            <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #eee;">
+                                <h4 style="margin-bottom: 12px;">📖 База знаний (технические документы)</h4>
+                                <p style="color: #666; font-size: 12px; margin-bottom: 12px;">Документы используются для фактической точности статей. AI вставляет релевантный документ в промпт.</p>
+                                <div style="display: grid; grid-template-columns: 1fr 2fr auto; gap: 8px; margin-bottom: 10px; align-items: end;">
+                                    <div>
+                                        <label for="wordpressKnowledgeTitle" style="font-size: 12px;">Название</label>
+                                        <input type="text" id="wordpressKnowledgeTitle" placeholder="Спецификация фрезеров" />
+                                    </div>
+                                    <div>
+                                        <label for="wordpressKnowledgeBody" style="font-size: 12px;">Содержимое (можно вставить большой текст)</label>
+                                        <textarea id="wordpressKnowledgeBody" rows="2" placeholder="Технические характеристики, факты, ссылки..."></textarea>
+                                    </div>
+                                    <button class="btn btn-primary" onclick="addWordpressKnowledge()" style="height: 38px;">➕ Добавить</button>
+                                </div>
+                                <div id="wordpressKnowledgeList" style="margin-top: 12px; font-size: 13px;">
+                                    <em style="color: #999;">Документы пока не добавлены</em>
+                                </div>
+                            </div>
+
+                            <!-- Последние посты -->
+                            <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #eee;">
+                                <h4 style="margin-bottom: 12px;">📝 Последние статьи</h4>
+                                <div id="wordpressRecentPosts" style="font-size: 13px;">
+                                    <em style="color: #999;">Статей пока нет</em>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -991,9 +1168,61 @@
                 <!-- Яндекс-Дзен -->
                 <div class="channel-panel" id="channelPanel-dzen" style="display: none;">
                     <div class="channel-card">
-                        <h3>🟡 Яндекс-Дзен</h3>
-                        <p>Публикация статей и постов на Дзен. Подключение через Дзен API.</p>
-                        <p style="color: #999; font-style: italic;">Скоро будет доступно. Канал находится в разработке.</p>
+                        <h3>🟡 Яндекс-Дзен (через RSS блога WordPress)</h3>
+                        <p>Дзен не имеет публичного API для автопубликации. Интеграция работает через <strong>функцию «Свой сайт»</strong> в Дзен Студии: вы привязываете свой WordPress-блог к каналу и подключаете RSS-ленту, после чего Дзен автоматически публикует новые статьи из блога.</p>
+
+                        <div style="background:#e3f2fd; border-left:4px solid #1976d2; padding:12px 16px; margin:16px 0; border-radius:4px;">
+                            <strong>📋 Предварительные требования</strong>
+                            <ul style="margin:8px 0 0 20px; padding:0; line-height:1.7;">
+                                <li>У канала Дзен должно быть <strong>минимум 10 подписчиков</strong></li>
+                                <li>Блог WordPress должен работать на обычном домене (IDN-домены с кириллицей не поддерживаются)</li>
+                                <li>В блоге должно быть уже опубликовано несколько статей (для первичной проверки фида)</li>
+                            </ul>
+                        </div>
+
+                        <div style="background:#fff8e1; border-left:4px solid #ffc107; padding:12px 16px; margin:16px 0; border-radius:4px;">
+                            <strong>🔧 Пошаговая настройка (согласно <a href="https://dzen.ru/help/ru/website/site-to-channel.html" target="_blank" style="color:#1976d2;">официальной инструкции Дзен</a>)</strong>
+                            <ol style="margin:8px 0 0 20px; padding:0; line-height:1.7;">
+                                <li><strong>Откройте Дзен Студию</strong> → <a href="https://dzen.ru/media/zen/login" target="_blank" style="color:#1976d2;">dzen.ru/media/zen/login</a></li>
+                                <li>В левом меню нажмите <strong>«Настройки»</strong></li>
+                                <li>В левом нижнем углу выберите <strong>«Свой сайт»</strong></li>
+                                <li>Введите домен вашего WordPress-блога (например, <code>blog.example.com</code>) и подтвердите права владения:
+                                    <ul style="margin:4px 0 0 20px; color:#666; font-size:13px;">
+                                        <li>через загрузку HTML-файла в корень сайта, <em>или</em></li>
+                                        <li>через добавление метатега в <code>&lt;head&gt;</code> (в WP — через плагин Insert Headers and Footers)</li>
+                                    </ul>
+                                </li>
+                                <li>После подтверждения домена нажмите <strong>«Настроить трансляцию материалов сайта в Дзен»</strong></li>
+                                <li>Укажите URL RSS-ленты вашего блога:
+                                    <div style="background:#fff; padding:8px; margin:4px 0; border-radius:4px; font-family:monospace; font-size:13px;">https://ваш-блог.ru/feed/</div>
+                                    <span style="color:#666; font-size:12px;">Рекомендуется установить плагин <a href="https://wordpress.org/plugins/rss-for-yandex-zen/" target="_blank" style="color:#1976d2;">RSS for Yandex Zen</a> — он генерирует фид в формате, полностью совместимом с требованиями Дзена (правильные теги <code>&lt;content:encoded&gt;</code>, <code>&lt;enclosure&gt;</code> для изображений и т.д.). После установки фид доступен по адресу <code>/feed/yandex-zen</code>.</span>
+                                </li>
+                                <li>Отправьте ленту на проверку и отслеживайте статус в разделе <strong>«Свой сайт»</strong></li>
+                            </ol>
+                        </div>
+
+                        <div style="background:#ffebee; border-left:4px solid #e57373; padding:12px 16px; margin:16px 0; border-radius:4px;">
+                            <strong>⚠️ Ограничения</strong>
+                            <ul style="margin:8px 0 0 20px; padding:0; line-height:1.7;">
+                                <li>Количество проверок RSS-ленты ограничено: <strong>не более 3 в год</strong> — готовьте фид тщательно</li>
+                                <li>Домен ленты должен <strong>совпадать</strong> с подтверждённым доменом сайта</li>
+                                <li>Лента должна соответствовать <a href="https://dzen.ru/help/ru/website/rss-modify.html" target="_blank" style="color:#1976d2;">общим требованиям платформы</a> (без спама, кликбейта, низкокачественного контента)</li>
+                            </ul>
+                        </div>
+
+                        <div style="background:#e8f5e9; border-left:4px solid #4caf50; padding:12px 16px; margin:16px 0; border-radius:4px;">
+                            <strong>✅ После подключения всё работает автоматически:</strong>
+                            <ol style="margin:8px 0 0 20px; padding:0; line-height:1.7;">
+                                <li>Сгенерируйте статью во вкладке <a href="#" onclick="document.querySelector('button.channel-tab[data-channel=&quot;blog&quot;]').click(); return false;" style="color:#1976d2;">«WordPress»</a> (по расписанию или вручную)</li>
+                                <li>Она публикуется в вашем WP-блоге</li>
+                                <li>Дзен в течение нескольких часов подтягивает её через RSS и публикует на канале</li>
+                                <li>Анонс одновременно уходит в подключённый Telegram-канал</li>
+                            </ol>
+                        </div>
+
+                        <p style="color:#999; font-size:12px; margin-top:16px;">
+                            <strong>Задержка:</strong> Дзен обычно подтягивает новые статьи в течение 1–6 часов после публикации в WordPress. Отдельных настроек на этой вкладке нет — всё управляется через вкладку «WordPress» + разовую настройку в Дзен Студии.
+                        </p>
                     </div>
                 </div>
 
@@ -1011,6 +1240,7 @@
     </div>
     <script src="/js/common.js"></script>
     <script src="/js/channels.js"></script>
+    <script src="/js/channels-wordpress.js"></script>
     <script>
         // Специальная инициализация для страницы каналов
         // Доступна без авторизации - для подключения бота

@@ -8,13 +8,15 @@ const { generateCorrelationId } = require('./status');
 const DEFAULT_SOFT_LIMIT = 5; // Предупреждение
 const DEFAULT_HARD_LIMIT = 10; // Блокировка
 const DEFAULT_DAILY_LIMIT = 10; // Максимум публикаций в день
+const DEFAULT_BLOG_DAILY_LIMIT = 3; // Лимит статей в день
 
 // Квоты по типам операций
 const QUOTA_TYPES = {
   TEXT_GENERATION: 'text_generation',
   IMAGE_GENERATION: 'image_generation',
   VIDEO_GENERATION: 'video_generation', // TASK-015
-  PUBLICATION: 'publication'
+  PUBLICATION: 'publication',
+  BLOG_GENERATION: 'blog_generation'
 };
 
 /**
@@ -30,7 +32,8 @@ function getLimits(chatId, settings = {}) {
     dailyLimit: settings.dailyLimit || DEFAULT_DAILY_LIMIT,
     textQuota: settings.textQuota || 50, // текстовых генераций в день
     imageQuota: settings.imageQuota || 20, // генераций изображений в день
-    videoQuota: settings.videoQuota || 10 // TASK-015: генераций видео в день
+    videoQuota: settings.videoQuota || 10, // TASK-015: генераций видео в день
+    blogDailyQuota: settings.blogDailyQuota || DEFAULT_BLOG_DAILY_LIMIT // статей в день
   };
 }
 
@@ -77,11 +80,20 @@ async function getTodayUsage(chatId, dateStr, tz = 'Europe/Moscow') {
       [tz, dateStr]
     );
 
+    // WordPress blog generation
+    const blogRes = await client.query(
+      `SELECT COUNT(*)::int AS c FROM content_posts
+       WHERE content_type = 'blog'
+         AND to_char(created_at AT TIME ZONE $1, 'YYYY-MM-DD') = $2`,
+      [tz, dateStr]
+    );
+
     return {
       published: publishedRes.rows[0]?.c || 0,
       textGenerated: textRes.rows[0]?.c || 0,
       imageGenerated: imageRes.rows[0]?.c || 0,
-      videoGenerated: videoRes.rows[0]?.c || 0
+      videoGenerated: videoRes.rows[0]?.c || 0,
+      blogGenerated: blogRes.rows[0]?.c || 0
     };
   });
 }
@@ -167,6 +179,23 @@ async function checkQuota(chatId, operationType, options = {}) {
       return { allowed: true };
     }
 
+    // WordPress blog generation
+    case QUOTA_TYPES.BLOG_GENERATION: {
+      if (usage.blogGenerated >= limits.blogDailyQuota) {
+        return {
+          allowed: false,
+          reason: `Достигнут лимит генераций статей: ${usage.blogGenerated}/${limits.blogDailyQuota}`
+        };
+      }
+      if (usage.blogGenerated >= limits.blogDailyQuota * 0.8) {
+        return {
+          allowed: true,
+          warning: `Приближение к лимиту генераций статей: ${usage.blogGenerated}/${limits.blogDailyQuota}`
+        };
+      }
+      return { allowed: true };
+    }
+
     default:
       return { allowed: true };
   }
@@ -181,13 +210,14 @@ async function checkQuota(chatId, operationType, options = {}) {
  */
 async function getUsageStats(chatId, dateStr, tz = 'Europe/Moscow') {
   const usage = await getTodayUsage(chatId, dateStr, tz);
-  
+
   return {
     today: {
       published: usage.published,
       textGenerated: usage.textGenerated,
       imageGenerated: usage.imageGenerated,
-      videoGenerated: usage.videoGenerated // TASK-015
+      videoGenerated: usage.videoGenerated, // TASK-015
+      blogGenerated: usage.blogGenerated
     },
     limits: {
       softLimit: DEFAULT_SOFT_LIMIT,
@@ -195,13 +225,15 @@ async function getUsageStats(chatId, dateStr, tz = 'Europe/Moscow') {
       dailyLimit: DEFAULT_DAILY_LIMIT,
       textQuota: 50,
       imageQuota: 20,
-      videoQuota: 10 // TASK-015
+      videoQuota: 10, // TASK-015
+      blogDailyQuota: DEFAULT_BLOG_DAILY_LIMIT
     },
     percentages: {
       published: Math.round((usage.published / DEFAULT_HARD_LIMIT) * 100),
       text: Math.round((usage.textGenerated / 50) * 100),
       image: Math.round((usage.imageGenerated / 20) * 100),
-      video: Math.round((usage.videoGenerated / 10) * 100) // TASK-015
+      video: Math.round((usage.videoGenerated / 10) * 100), // TASK-015
+      blog: Math.round((usage.blogGenerated / DEFAULT_BLOG_DAILY_LIMIT) * 100)
     }
   };
 }
@@ -228,5 +260,6 @@ module.exports = {
   QUOTA_TYPES,
   DEFAULT_SOFT_LIMIT,
   DEFAULT_HARD_LIMIT,
-  DEFAULT_DAILY_LIMIT
+  DEFAULT_DAILY_LIMIT,
+  DEFAULT_BLOG_DAILY_LIMIT
 };

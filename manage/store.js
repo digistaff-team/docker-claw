@@ -1196,5 +1196,57 @@ module.exports = {
     clearAIRouterLogs,
     getAIRouterStats,
     setBotUsername,
-    setOnboardingComplete
+    setOnboardingComplete,
+
+    // === WordPress Blog Config ===
+    getWpConfig(chatId) {
+        const data = statesCache[chatId];
+        return data?.wordpressConfig || null;
+    },
+
+    setWpConfig(chatId, patch = {}) {
+        if (!statesCache[chatId]) statesCache[chatId] = {};
+        const current = statesCache[chatId].wordpressConfig || {};
+        const next = { ...current };
+
+        if (patch.baseUrl !== undefined) next.baseUrl = String(patch.baseUrl || '').trim() || null;
+        if (patch.username !== undefined) next.username = String(patch.username || '').trim() || null;
+        if (patch.appPassword !== undefined) next.appPassword = patch.appPassword || null;
+        if (patch.defaultCategoryId !== undefined) next.defaultCategoryId = patch.defaultCategoryId || null;
+        if (patch.enabled !== undefined) next.enabled = !!patch.enabled;
+        if (patch.autoPublish !== undefined) next.autoPublish = !!patch.autoPublish;
+        if (patch.announceTelegram !== undefined) next.announceTelegram = !!patch.announceTelegram;
+        if (patch.useKnowledgeBase !== undefined) next.useKnowledgeBase = !!patch.useKnowledgeBase;
+        if (patch.scheduleTime !== undefined) next.scheduleTime = patch.scheduleTime || null;
+        if (patch.scheduleTz !== undefined) next.scheduleTz = patch.scheduleTz || null;
+        if (patch.scheduleDays !== undefined) {
+            if (Array.isArray(patch.scheduleDays)) {
+                next.scheduleDays = patch.scheduleDays.map(d => parseInt(d, 10)).filter(d => d >= 1 && d <= 7);
+            }
+        }
+        if (patch.dailyLimit !== undefined) {
+            const limit = parseInt(patch.dailyLimit, 10);
+            next.dailyLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 10) : 3;
+        }
+        if (patch.minIntervalHours !== undefined) {
+            const hours = parseInt(patch.minIntervalHours, 10);
+            next.minIntervalHours = Number.isFinite(hours) && hours > 0 ? Math.min(hours, 48) : 6;
+        }
+        if (patch.lastPublishedAt !== undefined) next.lastPublishedAt = patch.lastPublishedAt || null;
+        if (patch.consecutiveErrors !== undefined) {
+            const errors = parseInt(patch.consecutiveErrors, 10);
+            next.consecutiveErrors = Number.isFinite(errors) && errors >= 0 ? errors : 0;
+        }
+        if (patch.stats !== undefined) next.stats = { ...(next.stats || {}), ...patch.stats };
+
+        statesCache[chatId].wordpressConfig = next;
+        return persist(chatId);
+    },
+
+    clearWpConfig(chatId) {
+        if (statesCache[chatId]) {
+            delete statesCache[chatId].wordpressConfig;
+            return persist(chatId);
+        }
+    }
 };

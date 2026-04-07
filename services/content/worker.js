@@ -1,18 +1,28 @@
 /**
  * TASK-006, TASK-007: Worker для обработки задач из БД-очереди
  * TASK-015: Polling для асинхронных video-генераций
+ * TASK-020: WordPress blog generation pipeline
  */
 const queueRepo = require('./queue.repository');
 const { generateCorrelationId, JOB_STATUS, QUEUE_STATUS } = require('./status');
 const videoService = require('./video.service');
+const wordpressMvp = require('../../services/wordpressMvp.service');
+const blogGenerator = require('../../services/blogGenerator.service');
+const wpRepo = require('./wordpress.repository');
+const contentMvp = require('../../services/contentMvp.service');
+const contentLimits = require('./limits');
+const manageStore = require('../../manage/store');
+const alerts = require('./alerts');
 
 const POLL_INTERVAL_MS = 5000; // 5 секунд
-const STUCK_TIMEOUT_MINUTES = 10;
-const MAX_CONCURRENT_JOBS = 1; // Максимум параллельных задач на chat
 const VIDEO_POLL_INTERVAL_MS = parseInt(process.env.VIDEO_POLL_INTERVAL_MS || '10000', 10); // TASK-015
+const BLOG_POLL_INTERVAL_MS = 60000; // 60 секунд для планировщика тем WordPress
+const MAX_CONCURRENT_JOBS = 1; // Максимум параллельных задач на chat
+const STUCK_TIMEOUT_MINUTES = 10;
 
 let workerHandle = null;
 let videoPollingHandle = null; // TASK-015
+let blogPollingHandle = null; // TASK-020: WordPress topic scheduler
 let botsGetter = null;
 let getCwBot = null; // Центральный CW бот
 let jobHandlers = new Map();
@@ -62,7 +72,16 @@ function startWorker(getBots, getCwBotFn) {
     }
   }, VIDEO_POLL_INTERVAL_MS);
 
-  console.log('[CONTENT-WORKER] Started (queue + video polling)');
+  // TASK-020: Запуск планировщика тем для WordPress
+  blogPollingHandle = setInterval(async () => {
+    try {
+      await scheduleBlogPosts();
+    } catch (e) {
+      console.error('[CONTENT-WORKER-BLOG] Error:', e.message);
+    }
+  }, BLOG_POLL_INTERVAL_MS);
+
+  console.log('[CONTENT-WORKER] Started (queue + video polling + blog scheduler)');
 }
 
 /**
@@ -76,6 +95,10 @@ function stopWorker() {
   if (videoPollingHandle) {
     clearInterval(videoPollingHandle);
     videoPollingHandle = null;
+  }
+  if (blogPollingHandle) {
+    clearInterval(blogPollingHandle);
+    blogPollingHandle = null;
   }
   console.log('[CONTENT-WORKER] Stopped');
 }
@@ -341,6 +364,331 @@ async function pollVideoForChat(chatId, bot) {
   }
 }
 
+// ============================================
+// TASK-020: WordPress Blog Scheduler
+// ============================================
+
+/**
+ * Планировщик тем для WordPress
+ * Каждый tick проверяет пользователей с включенным WordPress
+ * и создаёт задачи на генерацию статей из свободных тем
+ */
+async function scheduleBlogPosts() {
+  if (!botsGetter) return;
+
+  const bots = botsGetter();
+  if (!bots || bots.size === 0) return;
+
+  for (const [chatId] of bots) {
+    try {
+      await scheduleBlogPostsForChat(chatId);
+    } catch (e) {
+      if (!e.message.includes('does not exist')) {
+        console.error(`[CONTENT-WORKER-BLOG] Error scheduling for ${chatId}:`, e.message);
+      }
+    }
+  }
+}
+
+/**
+ * Планирование постов для конкретного пользователя
+ */
+async function scheduleBlogPostsForChat(chatId) {
+  // Проверяем, что WordPress подключён
+  const wpConfig = manageStore.getWpConfig(chatId);
+  if (!wpConfig || !wpConfig.baseUrl || !wpConfig.username || !wpConfig.appPassword) {
+    return; // WordPress не подключён
+  }
+
+  // Проверяем лимиты
+  const publishedToday = await contentLimits.getUsageStats(chatId, contentLimits.QUOTA_TYPES.BLOG_GENERATION);
+  const perDayLimit = wpConfig.postsPerDay || 3; // По умолчанию 3 поста в день
+
+  if (publishedToday.today >= perDayLimit) {
+    return; // Достигнут дневной лимит
+  }
+
+  // Проверяем, есть ли уже активные задачи wordpress в очереди
+  const queueStats = await queueRepo.getQueueStats(chatId);
+  // Упрощённая проверка — можно расширить до просмотра типов задач
+
+  // Выбираем следующую тему (резервируем её)
+  const contentRepo = require('./repository');
+  const topic = await contentRepo.reserveNextTopic(chatId);
+
+  if (!topic) {
+    return; // Нет доступных тем
+  }
+
+  // Создаём задачу на генерацию
+  await enqueueJob(chatId, {
+    job_type: 'wordpress_generate',
+    payload: {
+      topicId: topic.id,
+      topic: topic.topic,
+      keywords: topic.focus || topic.secondary || '',
+      techDocId: topic.tech_doc_id || null
+    },
+    status: 'queued',
+    channel: 'wordpress'
+  });
+
+  console.log(`[CONTENT-WORKER-BLOG] Enqueued blog post generation for chat ${chatId}, topic ${topic.id}`);
+}
+
+/**
+ * Обработчик задачи на генерацию WordPress поста
+ */
+async function handleWordPressGeneration(chatId, job, bot) {
+  const { topicId, topic, keywords, techDocId } = job.payload;
+  const corrId = job.correlation_id || generateCorrelationId();
+
+  console.log(`[CONTENT-WORKER-BLOG] Generating post for topic ${topicId}: ${topic}`);
+
+  try {
+    // 1. Генерация статьи
+    const article = await blogGenerator.generate(chatId, {
+      topic,
+      keywords,
+      techDocId,
+      moderatorNote: null
+    });
+
+    console.log(`[CONTENT-WORKER-BLOG] Article generated: ${article.seoTitle}`);
+
+    // 2. Создаём черновик поста в БД
+    const postId = await wpRepo.createDraftPost(chatId, {
+      jobId: job.id,
+      bodyHtml: article.bodyHtml,
+      seoTitle: article.seoTitle,
+      metaDesc: article.metaDesc,
+      featuredImageUrl: null, // Пока нет изображения
+      contentType: 'blog',
+      publishStatus: 'draft'
+    });
+
+    // 3. Загружаем изображение в WordPress
+    let mediaResult = null;
+    if (article.imageBuffer) {
+      try {
+        mediaResult = await wordpressMvp.uploadMedia(chatId, {
+          buffer: article.imageBuffer,
+          filename: article.imageFilename || 'cover.jpg',
+          mimeType: article.imageMime || 'image/jpeg',
+          altText: article.seoTitle,
+          title: article.seoTitle
+        });
+
+        console.log(`[CONTENT-WORKER-BLOG] Media uploaded: ${mediaResult.id}`);
+      } catch (e) {
+        console.warn('[CONTENT-WORKER-BLOG] Failed to upload image, continuing without it:', e.message);
+      }
+    }
+
+    // 4. Создаём черновик в WordPress
+    const wpDraft = await wordpressMvp.createDraft(chatId, {
+      title: article.seoTitle,
+      content: article.bodyHtml,
+      excerpt: article.metaDesc,
+      featured_media: mediaResult?.id || 0,
+      slug: article.slug
+    });
+
+    console.log(`[CONTENT-WORKER-BLOG] WP draft created: ${wpDraft.id}, preview: ${wpDraft.preview_link}`);
+
+    // 5. Обновляем IDs в БД
+    await wpRepo.updateWpIds(chatId, postId, {
+      wpMediaId: mediaResult?.id || null,
+      wpPostId: wpDraft.id,
+      wpPermalink: wpDraft.link,
+      wpPreviewUrl: wpDraft.preview_link,
+      bodyHtml: article.bodyHtml,
+      seoTitle: article.seoTitle,
+      metaDesc: article.metaDesc,
+      featuredImageUrl: mediaResult?.source_url || null
+    });
+
+    // 6. Переходим в статус ready (ожидание модерации)
+    await wpRepo.markReady(chatId, postId);
+
+    // 7. Отправляем на модерацию (если включено)
+    const premoderationEnabled = wpConfig.premoderation !== false; // По умолчанию включена
+    if (premoderationEnabled) {
+      await sendBlogModerationRequest(chatId, postId, bot);
+    } else {
+      // Автопубликация без модерации
+      await wpRepo.markApproved(chatId, postId);
+    }
+
+    // 8. Тема уже отмечена как использованная в reserveNextTopic
+    // (content_topics.used_at проставлен автоматически)
+
+    console.log(`[CONTENT-WORKER-BLOG] Post ${postId} ready for moderation`);
+
+    return { success: true };
+  } catch (e) {
+    console.error('[CONTENT-WORKER-BLOG] Generation failed:', e.message);
+
+    // Пытаемся отметить ошибку в БД
+    try {
+      const contentRepo = require('./repository');
+      const posts = await wpRepo.findByStatus(chatId, 'draft');
+      if (posts.length > 0) {
+        const postId = posts[0].id;
+        await wpRepo.markError(chatId, postId, e.message);
+      }
+    } catch (dbError) {
+      console.error('[CONTENT-WORKER-BLOG] Failed to update error status:', dbError.message);
+    }
+
+    // Уведомляем админа
+    try {
+      await alerts.notifyAdmin(`Blog generation failed for chat ${chatId}: ${e.message}`);
+    } catch (alertError) {
+      console.error('[CONTENT-WORKER-BLOG] Failed to send alert:', alertError.message);
+    }
+
+    return { success: false, error: e.message, retry: e.name === 'InsufficientBalanceError' ? false : true };
+  }
+}
+
+/**
+ * Отправить запрос на модерацию блога
+ */
+async function sendBlogModerationRequest(chatId, postId, bot) {
+  try {
+    const post = await wpRepo.getPostById(chatId, postId);
+    if (!post || !post.wp_preview_url) {
+      throw new Error('Post or preview URL not found');
+    }
+
+    // Получаем конфигурацию канала
+    const data = manageStore.getState(chatId);
+    const moderatorId = process.env.CONTENT_MVP_MODERATOR_USER_ID || data?.verifiedTelegramId || null;
+
+    if (!moderatorId) {
+      console.warn('[CONTENT-WORKER-BLOG] No moderator ID configured, skipping moderation');
+      await wpRepo.markApproved(chatId, postId);
+      return;
+    }
+
+    // Формируем сообщение
+    const message = `📝 Новая статья для блога
+Заголовок: ${post.seo_title || 'Без заголовка'}
+Темы: ${post.meta_desc || 'без описания'}
+
+[Превью](${post.wp_preview_url})
+
+[✅ Опубликовать] [🔁 Переписать] [❌ Отклонить]`;
+
+    // Используем CW_BOT для отправки
+    const cwBotToken = process.env.CW_BOT_TOKEN;
+    if (!cwBotToken) {
+      throw new Error('CW_BOT_TOKEN not configured');
+    }
+
+    const { Telegraf } = require('telegraf');
+    const { Markup } = require('telegraf');
+    const cwBot = new Telegraf(cwBotToken);
+
+    const keyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('✅ Опубликовать', `wp_mod:approve:${postId}`)],
+      [Markup.button.callback('🔁 Переписать', `wp_mod:rewrite:${postId}`)],
+      [Markup.button.callback('❌ Отклонить', `wp_mod:reject:${postId}`)]
+    ]);
+
+    await cwBot.telegram.sendMessage(moderatorId, message, {
+      parse_mode: 'Markdown',
+      disable_web_page_preview: false,
+      ...keyboard
+    });
+
+    console.log(`[CONTENT-WORKER-BLOG] Moderation request sent to ${moderatorId} for post ${postId}`);
+  } catch (e) {
+    console.error('[CONTENT-WORKER-BLOG] Failed to send moderation request:', e.message);
+    // Не кидаем ошибку — просто логируем
+  }
+}
+
+/**
+ * Обработчик публикации одобренного WordPress поста
+ */
+async function handleWordPressPublish(chatId, job, bot) {
+  const { postId } = job.payload;
+
+  console.log(`[CONTENT-WORKER-BLOG] Publishing post ${postId}`);
+
+  try {
+    const post = await wpRepo.getPostById(chatId, postId);
+    if (!post || !post.wp_post_id) {
+      throw new Error('Post not found or missing WP post ID');
+    }
+
+    // Публикуем в WordPress
+    const published = await wordpressMvp.publishPost(chatId, post.wp_post_id);
+    console.log(`[CONTENT-WORKER-BLOG] Post published in WP: ${published.link}`);
+
+    // Обновляем статус
+    await wpRepo.markPublished(chatId, postId, published.link);
+
+    // Публикуем анонс в Telegram канале пользователя
+    await publishBlogAnnouncement(chatId, post);
+
+    return { success: true };
+  } catch (e) {
+    console.error('[CONTENT-WORKER-BLOG] Publish failed:', e.message);
+
+    try {
+      await wpRepo.markError(chatId, postId, e.message);
+    } catch (dbError) {
+      console.error('[CONTENT-WORKER-BLOG] Failed to update error:', dbError.message);
+    }
+
+    return { success: false, error: e.message, retry: true };
+  }
+}
+
+/**
+ * Опубликовать анонс статьи в Telegram канале
+ */
+async function publishBlogAnnouncement(chatId, post) {
+  try {
+    const settings = contentMvp.getContentSettings(chatId);
+    if (!settings.channelId) {
+      console.warn('[CONTENT-WORKER-BLOG] No Telegram channel configured for announcement');
+      return;
+    }
+
+    // Получаем бот
+    const botEntry = botsGetter?.get(chatId);
+    if (!botEntry?.bot) {
+      console.error('[CONTENT-WORKER-BLOG] No bot available for announcement');
+      return;
+    }
+
+    // Формируем текст анонса
+    const text = `${post.seo_title || 'Новая статья'}
+
+${post.meta_desc || ''}
+
+👉 Читать полностью: ${post.wp_permalink || post.wp_preview_url}`;
+
+    // Отправляем сообщение с изобраением (если есть)
+    if (post.featured_image_url) {
+      await botEntry.bot.telegram.sendPhoto(settings.channelId, post.featured_image_url, {
+        caption: text,
+        parse_mode: 'Markdown'
+      });
+    } else {
+      await botEntry.bot.telegram.sendMessage(settings.channelId, text);
+    }
+
+    console.log(`[CONTENT-WORKER-BLOG] Announcement sent to Telegram channel for post ${post.id}`);
+  } catch (e) {
+    console.error('[CONTENT-WORKER-BLOG] Failed to send announcement:', e.message);
+  }
+}
+
 module.exports = {
   startWorker,
   stopWorker,
@@ -349,6 +697,10 @@ module.exports = {
   enqueueJob,
   processAllQueues,
   pollVideoGenerations,
+  scheduleBlogPosts,
+  handleWordPressGeneration,
+  handleWordPressPublish,
+  publishBlogAnnouncement,
   POLL_INTERVAL_MS,
   MAX_CONCURRENT_JOBS
 };

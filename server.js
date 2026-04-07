@@ -515,12 +515,16 @@ async function startServer() {
     const okMvpService = require('./services/okMvp.service');
     const instagramMvpService = require('./services/instagramMvp.service');
     const youtubeMvpService = require('./services/youtubeMvp.service');
+    const wordpressMvpService = require('./services/wordpressMvp.service');
 
     pinterestMvpService.setPinterestCwBot(cwBot);
     vkMvpService.setVkCwBot(cwBot);
     okMvpService.setOkCwBot(cwBot);
     instagramMvpService.setIgCwBot(cwBot);
     youtubeMvpService.setYtCwBot(cwBot);
+
+    // Инициализация WordPress worker handlers
+    wordpressMvpService.initWorkerHandlers();
 
     // Email processor - запуск cron для опроса почты
     let emailProcessor;

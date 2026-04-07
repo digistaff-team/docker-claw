@@ -2194,6 +2194,63 @@ function stopScheduler() {
   console.log('[CONTENT-MVP] Scheduler and worker stopped');
 }
 
+/**
+ * Поставить в очередь анонс блог-статьи в Telegram-канал пользователя.
+ * Используется WordPress-каналом после успешной публикации статьи в WP.
+ *
+ * @param {string} chatId
+ * @param {object} params
+ * @param {string} params.text — готовый текст анонса
+ * @param {Buffer} [params.imageBuffer] — обложка статьи
+ * @param {string} [params.imageMime]
+ * @param {string} [params.source='blog'] — источник для логов
+ * @param {number} [params.sourceRefId] — id записи в content_posts
+ * @returns {Promise<{ok: boolean, queueJobId?: number, message: string}>}
+ */
+async function enqueueAnnouncement(chatId, params = {}) {
+  const { text, imageBuffer, imageMime, source = 'blog', sourceRefId } = params;
+  if (!text || typeof text !== 'string') {
+    return { ok: false, message: 'enqueueAnnouncement: text is required' };
+  }
+
+  // Сохраняем картинку во временное место воркспейса, чтобы worker мог её прочитать
+  let imagePath = null;
+  if (imageBuffer && Buffer.isBuffer(imageBuffer)) {
+    try {
+      const path = require('path');
+      const fs = require('fs').promises;
+      const dir = path.join(config.DATA_ROOT || '/var/sandbox-data', String(chatId), 'blog-announcements');
+      await fs.mkdir(dir, { recursive: true });
+      const ext = (imageMime && imageMime.includes('png')) ? 'png' : 'jpg';
+      imagePath = path.join(dir, `announce_${Date.now()}.${ext}`);
+      await fs.writeFile(imagePath, imageBuffer);
+    } catch (e) {
+      console.warn('[BLOG-ANNOUNCE] failed to save image:', e.message);
+      imagePath = null;
+    }
+  }
+
+  const correlationId = generateCorrelationId();
+  const queueJobId = await queueRepo.enqueue(chatId, {
+    jobType: 'announce',
+    priority: 5,
+    payload: {
+      text,
+      imagePath,
+      source,
+      sourceRefId,
+      channel: 'telegram'
+    },
+    correlationId
+  });
+
+  return {
+    ok: true,
+    queueJobId,
+    message: `Анонс #${queueJobId} поставлен в очередь`
+  };
+}
+
 // ============================================
 // Exports
 // ============================================
@@ -2249,6 +2306,9 @@ module.exports = {
   // Очередь (для прямого доступа)
   enqueue: queueRepo.enqueue,
   getQueueStats: queueRepo.getQueueStats,
+
+  // Анонс блог-статьи в Telegram-канал пользователя
+  enqueueAnnouncement,
 
   // Центральный бот премодерации
   setContentBot: (bot) => { cwBot = bot; },

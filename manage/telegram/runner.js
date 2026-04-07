@@ -15,6 +15,9 @@ const pinterestMvpService = require('../../services/pinterestMvp.service');
 const vkMvpService = require('../../services/vkMvp.service');
 const okMvpService = require('../../services/okMvp.service');
 const instagramMvpService = require('../../services/instagramMvp.service');
+const wordpressMvpService = require('../../services/wordpressMvp.service');
+const blogGenerator = require('../../services/blogGenerator.service');
+const wpRepo = require('../../services/content/wordpress.repository');
 const { getEnabledChannels } = require('../../services/content/repository');
 
 const bots = new Map(); // chatId -> { bot, token }
@@ -1193,6 +1196,121 @@ function startBot(chatId, token) {
             await ctx.answerCbQuery('Ошибка').catch(() => {});
             await ctx.reply(`Ошибка модерации Instagram: ${e.message}`);
         }
+    });
+
+    // WordPress blog moderation callbacks
+    bot.action(/^wp_mod:(approve|rewrite|reject):(\d+)$/, async (ctx) => {
+        const fromId = String(ctx.from?.id || '');
+        const tgChatId = String(ctx.chat?.id || '');
+
+        const [, action, postIdRaw] = ctx.match || [];
+        const postId = Number(postIdRaw);
+        if (!Number.isFinite(postId)) {
+            await ctx.answerCbQuery('Некорректный ID').catch(() => {});
+            return;
+        }
+
+        console.log(`[WP-MOD-CALLBACK] ${action} post ${postId} (fromId=${fromId}, tgChatId=${tgChatId})`);
+
+        // Находим chatId по посту
+        let resolvedChatId = null;
+        const allStates = manageStore.getAllStates();
+        for (const [cid] of Object.entries(allStates)) {
+            try {
+                const post = await wpRepo.getPostById(cid, postId);
+                if (post) {
+                    resolvedChatId = cid;
+                    break;
+                }
+            } catch {
+                // Игнорируем ошибки если БД не существует
+            }
+        }
+
+        if (!resolvedChatId) {
+            await ctx.answerCbQuery('Пост не найден', { show_alert: true }).catch(() => {});
+            return;
+        }
+
+        // Проверяем права модератора
+        const wpConfig = manageStore.getWpConfig(resolvedChatId) || {};
+        const data = manageStore.getState(resolvedChatId);
+        const ownerTgId = String(data?.verifiedTelegramId || '');
+        const moderatorId = process.env.CONTENT_MVP_MODERATOR_USER_ID || '';
+        const allowedIds = new Set([ownerTgId, moderatorId].filter(Boolean));
+
+        if (!allowedIds.has(fromId)) {
+            console.log(`[WP-MOD] Access denied: fromId=${fromId}, resolvedChatId=${resolvedChatId}`);
+            await ctx.answerCbQuery('Недостаточно прав', { show_alert: true }).catch(() => {});
+            return;
+        }
+
+        try {
+            if (action === 'approve') {
+                await wpRepo.markApproved(resolvedChatId, postId);
+                await ctx.answerCbQuery('✅ Одобрено').catch(() => {});
+                await ctx.reply(`✅ Статья #${postId} одобрена и будет опубликована.`);
+            } else if (action === 'rewrite') {
+                // Запрашиваем комментарий от модератора
+                await ctx.answerCbQuery('🔁 Переписать').catch(() => {});
+                const msg = await ctx.reply(
+                    '📝 Напишите замечания для переписывания статьи (следующим сообщением):',
+                    Markup.forceReply().selective()
+                );
+
+                // Сохраняем состояние ожидания
+                if (!data) manageStore.setWpConfig(resolvedChatId, { pendingRewritePostId: postId });
+                else {
+                    data.pendingRewritePostId = postId;
+                    manageStore.persist(resolvedChatId);
+                }
+            } else if (action === 'reject') {
+                const post = await wpRepo.getPostById(resolvedChatId, postId);
+                if (post && post.wp_post_id) {
+                    await wordpressMvpService.deletePost(resolvedChatId, post.wp_post_id);
+                }
+                await wpRepo.markRejected(resolvedChatId, postId);
+                await ctx.answerCbQuery('❌ Отклонено').catch(() => {});
+                await ctx.reply(`❌ Статья #${postId} отклонена и удалена из WordPress.`);
+            }
+        } catch (e) {
+            console.error('[WP-MOD] Error:', e);
+            await ctx.answerCbQuery('Ошибка').catch(() => {});
+            await ctx.reply(`Ошибка модерации блога: ${e.message}`);
+        }
+    });
+
+    // Обработчик комментария для rewrite
+    bot.on('text', async (ctx, next) => {
+        const fromId = String(ctx.from?.id || '');
+        const chatId = ctx.chat?.id ? String(ctx.chat.id) : null;
+
+        if (!chatId) return next();
+
+        const data = manageStore.getState(chatId);
+        const pendingRewritePostId = data?.pendingRewritePostId;
+
+        if (!pendingRewritePostId) return next();
+
+        // Проверяем, что это ответ на сообщение бота
+        const replyToMessage = ctx.message?.reply_to_message;
+        if (!replyToMessage || replyToMessage.from?.id !== ctx.botInfo?.id) return next();
+
+        const moderatorNote = ctx.message.text;
+
+        try {
+            // Сохраняем заметку и возвращаем в draft
+            await wpRepo.markDraft(chatId, pendingRewritePostId, moderatorNote);
+            await ctx.reply(`🔁 Замечания сохранены. Статья #${pendingRewritePostId} будет переписана.`);
+
+            // Очищаем состояние ожидания
+            delete data.pendingRewritePostId;
+            manageStore.persist(chatId);
+        } catch (e) {
+            await ctx.reply(`Ошибка при сохранении замечаний: ${e.message}`);
+        }
+
+        return next();
     });
 
     bot.on('document', async (ctx) => {

@@ -92,6 +92,7 @@ AI агент (agentLoop) обрабатывает сообщения через
 | Контент Pinterest | `services/pinterestMvp.service.js` | SEO-ориентированный контент |
 | Контент Instagram | `services/instagramMvp.service.js` | Instagram Graph API, daily limit 5 |
 | Контент YouTube | `services/youtubeMvp.service.js` | YouTube Data API, генерация и публикация Shorts/видео |
+| Контент WordPress (блог + Дзен RSS + TG-анонс) | `services/wordpressMvp.service.js`, `services/blogGenerator.service.js`, `services/imageGen.service.js`, `services/content/wordpress.repository.js` | Per-user блог через `manageStore.getWpConfig()`. FSM `draft → ready → approved → published`, модерация через CW_BOT (`wp_mod:approve\|rewrite\|reject:{postId}`). Таблицы `content_topics`, `content_knowledge_base`. Кэш картинок: `${DATA_ROOT}/{chatId}/blog-cache/`. Эндпоинты `/api/content/wordpress/*`, `/api/content/topics`, `/api/content/knowledge`. UI: вкладка «WordPress» в `public/channels.html` + `public/js/channels-wordpress.js`. Дзен подтягивает посты из WP RSS автоматически, анонс в TG — через `contentMvp.enqueueAnnouncement` / `worker.publishBlogAnnouncement` |
 | Buffer кросс-постинг | `services/buffer.service.js` | Публикация Pinterest/Instagram через Buffer API |
 | Алерты контента | `services/content/alerts.js` | Уведомления о сбоях/лимитах в контент-пайплайне |
 | Биллинг | `manage/tokenBilling.js`, `manage/billingScheduler.js` | Баланс ProTalk, авто-отключение AI при исчерпании |

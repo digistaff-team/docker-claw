@@ -298,6 +298,52 @@ async function ensureSchema(chatId) {
       CREATE INDEX IF NOT EXISTS idx_ok_jobs_status
       ON ok_jobs(status, created_at);
     `);
+
+    // === WordPress Blog Integration ===
+    // Add columns to content_posts for blog/WordPress support
+    await client.query(`ALTER TABLE content_posts ADD COLUMN IF NOT EXISTS body_html TEXT;`);
+    await client.query(`ALTER TABLE content_posts ADD COLUMN IF NOT EXISTS seo_title VARCHAR(255);`);
+    await client.query(`ALTER TABLE content_posts ADD COLUMN IF NOT EXISTS meta_desc TEXT;`);
+    await client.query(`ALTER TABLE content_posts ADD COLUMN IF NOT EXISTS featured_image_url TEXT;`);
+    await client.query(`ALTER TABLE content_posts ADD COLUMN IF NOT EXISTS wp_media_id INTEGER;`);
+    await client.query(`ALTER TABLE content_posts ADD COLUMN IF NOT EXISTS wp_post_id INTEGER;`);
+    await client.query(`ALTER TABLE content_posts ADD COLUMN IF NOT EXISTS wp_permalink TEXT;`);
+    await client.query(`ALTER TABLE content_posts ADD COLUMN IF NOT EXISTS wp_preview_url TEXT;`);
+    await client.query(`ALTER TABLE content_posts ADD COLUMN IF NOT EXISTS moderator_note TEXT;`);
+
+    // content_topics table — source of topics for scheduler
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS content_topics (
+        id SERIAL PRIMARY KEY,
+        chat_id TEXT NOT NULL,
+        topic VARCHAR(500) NOT NULL,
+        keywords TEXT,
+        tech_doc_id INTEGER,
+        priority INTEGER NOT NULL DEFAULT 5,
+        used_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_content_topics_chat_status_priority
+      ON content_topics(chat_id, status, priority DESC, created_at ASC);
+    `);
+
+    // content_knowledge_base — technical documents for blog generation
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS content_knowledge_base (
+        id BIGSERIAL PRIMARY KEY,
+        chat_id TEXT NOT NULL,
+        title VARCHAR(500) NOT NULL,
+        body TEXT,
+        tags TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_content_knowledge_base_chat_id
+      ON content_knowledge_base(chat_id);
+    `);
   });
 }
 
