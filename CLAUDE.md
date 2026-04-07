@@ -8,7 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Docker-Claw (Клиент Завод) v3.0.0** — AI-платформа для управления изолированными Docker-контейнерами. Каждый пользователь получает персональный контейнер (Node.js-среда), персональную PostgreSQL БД и Telegram-бота. Система автоматически генерирует и публикует контент в Telegram, ВКонтакте, Одноклассники, Pinterest, Instagram.
 
-**Стек:** Node.js 18 + Express.js, PostgreSQL 15, MySQL 8 (навыки), Docker, Telegraf (Telegram Bot API), nodemailer/imap-simple (Email). Фронтенд — статические HTML/CSS/JS файлы (без фреймворка).
+**Стек:** Node.js 18 + Express.js, PostgreSQL 15, MySQL 8 (навыки), Docker, Telegraf (Telegram Bot API), nodemailer/imap-simple (Email), Sharp (обработка изображений), Buffer API (кросс-постинг в Pinterest/Instagram), YouTube Data API. Фронтенд — статические HTML/CSS/JS файлы (без фреймворка).
+
+Дополнительно поддерживаются: публикация в YouTube (Shorts/видео) через YouTube API, кросс-постинг через Buffer (`services/buffer.service.js`), генерация видео (`services/content/video.service.js`).
 
 ---
 
@@ -20,11 +22,12 @@ npm run dev          # Development: nodemon + auto-reload
 npm start            # Production: node server.js
 
 # Тесты (используют встроенный assert Node.js, без тестового раннера)
-npm test                                    # Все юнит-тесты
-node tests/content.status.test.js           # Тест машины состояний
-node tests/validators.extended.test.js      # Тест валидации контента
-node tests/vk.moderation.test.js            # Тест VK модерации
-node tests/vk.publisher.test.js             # Тест VK публикации
+npm test                                    # Запускает content.status + validators.extended
+node tests/content.status.test.js           # Машина состояний контента
+node tests/validators.extended.test.js      # Валидация контента
+node tests/vk.moderation.test.js            # VK модерация
+node tests/vk.publisher.test.js             # VK публикация
+node tests/youtube.mvp.test.js              # YouTube MVP
 
 # E2E тесты (Playwright)
 npm run test:e2e                            # Все E2E тесты
@@ -88,6 +91,9 @@ AI агент (agentLoop) обрабатывает сообщения через
 | Контент OK | `services/okMvp.service.js` | OK API, daily limit 5 |
 | Контент Pinterest | `services/pinterestMvp.service.js` | SEO-ориентированный контент |
 | Контент Instagram | `services/instagramMvp.service.js` | Instagram Graph API, daily limit 5 |
+| Контент YouTube | `services/youtubeMvp.service.js` | YouTube Data API, генерация и публикация Shorts/видео |
+| Buffer кросс-постинг | `services/buffer.service.js` | Публикация Pinterest/Instagram через Buffer API |
+| Алерты контента | `services/content/alerts.js` | Уведомления о сбоях/лимитах в контент-пайплайне |
 | Биллинг | `manage/tokenBilling.js`, `manage/billingScheduler.js` | Баланс ProTalk, авто-отключение AI при исчерпании |
 | Email | `manage/email/` | IMAP polling (каждые 5 мин) + SMTP отправка |
 | Agent Queue | `manage/agentQueue.js` | FIFO очередь AI задач, max 10 на пользователя, 2 сек cooldown |
@@ -96,13 +102,13 @@ AI агент (agentLoop) обрабатывает сообщения через
 
 ### Маршрутизация
 
-Все API маршруты регистрируются в `routes/index.js`. Префиксы: `/api/session`, `/api/execute`, `/api/files`, `/api/content`, `/api/manage`, `/api/auth`, `/api/plans`, `/api/database`, `/admin` (password-protected), `/sandbox`, `/hook`, `/webhook`.
+Основные API маршруты регистрируются в `routes/index.js`: `/session`, `/execute`, `/files`, `/database`, `/manage`, `/plans`, `/apps`, `/content`, `/auth`. Дополнительные роуты монтируются напрямую в `server.js`: `/admin` (password-protected, `routes/admin.routes.js`), `/sandbox`, `/hook`, `/webhook`, `/api/billing` (`routes/billing.routes.js`), `/api/user-hooks` (`routes/user_hooks.routes.js`).
 
 ### Контент-пайплайн
 
 Машина состояний: `draft → ready → approved → published` (+ `error/failed`).
 
-Поток: AI генерирует черновик → если `premoderationEnabled` → отправка модератору через CW Bot (кнопки ✅/🔁/❌) → очередь → worker → публикация в канал. Модуль `services/content/` содержит: `repository.js` (CRUD), `queue.repository.js` (FIFO с retry), `worker.js`, `status.js` (FSM), `validators.js`, `limits.js`, `video.service.js`.
+Поток: AI генерирует черновик → если `premoderationEnabled` → отправка модератору через CW Bot (кнопки ✅/🔁/❌) → очередь → worker → публикация в канал. Модуль `services/content/` содержит: `repository.js` (CRUD), `queue.repository.js` (FIFO с retry), `worker.js`, `status.js` (FSM), `validators.js`, `limits.js`, `video.service.js`, `alerts.js`, плюс per-channel репозитории: `vk.repository.js`, `ok.repository.js`, `pinterest.repository.js`, `instagram.repository.js`, `youtube.repository.js`.
 
 ### Автоматические навыки-копирайтеры
 
