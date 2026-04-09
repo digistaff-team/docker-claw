@@ -1,6 +1,70 @@
 const API_MANAGE = `${window.location.origin}/api/manage`;
 const API_CONTENT = `${window.location.origin}/api/content`;
 
+// === Инициализация scheduler элементов ===
+function initSchedulerChannels() {
+    // Generate hour options for Instagram
+    const igHourEl = document.getElementById('instagramScheduleHour');
+    if (igHourEl && igHourEl.options.length <= 1) {
+        for (let h = 0; h < 24; h++) {
+            const opt = document.createElement('option');
+            opt.value = h.toString().padStart(2, '0');
+            opt.textContent = h.toString().padStart(2, '0');
+            igHourEl.appendChild(opt);
+        }
+        igHourEl.value = '09';
+    }
+
+    // Generate hour options for Facebook
+    const fbHourEl = document.getElementById('facebookScheduleHour');
+    if (fbHourEl && fbHourEl.options.length <= 1) {
+        for (let h = 0; h < 24; h++) {
+            const opt = document.createElement('option');
+            opt.value = h.toString().padStart(2, '0');
+            opt.textContent = h.toString().padStart(2, '0');
+            fbHourEl.appendChild(opt);
+        }
+        fbHourEl.value = '10';
+    }
+
+    // Initialize timezone selects
+    if (typeof generateTimezoneSelect === 'function') {
+        generateTimezoneSelect('instagramScheduleTz', 'Europe/Moscow');
+        generateTimezoneSelect('facebookScheduleTz', 'Europe/Moscow');
+        generateTimezoneSelect('pinterestScheduleTz', 'Europe/Moscow');
+        generateTimezoneSelect('youtubeScheduleTz', 'Europe/Moscow');
+        generateTimezoneSelect('wordpressScheduleTz', 'Europe/Moscow');
+    }
+
+    // Initialize weekday checkboxes
+    if (typeof generateWeekdayCheckboxes === 'function') {
+        const igWeekdays = document.getElementById('instagramWeekdays');
+        if (igWeekdays && !igWeekdays.querySelector('input[type="checkbox"]')) {
+            igWeekdays.innerHTML = generateWeekdayCheckboxes('instagram-weekday', [0, 1, 2, 3, 4]);
+        }
+
+        const fbWeekdays = document.getElementById('facebookWeekdays');
+        if (fbWeekdays && !fbWeekdays.querySelector('input[type="checkbox"]')) {
+            fbWeekdays.innerHTML = generateWeekdayCheckboxes('facebook-weekday', [0, 1, 2, 3, 4]);
+        }
+
+        const pinterestWeekdays = document.getElementById('pinterestWeekdays');
+        if (pinterestWeekdays && !pinterestWeekdays.querySelector('input[type="checkbox"]')) {
+            pinterestWeekdays.innerHTML = generateWeekdayCheckboxes('pinterest-weekday', [1, 2, 3, 4, 5]);
+        }
+
+        const wordpressWeekdays = document.getElementById('wordpressWeekdays');
+        if (wordpressWeekdays && !wordpressWeekdays.querySelector('input[type="checkbox"]')) {
+            wordpressWeekdays.innerHTML = generateWeekdayCheckboxes('wordpress-weekday', [1, 2, 3, 4, 5]);
+        }
+    }
+
+    // Initialize time fields
+    updateInstagramScheduleTime();
+    updateFacebookScheduleTime();
+    updatePinterestScheduleTime();
+}
+
 // === Переключение табов каналов ===
 function initChannelTabs() {
     const tabs = document.querySelectorAll('.channel-tab');
@@ -598,21 +662,12 @@ async function loadPinterestConfig() {
             }
             if (cfg.board_id) document.getElementById('pinterestBoardId').value = cfg.board_id;
             if (cfg.website_url) document.getElementById('pinterestWebsiteUrl').value = cfg.website_url;
-            const isActiveEl = document.getElementById('pinterestIsActive');
-            if (isActiveEl) isActiveEl.checked = cfg.is_active !== false;
-            const autoPublishEl = document.getElementById('pinterestAutoPublish');
-            if (autoPublishEl) autoPublishEl.checked = !!cfg.auto_publish;
             // Планировщик
             if (cfg.schedule_time) {
-                const [h, m] = cfg.schedule_time.split(':');
-                const hourEl = document.getElementById('pinterestScheduleHour');
-                const minEl = document.getElementById('pinterestScheduleMinute');
-                if (hourEl) hourEl.value = (h || '09').padStart(2, '0');
-                if (minEl) minEl.value = (m || '00').padStart(2, '0');
+                setPinterestScheduleTimeInputs(cfg.schedule_time);
             }
             if (cfg.schedule_tz) {
-                const tzEl = document.getElementById('pinterestScheduleTz');
-                if (tzEl) tzEl.value = cfg.schedule_tz;
+                setPinterestScheduleTzInput(cfg.schedule_tz);
             }
             if (cfg.daily_limit != null) {
                 const dlEl = document.getElementById('pinterestDailyLimit');
@@ -623,10 +678,19 @@ async function loadPinterestConfig() {
                 if (piEl) piEl.value = String(cfg.publish_interval_hours);
             }
             if (cfg.allowed_weekdays) {
-                document.querySelectorAll('.pinterestWeekday').forEach(cb => {
-                    cb.checked = cfg.allowed_weekdays.includes(parseInt(cb.value, 10));
-                });
+                setWeekdays('pinterest-weekday', cfg.allowed_weekdays);
             }
+            // Load toggles
+            const randomEl = document.getElementById('pinterestRandomPublish');
+            if (randomEl) randomEl.checked = !!cfg.random_publish;
+            const premoderEl = document.getElementById('pinterestPremoderation');
+            if (premoderEl) {
+                premoderEl.checked = !!cfg.premoderation_enabled;
+                togglePinterestModeratorField();
+            }
+            // Load moderator
+            const moderatorEl = document.getElementById('pinterestModeratorUserId');
+            if (moderatorEl) moderatorEl.value = cfg.moderator_user_id || '';
             // Устанавливаем выбранную доску в select
             const boardSelect = document.getElementById('pinterestBoardSelect');
             if (boardSelect && cfg.board_id) {
@@ -739,7 +803,53 @@ async function loadSelectedPinterestBoardSettings(boardId) {
 }
 
 function updatePinterestScheduleTime() {
-    // Вспомогательная — вызывается при смене часа в select
+    const hour = document.getElementById('pinterestScheduleHour')?.value || '00';
+    const minute = document.getElementById('pinterestScheduleMinute')?.value || '00';
+    const timeField = document.getElementById('pinterestScheduleTime');
+    if (timeField) {
+        timeField.value = `${hour}:${minute.padStart(2, '0')}`;
+    }
+}
+
+function validatePinterestMinutes() {
+    const minuteInput = document.getElementById('pinterestScheduleMinute');
+    if (!minuteInput) return;
+    let val = minuteInput.value.replace(/[^0-9]/g, '');
+    if (val.length > 2) val = val.slice(0, 2);
+    if (val !== '' && parseInt(val, 10) > 59) val = '59';
+    minuteInput.value = val;
+}
+
+function setPinterestScheduleTimeInputs(timeValue) {
+    if (!timeValue) return;
+    const parts = timeValue.split(':');
+    if (parts.length < 2) return;
+    const hourSelect = document.getElementById('pinterestScheduleHour');
+    const minuteInput = document.getElementById('pinterestScheduleMinute');
+    if (hourSelect) hourSelect.value = parts[0].padStart(2, '0');
+    if (minuteInput) minuteInput.value = parts[1].padStart(2, '0');
+    updatePinterestScheduleTime();
+}
+
+function setPinterestScheduleTzInput(tzValue) {
+    const tzSelect = document.getElementById('pinterestScheduleTz');
+    if (!tzSelect || !tzValue) return;
+    tzSelect.value = tzValue;
+    if (!tzSelect.value) {
+        const opt = document.createElement('option');
+        opt.value = tzValue;
+        opt.textContent = tzValue;
+        opt.selected = true;
+        tzSelect.appendChild(opt);
+    }
+}
+
+function togglePinterestModeratorField() {
+    const premoderation = document.getElementById('pinterestPremoderation')?.checked || false;
+    const moderatorField = document.getElementById('pinterestModeratorField');
+    if (moderatorField) {
+        moderatorField.classList.toggle('visible', premoderation);
+    }
 }
 
 async function runPinterestNow() {
@@ -769,12 +879,11 @@ async function runPinterestNow() {
 async function savePinterestConfig() {
     const chatId = getChatId();
     if (!chatId) return;
+    updatePinterestScheduleTime();
     const boardId = (document.getElementById('pinterestBoardId')?.value || '').trim();
     const boardSelect = document.getElementById('pinterestBoardSelect');
     const boardName = boardSelect ? (boardSelect.options[boardSelect.selectedIndex]?.textContent || '').trim() : '';
     const websiteUrl = (document.getElementById('pinterestWebsiteUrl')?.value || '').trim();
-    const isActive = !!document.getElementById('pinterestIsActive')?.checked;
-    const autoPublish = !!document.getElementById('pinterestAutoPublish')?.checked;
     const idea = (document.getElementById('pinterestBoardIdea')?.value || '').trim();
     const focus = (document.getElementById('pinterestBoardFocus')?.value || '').trim();
     const purpose = (document.getElementById('pinterestBoardPurpose')?.value || '').trim();
@@ -783,13 +892,14 @@ async function savePinterestConfig() {
     const bufferChannelId = (document.getElementById('bufferChannelId')?.value || '').trim();
 
     // Планировщик
-    const scheduleHour = document.getElementById('pinterestScheduleHour')?.value || '09';
-    const scheduleMinute = (document.getElementById('pinterestScheduleMinute')?.value || '00').padStart(2, '0');
-    const scheduleTime = `${scheduleHour}:${scheduleMinute}`;
+    const scheduleTime = document.getElementById('pinterestScheduleTime')?.value || '09:00';
     const scheduleTz = document.getElementById('pinterestScheduleTz')?.value || 'Europe/Moscow';
     const dailyLimit = parseInt(document.getElementById('pinterestDailyLimit')?.value, 10) || 5;
-    const publishInterval = document.getElementById('pinterestPublishInterval')?.value || '3';
-    const allowedWeekdays = Array.from(document.querySelectorAll('.pinterestWeekday:checked')).map(cb => parseInt(cb.value, 10));
+    const publishInterval = parseFloat(document.getElementById('pinterestPublishInterval')?.value || '3');
+    const allowedWeekdays = getWeekdays('pinterest-weekday');
+    const randomPublish = !!document.getElementById('pinterestRandomPublish')?.checked;
+    const premoderationEnabled = !!document.getElementById('pinterestPremoderation')?.checked;
+    const moderatorUserId = (document.getElementById('pinterestModeratorUserId')?.value || '').trim();
 
     if (!websiteUrl) {
         showToast('Укажите Website URL', 'error');
@@ -802,8 +912,6 @@ async function savePinterestConfig() {
                 board_id: boardId,
                 board_name: boardName,
                 website_url: websiteUrl,
-                is_active: isActive,
-                auto_publish: autoPublish,
                 idea,
                 focus,
                 purpose,
@@ -811,8 +919,11 @@ async function savePinterestConfig() {
                 schedule_time: scheduleTime,
                 schedule_tz: scheduleTz,
                 daily_limit: dailyLimit,
-                publish_interval_hours: parseFloat(publishInterval),
-                allowed_weekdays: allowedWeekdays
+                publish_interval_hours: publishInterval,
+                allowed_weekdays: allowedWeekdays,
+                random_publish: randomPublish,
+                premoderation_enabled: premoderationEnabled,
+                moderator_user_id: moderatorUserId
         };
         // Отправляем Buffer credentials только если они не замаскированы
         if (bufferApiKey && !bufferApiKey.includes('***')) body.buffer_api_key = bufferApiKey;
@@ -917,17 +1028,44 @@ async function loadInstagramConfig() {
                 moderatorEl.value = cfg.moderator_user_id || chatId;
             }
 
-            const isActiveEl = document.getElementById('instagramIsActive');
-            if (isActiveEl) isActiveEl.checked = cfg.is_active !== false;
-            const autoPublishEl = document.getElementById('instagramAutoPublish');
-            if (autoPublishEl) autoPublishEl.checked = !!cfg.auto_publish;
             const isReelEl = document.getElementById('instagramIsReel');
             if (isReelEl) isReelEl.checked = !!cfg.is_reel;
             const dailyLimitEl = document.getElementById('instagramDailyLimit');
             if (dailyLimitEl) dailyLimitEl.value = cfg.daily_limit || 5;
-            const postingHoursEl = document.getElementById('instagramPostingHours');
-            if (postingHoursEl && Array.isArray(cfg.posting_hours)) {
-                postingHoursEl.value = cfg.posting_hours.join(',');
+            
+            // Load scheduler settings
+            if (cfg.schedule_time) {
+                setInstagramScheduleTimeInputs(cfg.schedule_time);
+            } else {
+                // Default to 09:00
+                const hourEl = document.getElementById('instagramScheduleHour');
+                const minuteEl = document.getElementById('instagramScheduleMinute');
+                if (hourEl) hourEl.value = '09';
+                if (minuteEl) minuteEl.value = '00';
+                updateInstagramScheduleTime();
+            }
+            
+            if (cfg.schedule_tz) {
+                setInstagramScheduleTzInput(cfg.schedule_tz);
+            }
+            
+            if (cfg.publish_interval_hours) {
+                const intervalEl = document.getElementById('instagramPublishInterval');
+                if (intervalEl) intervalEl.value = cfg.publish_interval_hours.toString();
+            }
+            
+            if (cfg.allowed_weekdays) {
+                setWeekdays('instagram-weekday', cfg.allowed_weekdays);
+            }
+            
+            // Load toggles
+            const randomPublishEl = document.getElementById('instagramRandomPublish');
+            if (randomPublishEl) randomPublishEl.checked = !!cfg.random_publish;
+            
+            const premoderationEl = document.getElementById('instagramPremoderation');
+            if (premoderationEl) {
+                premoderationEl.checked = !!cfg.premoderation;
+                toggleInstagramModeratorField();
             }
 
             // Заполняем select страниц если есть сохранённая
@@ -951,6 +1089,56 @@ async function loadInstagramConfig() {
         }
     } catch (e) {
         console.error('loadInstagramConfig', e);
+    }
+}
+
+// Instagram scheduler helpers
+function setInstagramScheduleTimeInputs(timeValue) {
+    const [hour, minute] = timeValue.split(':');
+    const hourEl = document.getElementById('instagramScheduleHour');
+    const minuteEl = document.getElementById('instagramScheduleMinute');
+    if (hourEl) hourEl.value = hour || '09';
+    if (minuteEl) minuteEl.value = (minute || '00').padStart(2, '0');
+    updateInstagramScheduleTime();
+}
+
+function updateInstagramScheduleTime() {
+    const hour = document.getElementById('instagramScheduleHour')?.value || '00';
+    const minute = document.getElementById('instagramScheduleMinute')?.value || '00';
+    const timeField = document.getElementById('instagramScheduleTime');
+    if (timeField) {
+        timeField.value = `${hour}:${minute.padStart(2, '0')}`;
+    }
+}
+
+function validateInstagramMinutes() {
+    const minuteInput = document.getElementById('instagramScheduleMinute');
+    if (!minuteInput) return;
+    let val = minuteInput.value.replace(/\D/g, '');
+    if (val.length > 2) val = val.slice(0, 2);
+    if (val !== '' && parseInt(val, 10) > 59) val = '59';
+    minuteInput.value = val;
+}
+
+function setInstagramScheduleTzInput(tzValue) {
+    const tzSelect = document.getElementById('instagramScheduleTz');
+    if (!tzSelect || !tzValue) return;
+    tzSelect.value = tzValue;
+    if (!tzSelect.value) {
+        // Add custom option if not in list
+        const opt = document.createElement('option');
+        opt.value = tzValue;
+        opt.textContent = tzValue;
+        opt.selected = true;
+        tzSelect.appendChild(opt);
+    }
+}
+
+function toggleInstagramModeratorField() {
+    const premoderation = document.getElementById('instagramPremoderation')?.checked || false;
+    const moderatorField = document.getElementById('instagramModeratorField');
+    if (moderatorField) {
+        moderatorField.classList.toggle('visible', premoderation);
     }
 }
 
@@ -1007,14 +1195,16 @@ async function saveInstagramConfig() {
     const fbPageName = pageSelect ? (pageSelect.options[pageSelect.selectedIndex]?.textContent || '').trim() : '';
     const defaultAltText = (document.getElementById('instagramDefaultAltText')?.value || '').trim();
     const locationId = (document.getElementById('instagramLocationId')?.value || '').trim();
-    const isActive = !!document.getElementById('instagramIsActive')?.checked;
-    const autoPublish = !!document.getElementById('instagramAutoPublish')?.checked;
     const isReel = !!document.getElementById('instagramIsReel')?.checked;
     const dailyLimit = parseInt(document.getElementById('instagramDailyLimit')?.value || '5', 10);
-    const postingHoursRaw = (document.getElementById('instagramPostingHours')?.value || '').trim();
-    const postingHours = postingHoursRaw
-        ? postingHoursRaw.split(',').map(h => parseInt(h.trim(), 10)).filter(h => h >= 0 && h <= 23)
-        : [];
+    
+    // New scheduler fields
+    const scheduleTime = document.getElementById('instagramScheduleTime')?.value || '09:00';
+    const scheduleTz = document.getElementById('instagramScheduleTz')?.value || 'Europe/Moscow';
+    const publishInterval = parseFloat(document.getElementById('instagramPublishInterval')?.value || '5');
+    const allowedWeekdays = getWeekdays('instagram-weekday');
+    const randomPublish = !!document.getElementById('instagramRandomPublish')?.checked;
+    const premoderation = !!document.getElementById('instagramPremoderation')?.checked;
     const moderatorUserId = (document.getElementById('instagramModeratorUserId')?.value || '').trim() || chatId;
 
     try {
@@ -1029,11 +1219,14 @@ async function saveInstagramConfig() {
                 ig_username: igUsername,
                 default_alt_text: defaultAltText,
                 location_id: locationId,
-                is_active: isActive,
-                auto_publish: autoPublish,
                 is_reel: isReel,
                 daily_limit: dailyLimit,
-                posting_hours: postingHours,
+                schedule_time: scheduleTime,
+                schedule_tz: scheduleTz,
+                publish_interval_hours: publishInterval,
+                allowed_weekdays: allowedWeekdays,
+                random_publish: randomPublish,
+                premoderation: premoderation,
                 moderator_user_id: moderatorUserId
             })
         });
@@ -1159,10 +1352,7 @@ async function loadVkStatus() {
             if (postTypeEl) postTypeEl.value = s.post_type || 'post';
 
             const weekdays = Array.isArray(s.allowed_weekdays) ? s.allowed_weekdays : [1, 2, 3, 4, 5];
-            for (let d = 0; d <= 6; d++) {
-                const cb = document.getElementById('vkWeekday' + d);
-                if (cb) cb.checked = weekdays.includes(d);
-            }
+            setWeekdays('vk-weekday', weekdays);
 
             // Загружаем moderator_user_id
             const moderatorEl = document.getElementById('vkModeratorUserId');
@@ -1248,7 +1438,7 @@ async function saveVkSettings() {
                 random_publish: !!document.getElementById('vkRandomPublish')?.checked,
                 premoderation_enabled: !!document.getElementById('vkPremoderation')?.checked,
                 post_type: (document.getElementById('vkPostType')?.value || 'post').trim(),
-                allowed_weekdays: [0,1,2,3,4,5,6].filter(d => document.getElementById('vkWeekday' + d)?.checked),
+                allowed_weekdays: getWeekdays('vk-weekday'),
                 moderator_user_id: moderatorUserId
             })
         });
@@ -1385,10 +1575,7 @@ async function loadOkStatus() {
             if (postTypeEl) postTypeEl.value = s.post_type || 'post';
 
             const weekdays = Array.isArray(s.allowed_weekdays) ? s.allowed_weekdays : [1, 2, 3, 4, 5];
-            for (let d = 0; d <= 6; d++) {
-                const cb = document.getElementById('okWeekday' + d);
-                if (cb) cb.checked = weekdays.includes(d);
-            }
+            setWeekdays('ok-weekday', weekdays);
 
             // Загружаем moderator_user_id
             const moderatorEl = document.getElementById('okModeratorUserId');
@@ -1478,7 +1665,7 @@ async function saveOkSettings() {
                 random_publish: !!document.getElementById('okRandomPublish')?.checked,
                 premoderation_enabled: !!document.getElementById('okPremoderation')?.checked,
                 post_type: (document.getElementById('okPostType')?.value || 'post').trim(),
-                allowed_weekdays: [0,1,2,3,4,5,6].filter(d => document.getElementById('okWeekday' + d)?.checked),
+                allowed_weekdays: getWeekdays('ok-weekday'),
                 moderator_user_id: moderatorUserId
             })
         });
@@ -1589,21 +1776,27 @@ async function loadYoutubeConfig() {
                 }
             }
         }
-        document.getElementById('youtubeIsActive').checked = !!cfg.is_active;
-        document.getElementById('youtubeAutoPublish').checked = !!cfg.auto_publish;
         if (cfg.schedule_time) {
             const [h, m] = cfg.schedule_time.split(':');
             document.getElementById('youtubeScheduleHour').value = h;
             document.getElementById('youtubeScheduleMinute').value = m;
+            updateYoutubeScheduleTime();
         }
         if (cfg.schedule_tz) document.getElementById('youtubeScheduleTz').value = cfg.schedule_tz;
         if (cfg.daily_limit) document.getElementById('youtubeDailyLimit').value = cfg.daily_limit;
         if (cfg.publish_interval_hours) document.getElementById('youtubePublishInterval').value = cfg.publish_interval_hours;
         if (cfg.moderator_user_id) document.getElementById('youtubeModeratorUserId').value = cfg.moderator_user_id;
         if (Array.isArray(cfg.allowed_weekdays)) {
-            document.querySelectorAll('.youtubeWeekday').forEach(cb => {
-                cb.checked = cfg.allowed_weekdays.includes(parseInt(cb.value, 10));
-            });
+            setWeekdays('youtube-weekday', cfg.allowed_weekdays);
+        }
+
+        // Load toggles
+        const randomEl = document.getElementById('youtubeRandomPublish');
+        if (randomEl) randomEl.checked = !!cfg.random_publish;
+        const premoderEl = document.getElementById('youtubePremoderation');
+        if (premoderEl) {
+            premoderEl.checked = !!cfg.premoderation_enabled;
+            toggleYoutubeModeratorField();
         }
 
         // Автозагрузка каналов Buffer для восстановления select
@@ -1630,13 +1823,7 @@ async function saveYoutubeConfig() {
     const statusEl = document.getElementById('youtubeSettingsStatus');
     if (statusEl) statusEl.textContent = '⏳ Сохранение...';
 
-    const weekdays = [];
-    document.querySelectorAll('.youtubeWeekday').forEach(cb => {
-        if (cb.checked) weekdays.push(parseInt(cb.value, 10));
-    });
-
-    const scheduleHour = document.getElementById('youtubeScheduleHour').value;
-    const scheduleMinute = document.getElementById('youtubeScheduleMinute').value;
+    updateYoutubeScheduleTime();
 
     // Channel ID берём из скрытого input (обновляется при выборе из select)
     const bufferChannelId = document.getElementById('youtubeBufferChannelId')?.value?.trim();
@@ -1649,14 +1836,14 @@ async function saveYoutubeConfig() {
                 chat_id: chatId,
                 buffer_api_key: document.getElementById('youtubeBufferApiKey').value,
                 buffer_channel_id: bufferChannelId,
-                is_active: document.getElementById('youtubeIsActive').checked,
-                auto_publish: document.getElementById('youtubeAutoPublish').checked,
-                schedule_time: `${scheduleHour}:${scheduleMinute}`,
+                schedule_time: document.getElementById('youtubeScheduleTime')?.value || '09:00',
                 schedule_tz: document.getElementById('youtubeScheduleTz').value,
                 daily_limit: parseInt(document.getElementById('youtubeDailyLimit').value, 10),
                 publish_interval_hours: parseInt(document.getElementById('youtubePublishInterval').value, 10),
-                allowed_weekdays: weekdays,
-                moderator_user_id: document.getElementById('youtubeModeratorUserId').value
+                allowed_weekdays: getWeekdays('youtube-weekday'),
+                random_publish: !!document.getElementById('youtubeRandomPublish')?.checked,
+                premoderation_enabled: !!document.getElementById('youtubePremoderation')?.checked,
+                moderator_user_id: (document.getElementById('youtubeModeratorUserId')?.value || '').trim() || chatId
             })
         });
         const data = await res.json();
@@ -1729,7 +1916,54 @@ async function testYoutubeBufferConnection() {
 }
 
 function updateYoutubeScheduleTime() {
-    // Helper: combine hour and minute into display (not strictly needed since we read both on save)
+    const hour = document.getElementById('youtubeScheduleHour')?.value || '00';
+    const minute = document.getElementById('youtubeScheduleMinute')?.value || '00';
+    const timeField = document.getElementById('youtubeScheduleTime');
+    if (timeField) {
+        timeField.value = `${hour}:${minute.padStart(2, '0')}`;
+    }
+}
+
+function validateYoutubeMinutes() {
+    const minuteInput = document.getElementById('youtubeScheduleMinute');
+    if (!minuteInput) return;
+    let val = minuteInput.value.replace(/[^0-9]/g, '');
+    if (val.length > 2) val = val.slice(0, 2);
+    if (val !== '' && parseInt(val, 10) > 59) val = '59';
+    minuteInput.value = val;
+    updateYoutubeScheduleTime();
+}
+
+function setYoutubeScheduleTimeInputs(timeValue) {
+    if (!timeValue) return;
+    const parts = timeValue.split(':');
+    if (parts.length < 2) return;
+    const hourSelect = document.getElementById('youtubeScheduleHour');
+    const minuteInput = document.getElementById('youtubeScheduleMinute');
+    if (hourSelect) hourSelect.value = parts[0].padStart(2, '0');
+    if (minuteInput) minuteInput.value = parts[1].padStart(2, '0');
+    updateYoutubeScheduleTime();
+}
+
+function setYoutubeScheduleTzInput(tzValue) {
+    const tzSelect = document.getElementById('youtubeScheduleTz');
+    if (!tzSelect || !tzValue) return;
+    tzSelect.value = tzValue;
+    if (!tzSelect.value) {
+        const opt = document.createElement('option');
+        opt.value = tzValue;
+        opt.textContent = tzValue;
+        opt.selected = true;
+        tzSelect.appendChild(opt);
+    }
+}
+
+function toggleYoutubeModeratorField() {
+    const premoderation = document.getElementById('youtubePremoderation')?.checked || false;
+    const moderatorField = document.getElementById('youtubeModeratorField');
+    if (moderatorField) {
+        moderatorField.classList.toggle('visible', premoderation);
+    }
 }
 
 async function runYoutubeNow() {

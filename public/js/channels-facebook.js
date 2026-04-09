@@ -137,22 +137,45 @@ window.loadFacebookConfig = async function() {
             $('fbBufferChannelId').value = cfg.buffer_channel_id;
         }
 
-        // Настройки
-        $('fbActive').checked = !!cfg.is_active;
-        $('fbAutoPublish').checked = !!cfg.auto_publish;
-        $('fbRandomPublish').checked = !!cfg.random_publish;
+        // Load scheduler settings
+        if (cfg.schedule_time) {
+            setFacebookScheduleTimeInputs(cfg.schedule_time);
+        } else {
+            const hourEl = document.getElementById('facebookScheduleHour');
+            const minuteEl = document.getElementById('facebookScheduleMinute');
+            if (hourEl) hourEl.value = '10';
+            if (minuteEl) minuteEl.value = '00';
+            updateFacebookScheduleTime();
+        }
+        
+        if (cfg.schedule_tz) {
+            setFacebookScheduleTzInput(cfg.schedule_tz);
+        }
+        
+        if (cfg.daily_limit) $('facebookDailyLimit').value = cfg.daily_limit;
+        if (cfg.publish_interval_hours) {
+            const intervalEl = document.getElementById('facebookPublishInterval');
+            if (intervalEl) intervalEl.value = cfg.publish_interval_hours.toString();
+        }
+        
+        if (cfg.allowed_weekdays) {
+            setWeekdays('facebook-weekday', cfg.allowed_weekdays);
+        }
+        
+        if (cfg.moderator_user_id) {
+            const modEl = document.getElementById('facebookModeratorUserId');
+            if (modEl) modEl.value = cfg.moderator_user_id;
+        }
 
-        if (cfg.schedule_time) $('fbScheduleTime').value = cfg.schedule_time;
-        if (cfg.schedule_tz) $('fbScheduleTz').value = cfg.schedule_tz;
-        if (cfg.daily_limit) $('fbDailyLimit').value = cfg.daily_limit;
-        if (cfg.publish_interval_hours) $('fbIntervalHours').value = cfg.publish_interval_hours;
-        if (cfg.moderator_user_id) $('fbModeratorUserId').value = cfg.moderator_user_id;
-
-        // Дни недели
-        const days = cfg.allowed_weekdays || [0, 1, 2, 3, 4, 5, 6];
-        document.querySelectorAll('#fbWeekdays input[data-day]').forEach(input => {
-            input.checked = days.includes(parseInt(input.dataset.day, 10));
-        });
+        // Load toggles
+        const randomPublishEl = document.getElementById('facebookRandomPublish');
+        if (randomPublishEl) randomPublishEl.checked = !!cfg.random_publish;
+        
+        const premoderationEl = document.getElementById('facebookPremoderation');
+        if (premoderationEl) {
+            premoderationEl.checked = !!cfg.premoderation;
+            toggleFacebookModeratorField();
+        }
 
         // Статус
         const pageName = cfg.page_name ? `Страница: ${cfg.page_name}` : '';
@@ -167,6 +190,55 @@ window.loadFacebookConfig = async function() {
     }
 };
 
+// Facebook scheduler helpers
+function setFacebookScheduleTimeInputs(timeValue) {
+    const [hour, minute] = timeValue.split(':');
+    const hourEl = document.getElementById('facebookScheduleHour');
+    const minuteEl = document.getElementById('facebookScheduleMinute');
+    if (hourEl) hourEl.value = hour || '10';
+    if (minuteEl) minuteEl.value = (minute || '00').padStart(2, '0');
+    updateFacebookScheduleTime();
+}
+
+function updateFacebookScheduleTime() {
+    const hour = document.getElementById('facebookScheduleHour')?.value || '00';
+    const minute = document.getElementById('facebookScheduleMinute')?.value || '00';
+    const timeField = document.getElementById('facebookScheduleTime');
+    if (timeField) {
+        timeField.value = `${hour}:${minute.padStart(2, '0')}`;
+    }
+}
+
+function validateFacebookMinutes() {
+    const minuteInput = document.getElementById('facebookScheduleMinute');
+    if (!minuteInput) return;
+    let val = minuteInput.value.replace(/\D/g, '');
+    if (val.length > 2) val = val.slice(0, 2);
+    if (val !== '' && parseInt(val, 10) > 59) val = '59';
+    minuteInput.value = val;
+}
+
+function setFacebookScheduleTzInput(tzValue) {
+    const tzSelect = document.getElementById('facebookScheduleTz');
+    if (!tzSelect || !tzValue) return;
+    tzSelect.value = tzValue;
+    if (!tzSelect.value) {
+        const opt = document.createElement('option');
+        opt.value = tzValue;
+        opt.textContent = tzValue;
+        opt.selected = true;
+        tzSelect.appendChild(opt);
+    }
+}
+
+function toggleFacebookModeratorField() {
+    const premoderation = document.getElementById('facebookPremoderation')?.checked || false;
+    const moderatorField = document.getElementById('facebookModeratorField');
+    if (moderatorField) {
+        moderatorField.classList.toggle('visible', premoderation);
+    }
+}
+
 /**
  * Сохранение конфигурации Facebook
  */
@@ -180,25 +252,28 @@ window.saveFacebookConfig = async function() {
     try {
         setFbStatus('Сохранение...', '#666');
 
-        const days = [];
-        document.querySelectorAll('#fbWeekdays input[data-day]:checked').forEach(input => {
-            days.push(parseInt(input.dataset.day, 10));
-        });
+        const scheduleTime = document.getElementById('facebookScheduleTime')?.value || '10:00';
+        const scheduleTz = document.getElementById('facebookScheduleTz')?.value || 'Europe/Moscow';
+        const dailyLimit = parseInt(document.getElementById('facebookDailyLimit')?.value || '10', 10);
+        const publishInterval = parseFloat(document.getElementById('facebookPublishInterval')?.value || '4');
+        const allowedWeekdays = getWeekdays('facebook-weekday');
+        const randomPublish = !!document.getElementById('facebookRandomPublish')?.checked;
+        const premoderation = !!document.getElementById('facebookPremoderation')?.checked;
+        const moderatorUserId = (document.getElementById('facebookModeratorUserId')?.value || '').trim() || null;
 
         const payload = {
             chat_id: chatId,
             buffer_api_key: $('fbBufferApiKey').value.trim() || null,
             buffer_channel_id: $('fbBufferChannelId').value || null,
             page_name: window.facebookConfig?.page_name || null,
-            is_active: $('fbActive').checked,
-            auto_publish: $('fbAutoPublish').checked,
-            schedule_time: $('fbScheduleTime').value,
-            schedule_tz: $('fbScheduleTz').value,
-            daily_limit: parseInt($('fbDailyLimit').value, 10) || 10,
-            publish_interval_hours: parseFloat($('fbIntervalHours').value) || 4,
-            allowed_weekdays: days,
-            random_publish: $('fbRandomPublish').checked,
-            moderator_user_id: $('fbModeratorUserId').value.trim() || null
+            schedule_time: scheduleTime,
+            schedule_tz: scheduleTz,
+            daily_limit: dailyLimit,
+            publish_interval_hours: publishInterval,
+            allowed_weekdays: allowedWeekdays,
+            random_publish: randomPublish,
+            premoderation: premoderation,
+            moderator_user_id: moderatorUserId
         };
 
         await jfetch(`${API_MANAGE}/channels/facebook`, {

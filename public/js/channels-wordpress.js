@@ -80,22 +80,38 @@
     try {
       const r = await jfetch(`${API}/wordpress/config?chatId=${encodeURIComponent(chatId)}`);
       const c = r.config || {};
-      $('wordpressEnabled').checked = !!c.enabled;
-      $('wordpressAutoPublish').checked = !!c.autoPublish;
+      // Keep legacy fields for backward compatibility
+      if (c.enabled !== undefined) $('wordpressEnabled') && ($('wordpressEnabled').checked = !!c.enabled);
+      if (c.autoPublish !== undefined) $('wordpressAutoPublish') && ($('wordpressAutoPublish').checked = !!c.autoPublish);
       $('wordpressAnnounceTelegram').checked = c.announceTelegram !== false;
       $('wordpressUseKnowledgeBase').checked = c.useKnowledgeBase !== false;
       const time = (c.scheduleTime || '09:00').split(':');
       $('wordpressScheduleHour').value = time[0] || '09';
-      $('wordpressScheduleMinute').value = time[1] || '00';
-      $('wordpressScheduleTime').value = c.scheduleTime || '09:00';
-      $('wordpressScheduleTz').value = c.scheduleTz || 'Europe/Moscow';
+      $('wordpressScheduleMinute').value = (time[1] || '00').padStart(2, '0');
+      updateWordpressScheduleTime();
+      if (c.scheduleTz) setWordpressScheduleTzInput(c.scheduleTz);
       $('wordpressDailyLimit').value = c.dailyLimit || 1;
-      $('wordpressMinIntervalHours').value = c.minIntervalHours || 6;
+      // Map minIntervalHours to publishInterval
+      const intervalHours = c.minIntervalHours || 6;
+      const intervalEl = $('wordpressPublishInterval');
+      if (intervalEl) {
+        if (intervalHours <= 3) intervalEl.value = '3';
+        else if (intervalHours <= 6) intervalEl.value = '6';
+        else if (intervalHours <= 12) intervalEl.value = '12';
+        else intervalEl.value = '24';
+      }
       const days = Array.isArray(c.scheduleDays) ? c.scheduleDays : [1, 2, 3, 4, 5];
-      [0, 1, 2, 3, 4, 5, 6].forEach(d => {
-        const el = $(`wordpressWeekday${d}`);
-        if (el) el.checked = days.includes(d);
-      });
+      setWeekdays('wordpress-weekday', days);
+      // New fields
+      const randomEl = $('wordpressRandomPublish');
+      if (randomEl) randomEl.checked = !!c.randomPublish;
+      const premoderEl = $('wordpressPremoderation');
+      if (premoderEl) {
+        premoderEl.checked = !!c.premoderationEnabled;
+        toggleWordpressModeratorField();
+      }
+      const moderatorEl = $('wordpressModeratorUserId');
+      if (moderatorEl) moderatorEl.value = c.moderatorUserId || '';
       if (c.defaultCategoryId) $('wordpressDefaultCategoryId').value = c.defaultCategoryId;
     } catch (e) {
       console.warn('loadWordpressConfig:', e.message);
@@ -106,17 +122,23 @@
   window.saveWordpressConfig = async function () {
     const chatId = chat();
     if (!chatId) return;
-    const days = [0, 1, 2, 3, 4, 5, 6].filter(d => $(`wordpressWeekday${d}`)?.checked);
+    updateWordpressScheduleTime();
+    const days = getWeekdays('wordpress-weekday');
     const cfg = {
-      enabled: $('wordpressEnabled').checked,
-      autoPublish: $('wordpressAutoPublish').checked,
+      // Legacy fields for backward compatibility
+      enabled: $('wordpressEnabled') ? $('wordpressEnabled').checked : true,
+      autoPublish: $('wordpressAutoPublish') ? $('wordpressAutoPublish').checked : false,
       announceTelegram: $('wordpressAnnounceTelegram').checked,
       useKnowledgeBase: $('wordpressUseKnowledgeBase').checked,
+      // New standard fields
       scheduleTime: $('wordpressScheduleTime').value || '09:00',
-      scheduleTz: $('wordpressScheduleTz').value,
+      scheduleTz: $('wordpressScheduleTz').value || 'Europe/Moscow',
       scheduleDays: days,
       dailyLimit: parseInt($('wordpressDailyLimit').value, 10) || 1,
-      minIntervalHours: parseInt($('wordpressMinIntervalHours').value, 10) || 6,
+      minIntervalHours: parseInt($('wordpressPublishInterval').value, 10) || 24,
+      randomPublish: !!$('wordpressRandomPublish')?.checked,
+      premoderationEnabled: !!$('wordpressPremoderation')?.checked,
+      moderatorUserId: ($('wordpressModeratorUserId')?.value || '').trim(),
       defaultCategoryId: parseInt($('wordpressDefaultCategoryId').value, 10) || null
     };
     setStatus('Сохранение...', '#666');
@@ -144,6 +166,32 @@
     if (v && parseInt(v, 10) > 59) v = '59';
     el.value = v;
     updateWordpressScheduleTime();
+  };
+  window.setWordpressScheduleTimeInputs = function(timeValue) {
+    if (!timeValue) return;
+    const [h, m] = timeValue.split(':');
+    if ($('wordpressScheduleHour')) $('wordpressScheduleHour').value = (h || '09').padStart(2, '0');
+    if ($('wordpressScheduleMinute')) $('wordpressScheduleMinute').value = (m || '00').padStart(2, '0');
+    updateWordpressScheduleTime();
+  };
+  window.setWordpressScheduleTzInput = function(tzValue) {
+    const tzSelect = $('wordpressScheduleTz');
+    if (!tzSelect || !tzValue) return;
+    tzSelect.value = tzValue;
+    if (!tzSelect.value) {
+      const opt = document.createElement('option');
+      opt.value = tzValue;
+      opt.textContent = tzValue;
+      opt.selected = true;
+      tzSelect.appendChild(opt);
+    }
+  };
+  window.toggleWordpressModeratorField = function() {
+    const premoderation = $('wordpressPremoderation')?.checked || false;
+    const moderatorField = $('wordpressModeratorField');
+    if (moderatorField) {
+      moderatorField.classList.toggle('visible', premoderation);
+    }
   };
 
   // ===== Categories =====

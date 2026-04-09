@@ -3059,3 +3059,208 @@ select {
         max-height: calc(100vh - 20px);
     }
 }
+
+/* ========================================
+   Scheduler Standard Styles
+   ======================================== */
+
+/* Two-block layout for channel panels */
+.scheduler-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 16px;
+}
+
+.channel-settings-block,
+.schedule-settings-block {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.channel-settings-block h3,
+.schedule-settings-block h3 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #2c3e50;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Mobile: stacked layout */
+@media (max-width: 768px) {
+    .scheduler-container {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    
+    .channel-settings-block {
+        order: 1;
+    }
+    
+    .schedule-settings-block {
+        order: 2;
+    }
+}
+
+/* Time picker styles */
+.scheduler-time-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.scheduler-time-row select,
+.scheduler-time-row input[type="text"] {
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.scheduler-time-row select {
+    min-width: 80px;
+}
+
+.scheduler-time-row input[type="text"] {
+    width: 60px;
+    text-align: center;
+}
+
+/* Timezone selector */
+.scheduler-tz-row {
+    margin-bottom: 12px;
+}
+
+.scheduler-tz-row select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 14px;
+    background: white;
+}
+
+/* Weekday checkboxes */
+.scheduler-weekdays-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.weekday-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    background: white;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    user-select: none;
+    transition: all 0.2s;
+}
+
+.weekday-label:hover {
+    background: #e9ecef;
+}
+
+.weekday-label input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.weekday-label input[type="checkbox"]:checked + span {
+    font-weight: 600;
+    color: #007bff;
+}
+
+/* Scheduler form fields */
+.scheduler-field-row {
+    margin-bottom: 12px;
+}
+
+.scheduler-field-row label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #495057;
+}
+
+.scheduler-field-row input[type="number"],
+.scheduler-field-row input[type="text"],
+.scheduler-field-row select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+/* Checkbox rows */
+.scheduler-checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.scheduler-checkbox-row input[type="checkbox"] {
+    margin: 0;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.scheduler-checkbox-row label {
+    margin: 0;
+    font-size: 14px;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Moderator field (conditionally shown) */
+.moderator-field {
+    display: none;
+}
+
+.moderator-field.visible {
+    display: block;
+}
+
+/* Scheduler controls (buttons) */
+.scheduler-controls {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #dee2e6;
+}
+
+.scheduler-controls .btn {
+    flex: 1;
+}
+
+/* Status line */
+.scheduler-status {
+    margin-top: 12px;
+    font-size: 14px;
+    color: #6c757d;
+}
+
+.scheduler-status.success {
+    color: #28a745;
+}
+
+.scheduler-status.error {
+    color: #dc3545;
+}
+
