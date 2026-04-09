@@ -114,25 +114,52 @@ router.get('/:chat_id/download', async (req, res) => {
 router.post('/:chat_id/upload', upload.single('file'), async (req, res) => {
     const { chat_id } = req.params;
     const { destination = '/workspace/input' } = req.body;
-    
+
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }
+
+    // Для файлов персонализации сохраняем напрямую на диск
+    const PERSONA_FILES = ['IDENTITY.md', 'SOUL.md', 'USER.md', 'MEMORY.md'];
+    const filename = req.file.originalname;
+    const isPersonaFile = PERSONA_FILES.includes(filename);
+    const isWorkspaceDest = destination.startsWith('/workspace');
     
+    if (isPersonaFile && isWorkspaceDest) {
+        try {
+            const storageService = require('../services/storage.service');
+            const dataDir = storageService.getDataDir(chat_id);
+            const destPath = path.join(dataDir, filename);
+            await fs.rename(req.file.path, destPath);
+            
+            const projectCacheService = require('../services/projectCache.service');
+            const containerPath = `/workspace/${filename}`;
+            await projectCacheService.updateFileInCache(chat_id, containerPath);
+            
+            return res.json({
+                success: true,
+                filename: filename,
+                destination: containerPath
+            });
+        } catch (error) {
+            return res.status(500).json({ error: error.message });
+        }
+    }
+
     const session = sessionService.getSession(chat_id);
     if (!session) {
-        return res.status(404).json({ error: 'Session not found' });
+        return res.status(404).json({ error: 'Session not found. Container must be running for non-personalization files' });
     }
-    
+
     try {
         // Use POSIX path for container destinations regardless of host OS.
         const remotePath = path.posix.join(destination, req.file.originalname);
         await dockerService.copyToContainer(req.file.path, session.containerId, remotePath);
         await fs.unlink(req.file.path).catch(() => {});
-        
+
         // Обновляем файл в кэше
         await projectCacheService.updateFileInCache(chat_id, remotePath);
-        
+
         res.json({
             success: true,
             filename: req.file.originalname,
@@ -209,22 +236,38 @@ router.get('/:chat_id/stats', async (req, res) => {
 router.get('/:chat_id/content', async (req, res) => {
     const { chat_id } = req.params;
     const { filepath } = req.query;
-    
+
     if (!filepath) {
         return res.status(400).json({ error: 'filepath is required' });
     }
-    
+
     const session = sessionService.getSession(chat_id);
     if (!session) {
+        // Fallback: читаем файл напрямую с диска для персонализации
+        // Это позволяет просматривать IDENTITY.md, SOUL.md, USER.md даже без запущенного контейнера
+        const PERSONA_FILES = ['IDENTITY.md', 'SOUL.md', 'USER.md', 'MEMORY.md'];
+        const filename = path.basename(filepath);
+        if (PERSONA_FILES.includes(filename)) {
+            try {
+                const storageService = require('../services/storage.service');
+                const dataDir = storageService.getDataDir(chat_id);
+                const filePath = path.join(dataDir, filename);
+                const content = await fs.readFile(filePath, 'utf-8');
+                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                return res.send(content);
+            } catch (e) {
+                return res.status(404).json({ error: 'File not found on disk' });
+            }
+        }
         return res.status(404).json({ error: 'Session not found' });
     }
-    
+
     try {
         const result = await dockerService.executeInContainer(
             session.containerId,
             `cat ${filepath}`
         );
-        
+
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.send(result.stdout);
     } catch (error) {

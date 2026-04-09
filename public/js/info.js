@@ -70,25 +70,82 @@ async function loadSessionInfo() {
     try {
         const response = await fetch(`${API_URL}/session/${chatId}`);
         const data = await response.json();
+
         if (data.exists) {
             // Загружаем Telegram username через API
             const username = await getTelegramUsername(chatId);
 
+            // Статус контейнера
+            let statusHtml;
+            if (data.containerAlive) {
+                statusHtml = '🟢 Активен';
+            } else if (data.containerStatus === 'exited' || data.containerStatus === 'dead') {
+                statusHtml = '⏸️ Остановлен';
+            } else if (data.containerStatus) {
+                statusHtml = `🟡 ${data.containerStatus}`;
+            } else {
+                statusHtml = '🔴 Неактивен';
+            }
+
+            // Инфо о сессии
+            const sessionInfo = data.sessionInMemory
+                ? `<div><strong>Сессия в памяти:</strong> Да</div>
+                   <div><strong>Последняя активность:</strong> ${data.idle ? Math.round(parseInt(data.idle) / 60) + ' мин назад' : 'Неизвестно'}</div>
+                   <div><strong>Команд выполнено:</strong> ${data.commandCount}</div>`
+                : `<div><strong>Сессия в памяти:</strong> Нет (контейнер на диске)</div>
+                   <div><strong>Примечание:</strong> Контейнер будет запущен автоматически при первом обращении</div>`;
+
             el.innerHTML = `
                 <div><strong>Chat ID:</strong> ${data.chat_id}${username}</div>
-                <div><strong>Session ID:</strong> ${data.sessionId}</div>
                 <div><strong>Container ID:</strong> ${data.containerId}</div>
-                <div><strong>Создана:</strong> ${new Date(data.created).toLocaleString('ru-RU')}</div>
-                <div><strong>Возраст:</strong> ${data.age}</div>
-                <div><strong>Команд выполнено:</strong> ${data.commandCount}</div>
-                <div><strong>Статус:</strong> ${data.containerAlive ? '🟢 Активна' : '🔴 Неактивна'}</div>
+                <div><strong>Создан:</strong> ${data.created ? new Date(data.created).toLocaleString('ru-RU') : 'Неизвестно'}</div>
+                <div><strong>Статус:</strong> ${statusHtml}</div>
+                ${sessionInfo}
             `;
         } else {
-            el.innerHTML = '<div style="color: #f44336;">Сессия не найдена</div>';
+            // Сессии и контейнера нет
+            if (data.hasFilesOnDisk) {
+                el.innerHTML = `
+                    <div style="color: #FF9800;">⚠️ Контейнер не создан</div>
+                    <div style="margin-top: 8px; font-size: 13px;">
+                        Файлы пользователя сохранены на диске. Контейнер будет создан автоматически при первом обращении.
+                    </div>
+                    <div style="margin-top: 12px;">
+                        <button class="btn btn-primary" onclick="createSessionNow()" style="padding: 8px 16px; font-size: 13px;">🚀 Создать контейнер сейчас</button>
+                    </div>
+                `;
+            } else {
+                el.innerHTML = '<div style="color: #f44336;">Нет данных о пользователе</div>';
+            }
         }
     } catch (e) {
         console.error('Error loading session info', e);
         el.innerHTML = '<div style="color: #f44336;">Ошибка загрузки информации о сессии</div>';
+    }
+}
+
+async function createSessionNow() {
+    const chatId = getChatId();
+    if (!chatId) return;
+
+    showToast('Создаём контейнер...', 'info');
+
+    try {
+        const response = await fetch(`${API_URL}/session/create`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId })
+        });
+
+        if (response.ok) {
+            showToast('Контейнер создан', 'success');
+            await loadSessionInfo();
+        } else {
+            const err = await response.json().catch(() => ({}));
+            showToast(err.error || 'Ошибка создания', 'error');
+        }
+    } catch (e) {
+        showToast('Ошибка создания: ' + e.message, 'error');
     }
 }
 

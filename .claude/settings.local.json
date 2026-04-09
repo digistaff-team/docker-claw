@@ -7,7 +7,8 @@
       "Bash(find /c/Projects/Docker-Claw -name docker-compose* -o -name *.dockerignore -o -name config.js)",
       "Bash(git commit:*)",
       "Bash(python3:*)",
-      "Bash(docker network:*)"
+      "Bash(docker network:*)",
+      "Bash(git:*)"
     ]
   }
 }

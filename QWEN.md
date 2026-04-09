@@ -423,7 +423,41 @@ module.exports = {
 4. **Per-user PostgreSQL**: Database named `db_{chatId}` auto-provisioned
 5. **Agent loop**: Tool-calling pattern for AI autonomy
 
-## Recent Changes (April 2026)
+## Recent Changes (April 9, 2026)
+
+### Session Lifecycle — Containers Preserved on Idle Cleanup
+
+**Problem:** Containers and user databases were being **deleted** after 24 hours of inactivity, causing:
+- Loss of runtime state and PM2 processes
+- Database recreation overhead on next visit
+- User personalization files temporarily inaccessible (files on disk were safe, but API required container)
+
+**Solution:** Containers are now **stopped** instead of deleted during idle session cleanup:
+
+**Changes:**
+- `session.service.js`:
+  - New `stopSession(chatId)` — stops container, keeps it on disk, preserves database
+  - Modified `cleanupIdleSessions()` — calls `stopSession` instead of `destroySession`
+  - Modified `recoverSession()` — starts stopped containers on demand, no longer deletes on startup failure
+  - `destroySession()` preserved for explicit account deletion only
+
+- `docker.service.js`:
+  - New `stopContainer(containerId)` — runs `docker stop -t 10`
+  - Modified `startContainer(containerId)` — no longer re-initializes workspace (only starts)
+  - Both functions exported
+
+**Lifecycle:**
+1. User active → container running
+2. 24h idle → container **stopped** (not deleted)
+3. User returns → container **started** automatically via `recoverSession`
+4. Workspace, files, PM2 processes preserved
+
+**Benefits:**
+- ✅ Faster session recovery (no container recreation)
+- ✅ No npm install / workspace structure rebuild on restart
+- ✅ PM2 processes resurrected from dump
+- ✅ Database always preserved
+- ✅ User files always accessible (direct disk fallback + container)
 
 ### WordPress/Дзен Blog Publishing System
 
@@ -603,6 +637,15 @@ The `contentMvp.service.js` was updated to use files from `/workspace/input` for
 - Modified `generateImage(chatId, topic, text)` — now accepts `chatId` and incorporates user files into Kie.ai prompts
 
 All 7 call sites of `generateImage()` were updated to pass `chatId`.
+
+### Personalization Files Always Accessible
+
+**Problem:** Personalization files (`IDENTITY.md`, `SOUL.md`, `USER.md`) appeared empty in the web UI when the user's container was stopped, even though files were safely stored on disk.
+
+**Solution:** `files.routes.js` now has a disk fallback for personalization files:
+- When session/container is inactive, API reads files directly from `/var/sandbox-data/{chatId}/{filename}`
+- Upload route also saves personalization files directly to disk
+- Non-personalization files still require a running container
 
 ### Environment Variable Loading
 

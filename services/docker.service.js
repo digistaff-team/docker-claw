@@ -157,10 +157,19 @@ async function waitForContainer(containerId, timeoutMs) {
     throw new Error('Container ' + containerId + ' did not start within ' + timeoutMs + 'ms');
 }
 
+/**
+ * Остановить контейнер (без удаления)
+ */
+async function stopContainer(containerId) {
+    await execDocker(['stop', '-t', '10', containerId]);
+}
+
+/**
+ * Запустить остановленный контейнер (без пере-инициализации)
+ */
 async function startContainer(containerId) {
     await execDocker(['start', containerId]);
     await waitForContainer(containerId, 15000);
-    await initializeWorkspaceStructure(containerId);
 }
 
 async function createUserContainer(chatId, options) {
@@ -430,6 +439,7 @@ module.exports = {
     getContainerStatus: getContainerStatus,
     getAllUserContainers: getAllUserContainers,
     waitForContainer: waitForContainer,
+    stopContainer: stopContainer,
     startContainer: startContainer,
     createUserContainer: createUserContainer,
     executeInContainer: executeInContainer,

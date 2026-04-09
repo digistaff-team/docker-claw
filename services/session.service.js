@@ -96,34 +96,29 @@ function getInitStatus(chatId) {
 async function recoverSession(chatId) {
     const containerName = `sandbox-user-${chatId}`;
     const containerId = await dockerService.getContainerIdByName(containerName);
-    
+
     if (!containerId) {
         return null;
     }
-    
+
     console.log(`[SESSION] Recovering session: ${chatId}`);
-    
+
     // Проверяем и запускаем контейнер если остановлен
     const status = await dockerService.getContainerStatus(containerId);
     if (status !== 'running') {
-        console.log(`[SESSION] Starting stopped container: ${containerName}`);
+        console.log(`[SESSION] Starting stopped container: ${containerName} (status: ${status})`);
         try {
             await dockerService.startContainer(containerId);
         } catch (err) {
-            console.log(`[SESSION] Failed to start container ${containerName}: ${err.message}`);
-            // Удаляем старый контейнер и создаем новый
-            try {
-                await dockerService.removeContainer(containerId);
-            } catch (e) {
-                console.log(`[SESSION] Could not remove container: ${e.message}`);
-            }
+            console.error(`[SESSION] Failed to start container ${containerName}: ${err.message}`);
+            console.log(`[SESSION] Container will be recreated on next getOrCreateSession`);
             return null;
         }
     }
-    
+
     const dbInfo = await getDatabaseInfo(chatId);
     const dataDir = storageService.getDataDir(chatId);
-    
+
     const session = {
         chatId,
         sessionId: chatId,
@@ -137,7 +132,7 @@ async function recoverSession(chatId) {
         allowNetwork: true,
         recovered: true
     };
-    
+
     sessions.set(chatId, session);
 
     // Восстанавливаем pm2-процессы после рестарта контейнера.
@@ -192,11 +187,34 @@ function getSession(chatId) {
 }
 
 /**
- * Удаляет сессию
+ * Останавливает сессию (контейнер + сохраняет БД)
+ * Вызывается при очистке неактивных сессий.
+ * Контейнер останавливается, но НЕ удаляется — быстрый рестарт при следующем обращении.
+ */
+async function stopSession(chatId) {
+    const session = sessions.get(chatId);
+
+    if (session) {
+        try {
+            console.log(`[SESSION] Stopping container: ${session.containerId}`);
+            await dockerService.stopContainer(session.containerId);
+            sessions.delete(chatId);
+            console.log(`[SESSION] Stopped (not destroyed): ${chatId}`);
+        } catch (err) {
+            console.warn(`[SESSION] Could not stop container for ${chatId}: ${err.message}`);
+            // Если контейнер уже не существует — просто удаляем из памяти
+            sessions.delete(chatId);
+        }
+    }
+}
+
+/**
+ * Удаляет сессию полностью (контейнер + БД)
+ * Используйте только для явного удаления аккаунта.
  */
 async function destroySession(chatId) {
     const session = sessions.get(chatId);
-    
+
     if (session) {
         await dockerService.removeContainer(session.containerId);
         await deleteUserDatabase(chatId);
@@ -236,26 +254,26 @@ function getAllSessions() {
 }
 
 /**
- * Очищает неактивные сессии
+ * Очищает неактивные сессии — ОСТАНАВЛИВАЕТ контейнеры вместо удаления
  */
 async function cleanupIdleSessions() {
     const now = Date.now();
-    const toRemove = [];
-    
+    const toStop = [];
+
     for (const [chatId, session] of sessions) {
         const idle = now - session.lastActivity;
-        
+
         if (idle > config.SESSION_MAX_IDLE_MS) {
-            toRemove.push(chatId);
+            toStop.push(chatId);
         }
     }
-    
-    for (const chatId of toRemove) {
-        console.log(`[CLEANUP] Removing idle session: ${chatId}`);
-        await destroySession(chatId);
+
+    for (const chatId of toStop) {
+        console.log(`[CLEANUP] Stopping idle session: ${chatId}`);
+        await stopSession(chatId);
     }
-    
-    return toRemove.length;
+
+    return toStop.length;
 }
 
 /**
@@ -309,6 +327,7 @@ module.exports = {
     getOrCreateSession,
     getSession,
     destroySession,
+    stopSession,
     executeCommand,
     getAllSessions,
     cleanupIdleSessions,
