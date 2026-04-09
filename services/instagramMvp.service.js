@@ -1,6 +1,6 @@
 /**
  * Instagram MVP Service — генерация, модерация, публикация Instagram-постов
- * По аналогии с vkMvp.service.js
+ * Публикация через Buffer GraphQL API (аналогично Pinterest)
  */
 const path = require('path');
 const os = require('os');
@@ -12,8 +12,8 @@ const manageStore = require('../manage/store');
 const sessionService = require('./session.service');
 const dockerService = require('./docker.service');
 const storageService = require('./storage.service');
-const instagramService = require('./instagram.service');
 const imageService = require('./image.service');
+const bufferService = require('./buffer.service');
 const igRepo = require('./content/instagram.repository');
 
 const contentModules = require('./content/index');
@@ -66,19 +66,14 @@ function getIgSettings(chatId) {
   const cfg = manageStore.getInstagramConfig(chatId);
   return {
     isActive: !!cfg?.is_active,
-    igUserId: cfg?.ig_user_id || null,
-    accessToken: cfg?.access_token || null,
-    fbPageId: cfg?.fb_page_id || null,
-    igUsername: cfg?.ig_username || null,
+    bufferApiKey: cfg?.buffer_api_key || null,
+    bufferChannelId: cfg?.buffer_channel_id || null,
     scheduleTime: cfg?.schedule_time || '10:00',
     scheduleTz: isValidTz(cfg?.schedule_tz) ? cfg.schedule_tz : SCHEDULE_TZ,
     dailyLimit: cfg?.daily_limit || DAILY_IG_LIMIT,
     publishIntervalHours: Number.isFinite(cfg?.publish_interval_hours) ? cfg.publish_interval_hours : 4,
     randomPublish: !!cfg?.random_publish,
-    premoderationEnabled: cfg?.premoderation_enabled !== false, // по умолчанию включена
-    contentType: cfg?.is_reel ? 'reel' : 'photo',
-    autoPublish: !!cfg?.auto_publish,
-    locationId: cfg?.location_id || null,
+    premoderationEnabled: cfg?.auto_publish === true ? false : true,
     allowedWeekdays: Array.isArray(cfg?.allowed_weekdays) ? cfg.allowed_weekdays : [0, 1, 2, 3, 4, 5, 6],
     moderator_user_id: cfg?.moderator_user_id || null,
     stats: cfg?.stats || { total_posts: 0, posts_today: 0, last_post_date: null }
@@ -144,13 +139,11 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
 Ответь строго в формате JSON:
 {
   "caption": "подпись к посту для Instagram (150–2200 символов, вовлекающая, с хэштегами в конце)",
-  "hookText": "хук — цепляющая фраза 4-6 слов для наложения на изображение",
   "imagePrompt": "промпт для генерации изображения на английском (стиль: яркий, Instagram-формат, без текста)"
 }
 
 Требования:
 - caption: 300–500 символов оптимально, первая строка — хук (цепляет внимание), 5–15 хэштегов в конце, эмодзи как маркеры (2–4), CTA в конце
-- hookText: короткая цепляющая фраза для наложения на картинку (4-6 слов, русский)
 - imagePrompt: на английском, описание визуала, Instagram-стиль (яркий, квадратный формат 1:1), без текста на изображении
 - Стиль: живой, разговорный, без канцелярита
 - Язык: русский (кроме imagePrompt)`;
@@ -172,7 +165,6 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
   const parsed = JSON.parse(jsonMatch[0]);
   return {
     caption: String(parsed.caption || '').slice(0, 2200),
-    hookText: String(parsed.hookText || '').slice(0, 100),
     imagePrompt: String(parsed.imagePrompt || '').slice(0, 800)
   };
 }
@@ -245,37 +237,6 @@ async function saveImageToContainer(chatId, buffer, jobId) {
   await dockerService.copyToContainer(localTmp, session.containerId, containerPath);
   await fs.unlink(localTmp).catch(() => {});
   return containerPath;
-}
-
-/**
- * Загрузить изображение из контейнера на публичный хостинг
- * Instagram API требует публично доступный URL для image_url
- */
-async function uploadImageForInstagram(chatId, imagePath, jobId) {
-  const session = await sessionService.getOrCreateSession(chatId);
-  const tempPath = path.join(os.tmpdir(), `ig-upload-${chatId}-${jobId}.png`);
-  await dockerService.copyFromContainer(session.containerId, imagePath, tempPath);
-  const imageBuffer = await fs.readFile(tempPath);
-  await fs.unlink(tempPath).catch(() => {});
-
-  // Загрузка через imgbb или другой сервис
-  // Используем встроенный сервер как прокси — создаём временный файл в public
-  const publicDir = path.resolve(__dirname, '..', 'public', 'tmp');
-  await fs.mkdir(publicDir, { recursive: true });
-  const publicFileName = `ig_${chatId}_${jobId}_${Date.now()}.png`;
-  const publicPath = path.join(publicDir, publicFileName);
-  await fs.writeFile(publicPath, imageBuffer);
-
-  // Формируем URL (используем домен из config или fallback)
-  const baseUrl = process.env.PUBLIC_URL || process.env.BASE_URL || `http://localhost:${config.PORT || 3015}`;
-  const imageUrl = `${baseUrl}/tmp/${publicFileName}`;
-
-  // Запланировать удаление через 10 минут
-  setTimeout(async () => {
-    try { await fs.unlink(publicPath); } catch { /* ok */ }
-  }, 10 * 60 * 1000);
-
-  return imageUrl;
 }
 
 // ============================================
@@ -399,12 +360,9 @@ async function handleIgGenerateJob(chatId, queueJob, bot, correlationId) {
   // Запись в БД
   const jobId = await igRepo.createJob(chatId, {
     topic: topic.topic,
-    igUserId: settings.igUserId,
     caption: igText.caption,
-    hookText: igText.hookText,
     imagePrompt: igText.imagePrompt,
     imagePath,
-    igContentType: settings.contentType,
     status: 'ready',
     imageAttempts,
     correlationId
@@ -413,9 +371,7 @@ async function handleIgGenerateJob(chatId, queueJob, bot, correlationId) {
   const draft = {
     jobId,
     topic,
-    igUserId: settings.igUserId,
     caption: igText.caption,
-    hookText: igText.hookText,
     imagePrompt: igText.imagePrompt,
     imagePath,
     correlationId,
@@ -445,53 +401,54 @@ async function publishIgPost(chatId, bot, jobId, correlationId) {
   const cfg = manageStore.getInstagramConfig(chatId);
   if (!cfg) throw new Error('Instagram не настроен');
 
-  const igUserId = job.ig_user_id || cfg.ig_user_id;
-  const accessToken = cfg.access_token;
-
-  if (!igUserId || !accessToken) {
-    throw new Error('Instagram ig_user_id или access_token не настроен');
+  if (!cfg.buffer_api_key || !cfg.buffer_channel_id) {
+    throw new Error('Buffer API key или channel_id не настроены для Instagram');
   }
 
-  // Загрузить изображение на публичный URL
-  let imageUrl = null;
-  if (job.image_path) {
-    imageUrl = await uploadImageForInstagram(chatId, job.image_path, jobId);
+  // Копируем изображение из контейнера на хост
+  const session = await sessionService.getOrCreateSession(chatId);
+  const tempPath = path.join(os.tmpdir(), `ig-publish-${chatId}-${jobId}.png`);
+  await dockerService.copyFromContainer(session.containerId, job.image_path, tempPath);
+
+  let imageBuffer = await fs.readFile(tempPath);
+  await fs.unlink(tempPath).catch(() => {});
+
+  // Водяной знак (опционально)
+  const logoPath = '/workspace/brand/logo.png';
+  const logoLocalPath = path.join(os.tmpdir(), `ig-logo-${chatId}.png`);
+  try {
+    await dockerService.copyFromContainer(session.containerId, logoPath, logoLocalPath);
+    imageBuffer = await imageService.overlayWatermark(imageBuffer, logoLocalPath);
+    await fs.unlink(logoLocalPath).catch(() => {});
+  } catch (e) {
+    console.log(`[IG-MVP] Watermark skipped: ${e.message}`);
   }
 
-  // Публикация через Instagram API
-  let result;
-  if (job.ig_content_type === 'reel' && job.video_path) {
-    result = await instagramService.publishReelPost({
-      accessToken,
-      igUserId,
-      videoUrl: job.video_path, // Предполагается публичный URL
-      caption: job.caption || '',
-      locationId: cfg.location_id
-    });
-  } else {
-    if (!imageUrl) throw new Error('Нет изображения для публикации');
-    result = await instagramService.publishPhotoPost({
-      accessToken,
-      igUserId,
-      imageUrl,
-      caption: job.caption || '',
-      locationId: cfg.location_id
-    });
-  }
+  // Сохраняем на хост для публичного доступа
+  const hostDir = path.join(storageService.getDataDir(chatId), 'output', 'content');
+  await fs.mkdir(hostDir, { recursive: true });
+  await fs.writeFile(path.join(hostDir, `ig_${jobId}.png`), imageBuffer);
+
+  // Публикация через Buffer
+  const imageUrl = `${config.APP_URL}/api/files/public/${chatId}/ig_${jobId}.png`;
+  let text = String(job.caption || '').slice(0, 2200);
+
+  const bufferResult = await bufferService.createPost(cfg.buffer_api_key, cfg.buffer_channel_id, { text, imageUrl });
+  console.log(`[IG-MVP] Published via Buffer, postId=${bufferResult.postId}`);
 
   // Запись в лог
   await igRepo.addPublishLog(chatId, {
     jobId,
-    igUserId,
-    igMediaId: result.media_id ? String(result.media_id) : null,
+    bufferPostId: bufferResult.postId,
+    method: 'buffer',
     status: 'published',
     correlationId: corrId
   });
 
-  // Обновить статус
+  // Обновить статус job
   await igRepo.updateJob(chatId, jobId, {
     status: 'published',
-    igMediaId: result.media_id ? String(result.media_id) : ''
+    bufferPostId: bufferResult.postId
   });
 
   // Обновить статистику
@@ -511,12 +468,11 @@ async function publishIgPost(chatId, bot, jobId, correlationId) {
 
   // Уведомление
   if (bot?.telegram) {
-    const igUsername = cfg.ig_username || igUserId;
-    let msg = `📷 Instagram пост опубликован!\n${(job.caption || '').slice(0, 100)}...\n→ https://instagram.com/${igUsername}`;
+    const msg = `📷 Instagram пост опубликован через Buffer!\n${text.slice(0, 100)}...`;
     await bot.telegram.sendMessage(chatId, msg).catch(() => {});
   }
 
-  return result;
+  return { postId: bufferResult.postId };
 }
 
 // ============================================
@@ -534,9 +490,6 @@ async function sendIgToModerator(chatId, bot, draft) {
 
   const caption = [
     `📷 Черновик для Instagram #${draft.jobId}`,
-    `Аккаунт: @${draft.igUserId || '?'}`,
-    '',
-    `🪝 Хук: ${draft.hookText || '—'}`,
     '',
     (draft.caption || '').slice(0, 800),
     '',
@@ -594,7 +547,7 @@ async function handleInstagramModerationAction(chatId, bot, jobId, action) {
       return { ok: true, message: `📷 Instagram пост #${jobId} опубликован.` };
     } catch (e) {
       await igRepo.addPublishLog(chatId, {
-        jobId, igUserId: draft.igUserId || '', status: 'failed',
+        jobId, status: 'failed',
         errorText: e.message, correlationId
       });
       await igRepo.updateJob(chatId, jobId, { status: 'failed', errorText: e.message });
@@ -610,11 +563,9 @@ async function handleInstagramModerationAction(chatId, bot, jobId, action) {
       ]);
       const igText = await generateIgPostText(chatId, draft.topic, materialsText, personaText);
       draft.caption = igText.caption;
-      draft.hookText = igText.hookText;
       draft.imagePrompt = igText.imagePrompt;
       await igRepo.updateJob(chatId, jobId, {
         caption: igText.caption,
-        hookText: igText.hookText,
         imagePrompt: igText.imagePrompt
       });
       await sendIgToModerator(chatId, bot, draft);
@@ -658,13 +609,11 @@ async function handleInstagramModerationAction(chatId, bot, jobId, action) {
       const imagePath = await saveImageToContainer(chatId, imageBuffer, `${jobId}_reject_${Date.now()}`);
 
       draft.caption = igText.caption;
-      draft.hookText = igText.hookText;
       draft.imagePrompt = igText.imagePrompt;
       draft.imagePath = imagePath;
 
       await igRepo.updateJob(chatId, jobId, {
         caption: igText.caption,
-        hookText: igText.hookText,
         imagePrompt: igText.imagePrompt,
         imagePath,
         rejectedCount: draft.rejectedCount
