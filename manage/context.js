@@ -109,7 +109,7 @@ async function getAutoVkCopywriterSkill() {
  */
 function isInstagramChannelActive(chatId) {
     const igConfig = manageStore.getInstagramConfig(chatId);
-    return !!(igConfig?.is_active && igConfig?.ig_user_id && igConfig?.access_token);
+    return !!(igConfig?.is_active && igConfig?.buffer_api_key && igConfig?.buffer_channel_id);
 }
 
 /**
