@@ -52,6 +52,13 @@ async function ensureSchema(chatId) {
         used_at TIMESTAMPTZ
       );
     `);
+    // Миграция: добавить недостающие колонки для таблиц, созданных ранее
+    await client.query(`ALTER TABLE content_topics ADD COLUMN IF NOT EXISTS used_at TIMESTAMPTZ`);
+    await client.query(`ALTER TABLE content_topics ADD COLUMN IF NOT EXISTS status VARCHAR(50) NOT NULL DEFAULT 'pending'`);
+    await client.query(`ALTER TABLE content_topics ADD COLUMN IF NOT EXISTS focus VARCHAR(255)`);
+    await client.query(`ALTER TABLE content_topics ADD COLUMN IF NOT EXISTS secondary VARCHAR(255)`);
+    await client.query(`ALTER TABLE content_topics ADD COLUMN IF NOT EXISTS lsi VARCHAR(255)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_content_topics_status_created_at ON content_topics(status, created_at, id)`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS content_materials (
         id SERIAL PRIMARY KEY,
@@ -131,6 +138,25 @@ async function ensureSchema(chatId) {
       );
     `);
 
+    // Миграция: добавить недостающие колонки content_jobs для таблиц старой схемы
+    await client.query(`ALTER TABLE content_jobs ADD COLUMN IF NOT EXISTS status TEXT`);
+    await client.query(`ALTER TABLE content_jobs ADD COLUMN IF NOT EXISTS chat_id TEXT`);
+    await client.query(`ALTER TABLE content_jobs ADD COLUMN IF NOT EXISTS sheet_row INT`);
+    await client.query(`ALTER TABLE content_jobs ADD COLUMN IF NOT EXISTS sheet_topic TEXT`);
+    await client.query(`ALTER TABLE content_jobs ADD COLUMN IF NOT EXISTS content_type TEXT NOT NULL DEFAULT 'text+image'`);
+    await client.query(`ALTER TABLE content_jobs ADD COLUMN IF NOT EXISTS error_text TEXT`);
+    await client.query(`ALTER TABLE content_jobs ADD COLUMN IF NOT EXISTS image_attempts INT NOT NULL DEFAULT 0`);
+    await client.query(`ALTER TABLE content_jobs ADD COLUMN IF NOT EXISTS rejected_count INT NOT NULL DEFAULT 0`);
+    await client.query(`ALTER TABLE content_jobs ADD COLUMN IF NOT EXISTS draft_text TEXT`);
+    await client.query(`ALTER TABLE content_jobs ADD COLUMN IF NOT EXISTS image_path TEXT`);
+    await client.query(`ALTER TABLE content_jobs ADD COLUMN IF NOT EXISTS video_path TEXT`);
+    await client.query(`ALTER TABLE content_jobs ADD COLUMN IF NOT EXISTS correlation_id TEXT`);
+    await client.query(`ALTER TABLE content_jobs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`);
+    // Миграция: если была колонка post_status — перенести данные в status
+    try {
+      await client.query(`UPDATE content_jobs SET status = post_status WHERE status IS NULL AND post_status IS NOT NULL`);
+    } catch (_) { /* post_status может не существовать — игнорируем */ }
+
     // Миграция старых статусов
     await client.query(`
       UPDATE content_jobs
@@ -145,6 +171,20 @@ async function ensureSchema(chatId) {
       END
       WHERE status IS NOT NULL;
     `);
+    // Миграция: добавить недостающие колонки content_posts для таблиц старой схемы
+    await client.query(`ALTER TABLE content_posts ADD COLUMN IF NOT EXISTS body_text TEXT`);
+    await client.query(`ALTER TABLE content_posts ADD COLUMN IF NOT EXISTS hashtags TEXT`);
+    await client.query(`ALTER TABLE content_posts ADD COLUMN IF NOT EXISTS content_type TEXT NOT NULL DEFAULT 'text+image'`);
+    await client.query(`ALTER TABLE content_posts ADD COLUMN IF NOT EXISTS publish_status TEXT NOT NULL DEFAULT 'ready'`);
+    await client.query(`ALTER TABLE content_posts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`);
+    // Миграция: если была колонка text → body_text, status → publish_status
+    try {
+      await client.query(`UPDATE content_posts SET body_text = text WHERE body_text IS NULL AND text IS NOT NULL`);
+    } catch (_) {}
+    try {
+      await client.query(`UPDATE content_posts SET publish_status = status WHERE publish_status = 'ready' AND status IS NOT NULL AND status != 'ready'`);
+    } catch (_) {}
+
     await client.query(`
       UPDATE content_posts
       SET publish_status = CASE UPPER(publish_status)
@@ -158,6 +198,16 @@ async function ensureSchema(chatId) {
       END
       WHERE publish_status IS NOT NULL;
     `);
+    // Миграция: добавить недостающие колонки publish_logs для таблиц старой схемы
+    await client.query(`ALTER TABLE publish_logs ADD COLUMN IF NOT EXISTS channel_id TEXT`);
+    await client.query(`ALTER TABLE publish_logs ADD COLUMN IF NOT EXISTS telegram_message_id TEXT`);
+    await client.query(`ALTER TABLE publish_logs ADD COLUMN IF NOT EXISTS error_text TEXT`);
+    await client.query(`ALTER TABLE publish_logs ADD COLUMN IF NOT EXISTS correlation_id TEXT`);
+    // Миграция: channel → channel_id
+    try {
+      await client.query(`UPDATE publish_logs SET channel_id = channel WHERE channel_id IS NULL AND channel IS NOT NULL`);
+    } catch (_) {}
+
     await client.query(`
       UPDATE publish_logs
       SET status = LOWER(status)
@@ -311,23 +361,7 @@ async function ensureSchema(chatId) {
     await client.query(`ALTER TABLE content_posts ADD COLUMN IF NOT EXISTS wp_preview_url TEXT;`);
     await client.query(`ALTER TABLE content_posts ADD COLUMN IF NOT EXISTS moderator_note TEXT;`);
 
-    // content_topics table — source of topics for scheduler
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS content_topics (
-        id SERIAL PRIMARY KEY,
-        chat_id TEXT NOT NULL,
-        topic VARCHAR(500) NOT NULL,
-        keywords TEXT,
-        tech_doc_id INTEGER,
-        priority INTEGER NOT NULL DEFAULT 5,
-        used_at TIMESTAMPTZ,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `);
-    await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_content_topics_chat_status_priority
-      ON content_topics(chat_id, status, priority DESC, created_at ASC);
-    `);
+    // content_topics — таблица уже создаётся выше в ensureSchema, индекс создаётся там же
 
     // content_knowledge_base — technical documents for blog generation
     await client.query(`
