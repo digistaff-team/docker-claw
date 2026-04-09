@@ -602,20 +602,16 @@ function setInstagramConfig(chatId, patch = {}) {
     const current = statesCache[chatId].instagramConfig || {};
     const next = { ...current };
 
-    if (patch.app_id !== undefined) next.app_id = String(patch.app_id || '').trim() || null;
-    if (patch.app_secret !== undefined) next.app_secret = String(patch.app_secret || '').trim() || null;
-    if (patch.access_token !== undefined) next.access_token = patch.access_token || null;
-    if (patch.fb_page_id !== undefined) next.fb_page_id = String(patch.fb_page_id || '').trim() || null;
-    if (patch.fb_page_name !== undefined) next.fb_page_name = String(patch.fb_page_name || '').trim() || null;
-    if (patch.ig_user_id !== undefined) next.ig_user_id = String(patch.ig_user_id || '').trim() || null;
-    if (patch.ig_username !== undefined) next.ig_username = String(patch.ig_username || '').trim() || null;
-    if (patch.default_alt_text !== undefined) next.default_alt_text = String(patch.default_alt_text || '').trim() || null;
-    if (patch.location_id !== undefined) next.location_id = String(patch.location_id || '').trim() || null;
+    if (patch.buffer_api_key !== undefined) next.buffer_api_key = patch.buffer_api_key || null;
+    if (patch.buffer_channel_id !== undefined) next.buffer_channel_id = String(patch.buffer_channel_id || '').trim() || null;
     if (patch.is_active !== undefined) next.is_active = !!patch.is_active;
     if (patch.auto_publish !== undefined) next.auto_publish = !!patch.auto_publish;
-    if (patch.is_reel !== undefined) next.is_reel = !!patch.is_reel;
-    if (patch.daily_limit !== undefined) next.daily_limit = Math.min(Math.max(parseInt(patch.daily_limit, 10) || 5, 1), 25);
-    if (patch.posting_hours !== undefined && Array.isArray(patch.posting_hours)) next.posting_hours = patch.posting_hours;
+    if (patch.schedule_time !== undefined) next.schedule_time = patch.schedule_time || null;
+    if (patch.schedule_tz !== undefined) next.schedule_tz = patch.schedule_tz || null;
+    if (patch.daily_limit !== undefined) next.daily_limit = Math.min(Math.max(parseInt(patch.daily_limit, 10) || 3, 1), 25);
+    if (patch.publish_interval_hours !== undefined) next.publish_interval_hours = parseFloat(patch.publish_interval_hours) || 4;
+    if (patch.allowed_weekdays !== undefined && Array.isArray(patch.allowed_weekdays)) next.allowed_weekdays = patch.allowed_weekdays;
+    if (patch.random_publish !== undefined) next.random_publish = !!patch.random_publish;
     if (patch.moderator_user_id !== undefined) next.moderator_user_id = String(patch.moderator_user_id || '').trim() || null;
     if (patch.stats !== undefined) next.stats = { ...(next.stats || {}), ...patch.stats };
 
