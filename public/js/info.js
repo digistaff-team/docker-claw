@@ -1,19 +1,22 @@
-const API_URL = `${window.location.origin}/api`;
-const API_MANAGE = `${window.location.origin}/api/manage`;
-const API_CONTENT = `${window.location.origin}/api/content`;
+// API_URL определён в common.js
+const API_MANAGE = `${API_URL}/manage`;
+const API_CONTENT = `${API_URL}/content`;
 
 async function onLoginSuccess() {
-    await loadMetrics();
-    await loadSessionInfo();
-    await loadConfigPath();
-    await loadAIRouterLogs();
+    await Promise.all([
+        loadMetrics(),
+        loadSessionInfo(),
+        loadConfigPath(),
+        loadAIRouterLogs()
+    ]);
 }
 
 async function loadMetrics() {
     const chatId = getChatId();
     if (!chatId) return;
     try {
-        const data = await fetchJson(`${API_CONTENT}/metrics?chat_id=${encodeURIComponent(chatId)}`);
+        const res = await fetch(`${API_CONTENT}/metrics?chat_id=${encodeURIComponent(chatId)}`);
+        const data = res.ok ? await res.json() : {};
         const w24 = data?.windows?.last24h || {};
         const w7 = data?.windows?.last7d || {};
         document.getElementById('metricPublished24h').textContent = w24.published ?? '-';
