@@ -10,6 +10,7 @@
 - **AI agent in the loop** — Agent decides which commands to run, checks results, and forms responses (30+ tools available)
 - **Multi-channel management** — Telegram bot, Email (IMAP/SMTP), HTTP webhooks
 - **Multi-platform publishing** — Publish content to Telegram, VK, OK (Odnoklassniki), Instagram, Pinterest, YouTube Shorts
+- **WordPress/Дзен publishing** — Generate and publish blog articles to WordPress sites and Yandex Zen with AI-powered content generation, SEO optimization, and image cover generation
 - **Central moderation system** — Single moderation bot (CW_BOT) handles approval workflows for all platforms
 - **Web interface** — Dashboard for sessions, files, tasks, apps, channels, skills, balance, and AI settings
 - **Persistent storage** — Data survives restarts via bind-mount and per-user PostgreSQL
@@ -36,10 +37,12 @@
 | **Bot Framework** | Telegraf (Telegram) |
 | **Email** | imapflow, nodemailer, mailparser |
 | **AI Integration** | ProTalk router, OpenAI, OpenRouter |
-| **Image Generation** | Kie.ai API |
+| **Image Generation** | Kie.ai API, OpenAI Images (fallback) |
 | **Video Generation** | RunwayML, Pika, Kie.ai (optional) |
 | **Social Media** | VK API, OK API, Instagram API, Pinterest API, YouTube API, Buffer.com GraphQL API |
+| **Blog Publishing** | WordPress REST API v2 (Application Passwords), Yandex Zen |
 | **Session Management** | express-session + FileStore |
+| **Image Processing** | Sharp |
 | **Testing** | Playwright (E2E), Jest-compatible (unit) |
 | **CI/CD** | GitHub Actions |
 | **Reverse Proxy** | Nginx + Certbot (Let's Encrypt SSL) |
@@ -74,11 +77,13 @@
 ├── services/                  # Business logic layer
 │   ├── ai_router_service.js   # LLM routing (ProTalk/OpenAI/OpenRouter)
 │   ├── balance.service.js     # Balance checking & token management
+│   ├── blogGenerator.service.js # Blog article generation (WordPress/Дзен)
 │   ├── buffer.service.js      # Buffer.com GraphQL API (Pinterest, IG, YouTube)
 │   ├── contentMvp.service.js  # Content generation & publishing (Telegram)
 │   ├── deps.service.js        # Dependency graph
 │   ├── docker.service.js      # Container lifecycle management
 │   ├── image.service.js       # Image processing (watermarks, etc.)
+│   ├── imageGen.service.js    # Image generation (Kie.ai + OpenAI fallback)
 │   ├── instagram.service.js   # Instagram native API
 │   ├── instagramMvp.service.js # Instagram content pipeline
 │   ├── mysql.service.js       # MySQL skills DB connection
@@ -94,6 +99,7 @@
 │   ├── storage.service.js     # File storage & backups
 │   ├── vk.service.js          # VK native API
 │   ├── vkMvp.service.js       # VK content pipeline
+│   ├── wordpressMvp.service.js # WordPress publishing service
 │   ├── youtubeMvp.service.js  # YouTube Shorts content pipeline
 │   │
 │   └── content/               # Shared content pipeline modules
@@ -110,6 +116,7 @@
 │       ├── ok.repository.js   # OK DB repository
 │       ├── pinterest.repository.js # Pinterest DB repository
 │       ├── vk.repository.js   # VK DB repository
+│       ├── wordpress.repository.js # WordPress DB repository
 │       └── youtube.repository.js # YouTube DB repository
 │
 ├── manage/                    # Channel integrations & AI agent
@@ -175,6 +182,9 @@
 ├── tests/                     # Test files
 │   ├── content.status.test.js       # Content status tests
 │   ├── validators.extended.test.js  # Extended validators tests
+│   ├── wordpress.publisher.test.js  # WordPress publisher tests
+│   ├── blog.generator.test.js       # Blog generation tests
+│   ├── blog.moderation.test.js      # Blog moderation tests
 │   ├── vk.moderation.test.js        # VK moderation tests
 │   ├── vk.publisher.test.js         # VK publisher tests
 │   ├── youtube.mvp.test.js          # YouTube MVP tests
@@ -288,6 +298,8 @@ docker-compose up -d
 | `APP_URL` | — | Application URL (for webhooks) |
 | `API_URL` | — | API URL (for frontend) |
 | `PG_HOST` | `172.17.0.1` | PostgreSQL host |
+| `PG_ADMIN_HOST` | `PG_HOST` | PostgreSQL host for admin operations |
+| `PG_SANDBOX_HOST` | `PG_HOST` | PostgreSQL host passed to sandbox containers |
 | `PG_PASSWORD` | — | PostgreSQL password |
 | `DATA_ROOT` | `/var/sandbox-data` | User data storage root |
 | `DOCKER_IMAGE` | `sandbox-python:latest` | Sandbox container image |
@@ -295,21 +307,28 @@ docker-compose up -d
 | `CONTAINER_CPUS` | `2.0` | CPU limit per user container |
 | `CONTAINER_TIMEOUT` | — | Command execution timeout |
 | `KIE_API_KEY` | — | Kie.ai API key for image generation |
+| `OPENAI_API_KEY` | — | OpenAI API key (fallback for images, AI) |
 | `BOT_TOKEN` | — | Telegram bot token (user bot) |
 | `AUTH_BOT_TOKEN` | — | Telegram auth bot token (@clientzavod_bot) |
 | `CONTENT_MVP_TIME` | `09:00` | Scheduled content publish time |
+| `CONTENT_MVP_TZ` | `Europe/Moscow` | Timezone for scheduler |
 | `CHANNEL_ID` | — | Telegram channel ID for publishing |
-| `MODERATOR_USER_ID` | — | Telegram user ID for content moderation |
+| `CONTENT_MVP_MODERATOR_USER_ID` | — | Telegram user ID for content moderation |
+| `CONTENT_MVP_DAILY_LIMIT` | `1` | Daily content generation limit |
+| `CONTENT_MVP_CONTENT_TYPE` | `text+image` | Content type: text+image or text+video |
 | `CW_BOT_TOKEN` | — | Central moderation bot token |
 | `CW_BOT_USERNAME` | — | Central moderation bot username |
 | `CW_BOT_WEBHOOK_URL` | — | Central bot webhook URL |
-| `VIDEO_MODEL` | — | Default video generation model |
-| `VIDEO_TIMEOUT_SEC` | — | Video generation timeout |
+| `VIDEO_MODEL` | `veo3_fast` | Default video generation model |
+| `VIDEO_TIMEOUT_SEC` | `300` | Video generation timeout |
+| `VIDEO_FALLBACK_ENABLED` | `true` | Fallback to image on video failure |
 | `VK_*` | — | VK API credentials |
 | `OK_*` | — | OK API credentials |
 | `ADMIN_PASSWORD` | — | Admin panel password |
 | `BACKUP_ROOT` | `/var/sandbox-backups` | Backup storage root |
 | `SNAPSHOT_ROOT` | `/var/sandbox-snapshots` | Snapshot storage root |
+| `MYSQL_SKILLS_*` | — | MySQL skills database credentials |
+| `WEBHOOK_URL` | — | Telegram bot webhook URL (optional) |
 
 ## API Endpoints
 
@@ -327,6 +346,8 @@ All routes prefixed with `/api`.
 | `/api/plans/*` | Task plan management |
 | `/api/apps/*` | App registry |
 | `/api/billing/*` | Token billing & payments |
+| `/api/auth/*` | Authentication endpoints |
+| `/api/user-hooks/*` | User webhooks management |
 | `/sandbox/*` | Proxy to sandbox endpoints |
 | `/webhook` | Incoming webhook → agent task |
 | `/hook/:id` | User-defined webhooks |
@@ -404,6 +425,35 @@ module.exports = {
 
 ## Recent Changes (April 2026)
 
+### WordPress/Дзен Blog Publishing System
+
+New blog publishing infrastructure for WordPress sites and Yandex Zen:
+
+**New Services:**
+- `blogGenerator.service.js` — AI-powered article generation with SEO optimization
+- `wordpressMvp.service.js` — WordPress REST API v2 client (Application Passwords)
+- `imageGen.service.js` — Image generation for article covers (Kie.ai + OpenAI fallback)
+- `content/wordpress.repository.js` — WordPress DB repository
+
+**Blog Generation Pipeline:**
+1. Load knowledge base document (optional)
+2. Generate article format/structure via AI
+3. Generate image cover prompt via AI
+4. Generate cover image via Kie.ai/OpenAI
+5. Write full article HTML via AI
+6. Generate SEO metadata (title, description, slug) in parallel
+7. Upload media to WordPress
+8. Create draft post for moderation
+9. Publish after approval
+
+**WordPress Integration:**
+- REST API v2 with Basic Auth (Application Passwords)
+- Media upload with multipart/form-data
+- Draft creation with preview URLs
+- Post publishing and deletion
+- Category management
+- SEO-optimized slugs and metadata
+
 ### Multi-Platform Content Publishing System
 
 Major expansion of content publishing capabilities with 5 new social media platforms:
@@ -461,18 +511,42 @@ Complete billing infrastructure:
 
 ### AI Agent Tools Expansion
 
-`tools.js` now contains 30+ tool definitions:
-- `request_context` — Request user context
+`tools.js` now contains 30+ tool definitions organized in three categories:
+
+**Chat Tools:**
+- `request_context` — Request user context (tree + files in one call)
 - `create_plan` — Create task plans
-- `patch_file` — Patch file contents
-- `write_file` — Write file contents
-- `exec_command` — Execute shell commands
-- `http_request` — Make HTTP requests
-- `run_tests` — Run test suites
+- `read_file` — Read file contents
+- `list_dir` — List directory contents
+- `task_completed` — Complete task with report
+
+**Workspace Tools:**
+- `patch_file` — Patch file contents (preferred for edits)
+- `write_file` — Write file contents (new files only)
+- `undo_edit` — Undo file changes (with steps support)
+- `list_snapshots` — List file version history
+- `create_folder` — Create new folder
+- `delete_file` — Delete file (requires confirmation)
+- `send_file` — Send file to user in Telegram
 - `create_nodejs_app` — Create new Node.js applications
+- `list_nodejs_apps` — List created applications
+- `start_nodejs_app` / `stop_nodejs_app` — App lifecycle
+- `get_app_logs` — View app logs
 - `schedule_cron` — Schedule cron jobs
 - `analyze_deps` — Analyze dependencies
-- And more...
+- `invalidate_project_cache` — Reset project cache
+- `create_task_plan` — Create multi-step task plans
+- `read_plan` / `update_step_status` / `add_substep` — Plan management
+- `list_active_plans` — List all active plans
+- `http_request` — Make HTTP requests
+- `run_tests` — Run test suites (pytest/jest)
+- `create_python_module` — Create Python module scaffold
+- `install_packages` — Install pip/npm packages
+
+**Terminal Tools:**
+- `exec_command` — Execute shell commands
+- All workspace tools above
+- All task management tools above
 
 ### Authentication Bot Separation
 
@@ -513,6 +587,11 @@ New admin pages:
 - `setup-openai.js` — OpenAI setup wizard
 - `test-bot-handlers.js` — Bot handler tests
 - `test-publish.js` — Publishing tests
+- `test-wp-publish.js` — WordPress publishing tests
+- `bash_ai_external_call.py` — External AI agent caller
+- `create-user-db.js` — User database creation helper
+- `cleanup_backups.sh` — Backup cleanup script
+- `maintenance.sh` — System maintenance script
 
 ### Image Generation with User Input Files
 
@@ -524,6 +603,25 @@ The `contentMvp.service.js` was updated to use files from `/workspace/input` for
 - Modified `generateImage(chatId, topic, text)` — now accepts `chatId` and incorporates user files into Kie.ai prompts
 
 All 7 call sites of `generateImage()` were updated to pass `chatId`.
+
+### Environment Variable Loading
+
+Server now supports layered environment variable loading:
+- `.env` file is loaded first
+- `.env.local` file is loaded second and overrides `.env` values
+- This allows local development overrides without modifying the main `.env` file
+
+### Package.json Updates
+
+New dependencies added:
+- `sharp` (^0.34.5) — Image processing library
+- `mysql2` (^3.20.0) — MySQL driver for skills database
+
+Test script updated to include WordPress and blog tests:
+```bash
+npm test
+# Runs: content.status, validators.extended, wordpress.publisher, blog.generator, blog.moderation tests
+```
 
 ## Troubleshooting
 
@@ -594,10 +692,37 @@ npm start              # Start server (node server.js)
 npm run dev            # Start with auto-reload (nodemon)
 
 # Testing
-npm test               # Run unit tests
+npm test               # Run unit tests (content, validators, WordPress, blog)
 npm run test:e2e       # Run Playwright E2E tests
 npm run test:e2e:ui    # Run with Playwright UI
 npm run test:e2e:debug # Run in debug mode
+npm run test:e2e:headed # Run with headed browser
 npm run test:e2e:smoke # Critical path tests only
 npm run test:e2e:ci    # CI mode with HTML reporter
 ```
+
+---
+
+## Document Update Summary (April 9, 2026)
+
+This document has been updated to reflect the current state of the codebase:
+
+**Added:**
+- WordPress/Дзен blog publishing system capabilities
+- New services: `blogGenerator.service.js`, `wordpressMvp.service.js`, `imageGen.service.js`
+- New content repository: `wordpress.repository.js`
+- WordPress REST API integration details
+- Updated tech stack with Sharp, MySQL2, OpenAI Images fallback
+- New configuration variables: `PG_ADMIN_HOST`, `PG_SANDBOX_HOST`, `CONTENT_MVP_*`, `VIDEO_*`, `MYSQL_SKILLS_*`, `WEBHOOK_URL`
+- New API routes: `/api/auth/*`, `/api/user-hooks/*`
+- Expanded AI tools documentation with full tool categorization
+- New test files: WordPress and blog generation tests
+- New utility scripts: `test-wp-publish.js`, `bash_ai_external_call.py`, `create-user-db.js`, `maintenance.sh`
+- Environment variable layering (`.env` + `.env.local`)
+- Package.json dependency updates
+
+**Updated:**
+- Service directory structure with all 41 service files
+- Test file listing with new WordPress/blog tests
+- Configuration variable defaults and descriptions
+- Recent changes section with comprehensive WordPress integration details
