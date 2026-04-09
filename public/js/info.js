@@ -1,4 +1,6 @@
+const API_URL = `${window.location.origin}/api`;
 const API_MANAGE = `${window.location.origin}/api/manage`;
+const API_CONTENT = `${window.location.origin}/api/content`;
 
 async function onLoginSuccess() {
     await loadMetrics();
@@ -71,7 +73,7 @@ async function loadSessionInfo() {
         if (data.exists) {
             // Загружаем Telegram username через API
             const username = await getTelegramUsername(chatId);
-            
+
             el.innerHTML = `
                 <div><strong>Chat ID:</strong> ${data.chat_id}${username}</div>
                 <div><strong>Session ID:</strong> ${data.sessionId}</div>
@@ -81,9 +83,12 @@ async function loadSessionInfo() {
                 <div><strong>Команд выполнено:</strong> ${data.commandCount}</div>
                 <div><strong>Статус:</strong> ${data.containerAlive ? '🟢 Активна' : '🔴 Неактивна'}</div>
             `;
+        } else {
+            el.innerHTML = '<div style="color: #f44336;">Сессия не найдена</div>';
         }
     } catch (e) {
         console.error('Error loading session info', e);
+        el.innerHTML = '<div style="color: #f44336;">Ошибка загрузки информации о сессии</div>';
     }
 }
 
