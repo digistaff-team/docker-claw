@@ -755,6 +755,111 @@
                     </div>
                 </div>
 
+                <!-- Facebook -->
+                <div class="channel-panel" id="channelPanel-facebook" style="display: none;">
+                    <div class="channel-card">
+                        <h3>📘 Facebook</h3>
+                        <p>Публикация постов на Facebook страницу через Buffer API. Генерация текста и изображений с учётом ДНК бренда.</p>
+
+                        <!-- Buffer подключение -->
+                        <div id="facebookAuthBlock">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div>
+                                    <label for="fbBufferApiKey">Buffer API Token</label>
+                                    <input type="password" id="fbBufferApiKey" placeholder="buf..." autocomplete="off" />
+                                </div>
+                                <div>
+                                    <label for="fbBufferChannelId">Facebook канал (из Buffer)</label>
+                                    <select id="fbBufferChannelId">
+                                        <option value="">-- Сначала введите Buffer API Token --</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                <button class="btn btn-secondary" onclick="fetchFacebookBufferChannels()">🔄 Загрузить каналы</button>
+                                <button class="btn btn-secondary" onclick="testFacebookBufferConnection()">🔗 Проверить подключение</button>
+                            </div>
+                        </div>
+
+                        <div id="facebookStatus" class="channel-status" style="margin-top: 14px; font-size: 14px;"></div>
+
+                        <!-- Настройки -->
+                        <div id="facebookSettingsBlock" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+                            <h4 style="margin: 0 0 15px 0;">⚙️ Настройки публикации</h4>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div>
+                                    <label>
+                                        <input type="checkbox" id="fbActive"> Активен
+                                    </label>
+                                </div>
+                                <div>
+                                    <label>
+                                        <input type="checkbox" id="fbAutoPublish"> Автопубликация (без модерации)
+                                    </label>
+                                </div>
+                                <div>
+                                    <label>
+                                        <input type="checkbox" id="fbRandomPublish"> Случайное время публикации
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div>
+                                    <label for="fbScheduleTime">Время публикации</label>
+                                    <input type="time" id="fbScheduleTime" value="10:00" />
+                                </div>
+                                <div>
+                                    <label for="fbScheduleTz">Часовой пояс</label>
+                                    <input type="text" id="fbScheduleTz" value="Europe/Moscow" placeholder="Europe/Moscow" />
+                                </div>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div>
+                                    <label for="fbDailyLimit">Лимит постов в день</label>
+                                    <input type="number" id="fbDailyLimit" min="1" max="50" value="10" />
+                                </div>
+                                <div>
+                                    <label for="fbIntervalHours">Интервал между постами (часы)</label>
+                                    <input type="number" id="fbIntervalHours" min="1" max="24" value="4" step="0.5" />
+                                </div>
+                            </div>
+
+                            <!-- Дни недели -->
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 8px;">Дни публикации:</label>
+                                <div id="fbWeekdays" style="display: flex; gap: 12px; flex-wrap: wrap;">
+                                    <label><input type="checkbox" data-day="0" checked> Пн</label>
+                                    <label><input type="checkbox" data-day="1" checked> Вт</label>
+                                    <label><input type="checkbox" data-day="2" checked> Ср</label>
+                                    <label><input type="checkbox" data-day="3" checked> Чт</label>
+                                    <label><input type="checkbox" data-day="4" checked> Пт</label>
+                                    <label><input type="checkbox" data-day="5"> Сб</label>
+                                    <label><input type="checkbox" data-day="6"> Вс</label>
+                                </div>
+                            </div>
+
+                            <!-- Модератор -->
+                            <div style="margin-bottom: 15px;">
+                                <label for="fbModeratorUserId">Moderator User ID</label>
+                                <input type="text" id="fbModeratorUserId" placeholder="123456789" />
+                                <p style="color: #666; font-size: 12px; margin-top: 4px;">
+                                    Telegram ID модератора, который будет получать черновики для одобрения.
+                                    По умолчанию — ваш ID.
+                                </p>
+                            </div>
+
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 16px;">
+                                <button class="btn btn-success" onclick="saveFacebookConfig()">💾 Сохранить настройки</button>
+                                <button class="btn btn-primary" id="fbRunNowBtn" onclick="runFacebookNow()">▶️ Сгенерировать сейчас</button>
+                            </div>
+                            <div id="facebookSettingsStatus" style="margin-top: 10px; font-size: 13px;"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Blog/Website -->
                 <div class="channel-panel" id="channelPanel-blog" style="display: none;">
                     <div class="channel-card">
@@ -1241,6 +1346,7 @@
     <script src="/js/common.js"></script>
     <script src="/js/channels.js"></script>
     <script src="/js/channels-wordpress.js"></script>
+    <script src="/js/channels-facebook.js"></script>
     <script>
         // Специальная инициализация для страницы каналов
         // Доступна без авторизации - для подключения бота

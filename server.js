@@ -545,12 +545,13 @@ async function startServer() {
     // Делаем cwBot доступным для всех сервисов
     contentMvpService.setContentBot(cwBot);
 
-    // Передаём cwBot в другие сервисы (Pinterest, VK, OK, Instagram, YouTube)
+    // Передаём cwBot в другие сервисы (Pinterest, VK, OK, Instagram, YouTube, Facebook)
     const pinterestMvpService = require('./services/pinterestMvp.service');
     const vkMvpService = require('./services/vkMvp.service');
     const okMvpService = require('./services/okMvp.service');
     const instagramMvpService = require('./services/instagramMvp.service');
     const youtubeMvpService = require('./services/youtubeMvp.service');
+    const facebookMvpService = require('./services/facebookMvp.service');
     const wordpressMvpService = require('./services/wordpressMvp.service');
 
     pinterestMvpService.setPinterestCwBot(cwBot);
@@ -597,6 +598,9 @@ async function startServer() {
 
     // Запуск YouTube-планировщика
     youtubeMvpService.startScheduler(() => telegramRunner.bots);
+
+    // Запуск Facebook-планировщика
+    facebookMvpService.startScheduler(() => telegramRunner.bots);
 
     // Подключение Webhook API
     const webhookRoutes = require('./routes/webhook.routes');
@@ -673,6 +677,7 @@ async function gracefulShutdown() {
         contentMvpService.stopScheduler();
         try { require('./services/pinterestMvp.service').stopScheduler(); } catch (_) {}
         try { require('./services/youtubeMvp.service').stopScheduler(); } catch (_) {}
+        try { require('./services/facebookMvp.service').stopScheduler(); } catch (_) {}
         await manageStore.persist();
     } catch (e) {
         // ignore

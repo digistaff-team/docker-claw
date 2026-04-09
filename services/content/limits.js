@@ -16,7 +16,8 @@ const QUOTA_TYPES = {
   IMAGE_GENERATION: 'image_generation',
   VIDEO_GENERATION: 'video_generation', // TASK-015
   PUBLICATION: 'publication',
-  BLOG_GENERATION: 'blog_generation'
+  BLOG_GENERATION: 'blog_generation',
+  FACEBOOK_PUBLICATION: 'facebook_publication'
 };
 
 /**
@@ -93,7 +94,8 @@ async function getTodayUsage(chatId, dateStr, tz = 'Europe/Moscow') {
       textGenerated: textRes.rows[0]?.c || 0,
       imageGenerated: imageRes.rows[0]?.c || 0,
       videoGenerated: videoRes.rows[0]?.c || 0,
-      blogGenerated: blogRes.rows[0]?.c || 0
+      blogGenerated: blogRes.rows[0]?.c || 0,
+      facebookPublished: 0 // TODO: добавить Facebook после миграции
     };
   });
 }
@@ -196,6 +198,24 @@ async function checkQuota(chatId, operationType, options = {}) {
       return { allowed: true };
     }
 
+    // Facebook publication
+    case QUOTA_TYPES.FACEBOOK_PUBLICATION: {
+      const fbDailyLimit = 10; // TODO: брать из настроек Facebook
+      if (usage.facebookPublished >= fbDailyLimit) {
+        return {
+          allowed: false,
+          reason: `Достигнут дневной лимит Facebook публикаций: ${usage.facebookPublished}/${fbDailyLimit}`
+        };
+      }
+      if (usage.facebookPublished >= fbDailyLimit * 0.8) {
+        return {
+          allowed: true,
+          warning: `Приближение к лимиту Facebook публикаций: ${usage.facebookPublished}/${fbDailyLimit}`
+        };
+      }
+      return { allowed: true };
+    }
+
     default:
       return { allowed: true };
   }
@@ -233,7 +253,8 @@ async function getUsageStats(chatId, dateStr, tz = 'Europe/Moscow') {
       text: Math.round((usage.textGenerated / 50) * 100),
       image: Math.round((usage.imageGenerated / 20) * 100),
       video: Math.round((usage.videoGenerated / 10) * 100), // TASK-015
-      blog: Math.round((usage.blogGenerated / DEFAULT_BLOG_DAILY_LIMIT) * 100)
+      blog: Math.round((usage.blogGenerated / DEFAULT_BLOG_DAILY_LIMIT) * 100),
+      facebook: Math.round((usage.facebookPublished / 10) * 100)
     }
   };
 }

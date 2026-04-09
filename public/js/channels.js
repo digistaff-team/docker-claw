@@ -14,6 +14,11 @@ function initChannelTabs() {
             document.querySelectorAll('.channel-panel').forEach(p => p.style.display = 'none');
             const panel = document.getElementById('channelPanel-' + channel);
             if (panel) panel.style.display = 'block';
+
+            // Загружаем конфигурацию для конкретного канала
+            if (channel === 'facebook' && typeof loadFacebookConfig === 'function') {
+                loadFacebookConfig();
+            }
         });
     });
 }
@@ -144,6 +149,7 @@ async function onLoginSuccess() {
     await loadVkStatus();
     await loadOkStatus();
     await loadYoutubeConfig();
+    await loadFacebookConfig();
 }
 
 // Специальная инициализация для страницы каналов

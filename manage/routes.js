@@ -1293,4 +1293,81 @@ router.post('/channels/buffer/channels', async (req, res) => {
     }
 });
 
+/**
+ * GET /api/manage/channels/facebook — получить конфигурацию Facebook
+ */
+router.get('/channels/facebook', (req, res) => {
+    const chatId = req.query.chat_id;
+    if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+    const config = manageStore.getFacebookConfig(chatId);
+    if (!config) return res.json({ connected: false });
+    const safe = { ...config };
+    if (safe.buffer_api_key) safe.buffer_api_key = safe.buffer_api_key.slice(0, 6) + '***';
+    res.json({ connected: true, config: safe });
+});
+
+/**
+ * POST /api/manage/channels/facebook — сохранить конфигурацию Facebook
+ */
+router.post('/channels/facebook', async (req, res) => {
+    const chatId = req.body.chat_id;
+    if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+    try {
+        const patch = {};
+        const fields = [
+            'buffer_api_key', 'buffer_channel_id', 'page_name',
+            'is_active', 'auto_publish',
+            'schedule_time', 'schedule_tz', 'daily_limit',
+            'publish_interval_hours', 'allowed_weekdays',
+            'random_publish', 'moderator_user_id'
+        ];
+        for (const f of fields) {
+            if (req.body[f] !== undefined) patch[f] = req.body[f];
+        }
+        // Не перезаписывать замаскированный ключ
+        if (patch.buffer_api_key && patch.buffer_api_key.endsWith('***')) {
+            delete patch.buffer_api_key;
+        }
+        manageStore.setFacebookConfig(chatId, patch);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(400).json({ success: false, error: e.message });
+    }
+});
+
+/**
+ * DELETE /api/manage/channels/facebook — отключить Facebook
+ */
+router.delete('/channels/facebook', async (req, res) => {
+    const chatId = req.body.chat_id || req.query.chat_id;
+    if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+    try {
+        manageStore.clearFacebookConfig(chatId);
+        res.json({ success: true, message: 'Facebook отключён' });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+/**
+ * POST /api/manage/channels/facebook/test-buffer — тест соединения
+ */
+router.post('/channels/facebook/test-buffer', async (req, res) => {
+    const { chat_id: chatId, buffer_api_key, buffer_channel_id } = req.body;
+    if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+    if (!buffer_api_key || !buffer_channel_id) {
+        return res.status(400).json({ error: 'buffer_api_key и buffer_channel_id обязательны' });
+    }
+    try {
+        const bufferService = require('../services/buffer.service');
+        const result = await bufferService.testConnection(buffer_api_key, buffer_channel_id);
+        if (result.service !== 'facebook') {
+            return res.status(400).json({ error: `Канал является ${result.service}, а не Facebook` });
+        }
+        res.json({ success: true, ...result });
+    } catch (e) {
+        res.status(400).json({ success: false, error: e.message });
+    }
+});
+
 module.exports = router;

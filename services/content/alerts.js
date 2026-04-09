@@ -8,7 +8,11 @@ const ALERT_THRESHOLDS = {
   consecutiveFailures: 3, // N подряд фейлов → алерт
   noSuccessHours: 24, // N часов без успешных публикаций → алерт
   queueBacklog: 10, // N задач в очереди → предупреждение
-  stuckJobsHours: 1 // N часов "застрявших" задач → алерт
+  stuckJobsHours: 1, // N часов "застрявших" задач → алерт
+  // Facebook-specific пороги
+  facebookConsecutiveFailures: 3,
+  facebookQueueBacklog: 10,
+  facebookRateLimit: 1
 };
 
 // Кэш состояния для отслеживания подряд идущих фейлов
@@ -80,6 +84,40 @@ async function checkAndAlert(chatId, options = {}) {
       details: stuckResult.jobs
     };
     warnings.push(alert);
+  }
+
+  // 5. Facebook-specific проверки
+  const fbFailuresResult = await checkFacebookConsecutiveFailures(chatId);
+  if (fbFailuresResult.count >= ALERT_THRESHOLDS.facebookConsecutiveFailures) {
+    const alert = {
+      type: 'facebook_consecutive_failures',
+      severity: 'critical',
+      message: `Facebook: ${fbFailuresResult.count} подряд неудачных публикаций`,
+      details: fbFailuresResult.lastErrors
+    };
+    alerts.push(alert);
+
+    if (bot && moderatorUserId) {
+      await sendAlertToModerator(bot, moderatorUserId, alert);
+    }
+  }
+
+  const fbQueueResult = await checkFacebookQueueBacklog(chatId);
+  if (fbQueueResult.backlog >= ALERT_THRESHOLDS.facebookQueueBacklog) {
+    warnings.push({
+      type: 'facebook_queue_backlog',
+      message: `Facebook: в очереди ${fbQueueResult.backlog} задач`,
+      details: fbQueueResult.stats
+    });
+  }
+
+  const fbRateLimitResult = await checkFacebookRateLimit(chatId);
+  if (fbRateLimitResult.rateLimited) {
+    warnings.push({
+      type: 'facebook_rate_limit',
+      message: 'Facebook: Rate limit от Buffer API',
+      details: { resetAt: fbRateLimitResult.resetAt }
+    });
   }
 
   return { alerts, warnings };
@@ -170,7 +208,7 @@ async function checkQueueBacklog(chatId) {
  */
 async function checkStuckJobs(chatId) {
   const queueRepo = require('./queue.repository');
-  
+
   try {
     const jobs = await queueRepo.getStuckJobs(chatId, ALERT_THRESHOLDS.stuckJobsHours);
     return {
@@ -183,6 +221,90 @@ async function checkStuckJobs(chatId) {
     };
   } catch (e) {
     return { count: 0, jobs: [] };
+  }
+}
+
+/**
+ * Проверка подряд идущих Facebook-фейлов
+ */
+async function checkFacebookConsecutiveFailures(chatId) {
+  try {
+    const fbRepo = require('./facebook.repository');
+    const consecutive = await fbRepo.getConsecutiveFailures(chatId);
+
+    // Получаем последние ошибки
+    const lastErrors = await repository.withClient(chatId, async (client) => {
+      const result = await client.query(
+        `SELECT error_text, created_at
+         FROM facebook_publish_logs
+         WHERE status = 'failed'
+         ORDER BY created_at DESC
+         LIMIT 3`
+      );
+      return result.rows.map(r => ({
+        error: r.error_text,
+        at: r.created_at
+      }));
+    });
+
+    return { count: consecutive, lastErrors };
+  } catch (e) {
+    console.error('[ALERTS] checkFacebookConsecutiveFailures:', e);
+    return { count: 0, lastErrors: [] };
+  }
+}
+
+/**
+ * Проверка backlog очереди Facebook
+ */
+async function checkFacebookQueueBacklog(chatId) {
+  try {
+    const fbRepo = require('./facebook.repository');
+    const backlog = await fbRepo.getQueueBacklog(chatId);
+    return {
+      backlog,
+      stats: { queued: backlog, platform: 'facebook' }
+    };
+  } catch (e) {
+    console.error('[ALERTS] checkFacebookQueueBacklog:', e);
+    return { backlog: 0, stats: {} };
+  }
+}
+
+/**
+ * Проверка Rate Limit для Facebook (проверка по ошибкам)
+ */
+async function checkFacebookRateLimit(chatId) {
+  try {
+    const fbRepo = require('./facebook.repository');
+    const lastErrors = await repository.withClient(chatId, async (client) => {
+      const result = await client.query(
+        `SELECT error_text, created_at
+         FROM facebook_publish_logs
+         WHERE status = 'failed'
+           AND (error_text ILIKE '%rate%' OR error_text ILIKE '%429%')
+         ORDER BY created_at DESC
+         LIMIT 1`
+      );
+      return result.rows;
+    });
+
+    if (lastErrors.length > 0) {
+      const lastError = lastErrors[0];
+      const minutesSince = (Date.now() - new Date(lastError.created_at).getTime()) / (1000 * 60);
+      // Rate limit действует обычно 15-60 минут
+      if (minutesSince < 60) {
+        return {
+          rateLimited: true,
+          resetAt: new Date(new Date(lastError.created_at).getTime() + 15 * 60 * 1000).toISOString()
+        };
+      }
+    }
+
+    return { rateLimited: false };
+  } catch (e) {
+    console.error('[ALERTS] checkFacebookRateLimit:', e);
+    return { rateLimited: false };
   }
 }
 
@@ -242,6 +364,9 @@ module.exports = {
   checkNoSuccessPeriod,
   checkQueueBacklog,
   checkStuckJobs,
+  checkFacebookConsecutiveFailures,
+  checkFacebookQueueBacklog,
+  checkFacebookRateLimit,
   sendAlertToModerator,
   resetAlertCache,
   recordEvent,

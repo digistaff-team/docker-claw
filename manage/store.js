@@ -662,6 +662,43 @@ function clearYoutubeConfig(chatId) {
     }
 }
 
+// === Facebook Config ===
+
+function getFacebookConfig(chatId) {
+    const data = statesCache[chatId];
+    return data?.facebookConfig || null;
+}
+
+function setFacebookConfig(chatId, patch = {}) {
+    if (!statesCache[chatId]) statesCache[chatId] = {};
+    const current = statesCache[chatId].facebookConfig || {};
+    const next = { ...current };
+
+    if (patch.buffer_api_key !== undefined) next.buffer_api_key = patch.buffer_api_key || null;
+    if (patch.buffer_channel_id !== undefined) next.buffer_channel_id = String(patch.buffer_channel_id || '').trim() || null;
+    if (patch.page_name !== undefined) next.page_name = String(patch.page_name || '').trim() || null;
+    if (patch.is_active !== undefined) next.is_active = !!patch.is_active;
+    if (patch.auto_publish !== undefined) next.auto_publish = !!patch.auto_publish;
+    if (patch.schedule_time !== undefined) next.schedule_time = patch.schedule_time || null;
+    if (patch.schedule_tz !== undefined) next.schedule_tz = patch.schedule_tz || null;
+    if (patch.daily_limit !== undefined) next.daily_limit = Number.isFinite(patch.daily_limit) ? patch.daily_limit : 10;
+    if (patch.publish_interval_hours !== undefined) next.publish_interval_hours = Number.isFinite(patch.publish_interval_hours) ? patch.publish_interval_hours : 4;
+    if (patch.random_publish !== undefined) next.random_publish = !!patch.random_publish;
+    if (patch.allowed_weekdays !== undefined && Array.isArray(patch.allowed_weekdays)) next.allowed_weekdays = patch.allowed_weekdays;
+    if (patch.moderator_user_id !== undefined) next.moderator_user_id = String(patch.moderator_user_id || '').trim() || null;
+    if (patch.stats !== undefined) next.stats = { ...(next.stats || {}), ...patch.stats };
+
+    statesCache[chatId].facebookConfig = next;
+    return persist(chatId);
+}
+
+function clearFacebookConfig(chatId) {
+    if (statesCache[chatId]) {
+        delete statesCache[chatId].facebookConfig;
+        return persist(chatId);
+    }
+}
+
 // === VK Config ===
 
 function getVkConfig(chatId) {
@@ -1158,6 +1195,9 @@ module.exports = {
     getYoutubeConfig,
     setYoutubeConfig,
     clearYoutubeConfig,
+    getFacebookConfig,
+    setFacebookConfig,
+    clearFacebookConfig,
     getVkConfig,
     setVkConfig,
     getVkSettings,
