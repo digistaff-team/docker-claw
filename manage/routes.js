@@ -728,8 +728,7 @@ router.get('/channels/instagram', (req, res) => {
     const config = manageStore.getInstagramConfig(chatId);
     if (!config) return res.json({ connected: false });
     const safe = { ...config };
-    if (safe.app_secret) safe.app_secret = safe.app_secret.slice(0, 4) + '****';
-    if (safe.access_token) safe.access_token = safe.access_token.slice(0, 8) + '****';
+    if (safe.buffer_api_key) safe.buffer_api_key = safe.buffer_api_key.slice(0, 6) + '***';
     res.json({ connected: true, config: safe });
 });
 
@@ -739,15 +738,18 @@ router.post('/channels/instagram', async (req, res) => {
     try {
         const patch = {};
         const fields = [
-            'app_id', 'app_secret', 'access_token',
-            'fb_page_id', 'fb_page_name', 'ig_user_id', 'ig_username',
-            'default_alt_text', 'location_id',
-            'is_active', 'auto_publish', 'is_reel',
-            'daily_limit', 'posting_hours',
-            'moderator_user_id'
+            'buffer_api_key', 'buffer_channel_id',
+            'is_active', 'auto_publish',
+            'schedule_time', 'schedule_tz', 'daily_limit',
+            'publish_interval_hours', 'allowed_weekdays',
+            'random_publish', 'moderator_user_id'
         ];
         for (const f of fields) {
             if (req.body[f] !== undefined) patch[f] = req.body[f];
+        }
+        // Не перезаписывать замаскированный ключ
+        if (patch.buffer_api_key && patch.buffer_api_key.endsWith('***')) {
+            delete patch.buffer_api_key;
         }
         await manageStore.setInstagramConfig(chatId, patch);
         res.json({ success: true });
@@ -767,36 +769,21 @@ router.delete('/channels/instagram', async (req, res) => {
     }
 });
 
-router.get('/channels/instagram/accounts', async (req, res) => {
-    const chatId = req.query.chat_id;
+router.post('/channels/instagram/test-buffer', async (req, res) => {
+    const { chat_id: chatId, buffer_api_key, buffer_channel_id } = req.body;
     if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
-    const config = manageStore.getInstagramConfig(chatId);
-    if (!config || !config.access_token) {
-        return res.status(400).json({ error: 'Instagram не подключён или отсутствует access_token. Подключите приложение через Facebook OAuth.' });
+    if (!buffer_api_key || !buffer_channel_id) {
+        return res.status(400).json({ error: 'buffer_api_key и buffer_channel_id обязательны' });
     }
     try {
-        // Запрос Facebook Pages с привязанными Instagram-аккаунтами
-        const fetch = require('node-fetch');
-        const fbRes = await fetch(
-            `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,instagram_business_account{id,username}&access_token=${encodeURIComponent(config.access_token)}`,
-            { timeout: 15000 }
-        );
-        if (!fbRes.ok) {
-            const err = await fbRes.text();
-            return res.status(fbRes.status).json({ error: `Facebook API error: ${err.slice(0, 300)}` });
+        const bufferService = require('../services/buffer.service');
+        const result = await bufferService.testConnection(buffer_api_key, buffer_channel_id);
+        if (result.service !== 'instagram') {
+            return res.status(400).json({ error: `Канал является ${result.service}, а не Instagram` });
         }
-        const fbData = await fbRes.json();
-        const accounts = (fbData.data || [])
-            .filter(p => p.instagram_business_account)
-            .map(p => ({
-                fb_page_id: p.id,
-                page_name: p.name,
-                ig_user_id: p.instagram_business_account.id,
-                ig_username: p.instagram_business_account.username || ''
-            }));
-        res.json({ accounts });
+        res.json({ success: true, ...result });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(400).json({ error: e.message });
     }
 });
 
