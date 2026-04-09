@@ -37,18 +37,14 @@ async function ensureSchema(chatId) {
         id BIGSERIAL PRIMARY KEY,
         chat_id TEXT NOT NULL,
         topic TEXT NOT NULL,
-        ig_user_id TEXT,
         caption TEXT,
-        hook_text TEXT,
         image_prompt TEXT,
         image_path TEXT,
-        video_path TEXT,
-        ig_content_type TEXT NOT NULL DEFAULT 'photo' CHECK (ig_content_type IN ('photo', 'reel')),
         status TEXT NOT NULL DEFAULT 'draft',
         error_text TEXT,
         image_attempts INT NOT NULL DEFAULT 0,
         rejected_count INT NOT NULL DEFAULT 0,
-        ig_media_id TEXT,
+        buffer_post_id TEXT,
         correlation_id TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -60,8 +56,8 @@ async function ensureSchema(chatId) {
       CREATE TABLE IF NOT EXISTS instagram_publish_logs (
         id BIGSERIAL PRIMARY KEY,
         job_id BIGINT REFERENCES instagram_jobs(id) ON DELETE SET NULL,
-        ig_user_id TEXT NOT NULL,
-        ig_media_id TEXT,
+        buffer_post_id TEXT,
+        method TEXT NOT NULL DEFAULT 'buffer',
         status TEXT NOT NULL,
         error_text TEXT,
         correlation_id TEXT,
@@ -75,19 +71,15 @@ async function createJob(chatId, data) {
   return withClient(chatId, async (client) => {
     const result = await client.query(
       `INSERT INTO instagram_jobs
-        (chat_id, topic, ig_user_id, caption, hook_text, image_prompt, image_path, video_path, ig_content_type, status, image_attempts, correlation_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        (chat_id, topic, caption, image_prompt, image_path, status, image_attempts, correlation_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
       [
         chatId,
         data.topic,
-        data.igUserId || null,
         data.caption || null,
-        data.hookText || null,
         data.imagePrompt || null,
         data.imagePath || null,
-        data.videoPath || null,
-        data.igContentType || 'photo',
         data.status || 'draft',
         data.imageAttempts || 0,
         data.correlationId || null
@@ -104,13 +96,11 @@ async function updateJob(chatId, jobId, data) {
     let idx = 1;
 
     const map = {
-      topic: 'topic', igUserId: 'ig_user_id', caption: 'caption',
-      hookText: 'hook_text', imagePrompt: 'image_prompt',
-      imagePath: 'image_path', videoPath: 'video_path',
-      igContentType: 'ig_content_type', status: 'status',
-      errorText: 'error_text', imageAttempts: 'image_attempts',
-      rejectedCount: 'rejected_count', igMediaId: 'ig_media_id',
-      correlationId: 'correlation_id'
+      topic: 'topic', caption: 'caption',
+      imagePrompt: 'image_prompt', imagePath: 'image_path',
+      status: 'status', errorText: 'error_text',
+      imageAttempts: 'image_attempts', rejectedCount: 'rejected_count',
+      bufferPostId: 'buffer_post_id', correlationId: 'correlation_id'
     };
 
     for (const [jsKey, dbCol] of Object.entries(map)) {
@@ -180,13 +170,13 @@ async function addPublishLog(chatId, data) {
   return withClient(chatId, async (client) => {
     const result = await client.query(
       `INSERT INTO instagram_publish_logs
-        (job_id, ig_user_id, ig_media_id, status, error_text, correlation_id)
+        (job_id, buffer_post_id, method, status, error_text, correlation_id)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id`,
       [
         data.jobId || null,
-        data.igUserId,
-        data.igMediaId || null,
+        data.bufferPostId || null,
+        data.method || 'buffer',
         data.status,
         data.errorText || null,
         data.correlationId || null
