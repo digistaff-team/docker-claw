@@ -3,66 +3,75 @@ const API_CONTENT = `${window.location.origin}/api/content`;
 
 // === Инициализация scheduler элементов ===
 function initSchedulerChannels() {
-    // Generate hour options for Instagram
+    // Generate hour options for channels that use JS-generated selects
+    ['instagramScheduleHour', 'facebookScheduleHour'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.options.length <= 1) {
+            for (let h = 0; h < 24; h++) {
+                const opt = document.createElement('option');
+                opt.value = h.toString().padStart(2, '0');
+                opt.textContent = h.toString().padStart(2, '0');
+                el.appendChild(opt);
+            }
+        }
+    });
     const igHourEl = document.getElementById('instagramScheduleHour');
-    if (igHourEl && igHourEl.options.length <= 1) {
-        for (let h = 0; h < 24; h++) {
-            const opt = document.createElement('option');
-            opt.value = h.toString().padStart(2, '0');
-            opt.textContent = h.toString().padStart(2, '0');
-            igHourEl.appendChild(opt);
-        }
-        igHourEl.value = '09';
-    }
-
-    // Generate hour options for Facebook
+    if (igHourEl) igHourEl.value = '09';
     const fbHourEl = document.getElementById('facebookScheduleHour');
-    if (fbHourEl && fbHourEl.options.length <= 1) {
-        for (let h = 0; h < 24; h++) {
-            const opt = document.createElement('option');
-            opt.value = h.toString().padStart(2, '0');
-            opt.textContent = h.toString().padStart(2, '0');
-            fbHourEl.appendChild(opt);
-        }
-        fbHourEl.value = '10';
-    }
+    if (fbHourEl) fbHourEl.value = '10';
 
-    // Initialize timezone selects
+    // Initialize timezone selects for ALL channels (60+ TZ)
     if (typeof generateTimezoneSelect === 'function') {
+        generateTimezoneSelect('contentScheduleTz', 'Europe/Moscow');
+        generateTimezoneSelect('vkScheduleTz', 'Europe/Moscow');
+        generateTimezoneSelect('okScheduleTz', 'Europe/Moscow');
+        generateTimezoneSelect('youtubeScheduleTz', 'Europe/Moscow');
         generateTimezoneSelect('instagramScheduleTz', 'Europe/Moscow');
         generateTimezoneSelect('facebookScheduleTz', 'Europe/Moscow');
         generateTimezoneSelect('pinterestScheduleTz', 'Europe/Moscow');
-        generateTimezoneSelect('youtubeScheduleTz', 'Europe/Moscow');
         generateTimezoneSelect('wordpressScheduleTz', 'Europe/Moscow');
     }
 
-    // Initialize weekday checkboxes
+    // Initialize weekday checkboxes for ALL channels
     if (typeof generateWeekdayCheckboxes === 'function') {
-        const igWeekdays = document.getElementById('instagramWeekdays');
-        if (igWeekdays && !igWeekdays.querySelector('input[type="checkbox"]')) {
-            igWeekdays.innerHTML = generateWeekdayCheckboxes('instagram-weekday', [0, 1, 2, 3, 4]);
-        }
+        const defaultWeekdays = [1, 2, 3, 4, 5];
+        const weekdayConfigs = {
+            'telegramWeekdays': { prefix: 'telegram-weekday', days: defaultWeekdays },
+            'vkWeekdays': { prefix: 'vk-weekday', days: defaultWeekdays },
+            'okWeekdays': { prefix: 'ok-weekday', days: defaultWeekdays },
+            'youtubeWeekdays': { prefix: 'youtube-weekday', days: defaultWeekdays },
+            'instagramWeekdays': { prefix: 'instagram-weekday', days: defaultWeekdays },
+            'facebookWeekdays': { prefix: 'facebook-weekday', days: defaultWeekdays },
+            'pinterestWeekdays': { prefix: 'pinterest-weekday', days: defaultWeekdays },
+            'wordpressWeekdays': { prefix: 'wordpress-weekday', days: defaultWeekdays }
+        };
 
-        const fbWeekdays = document.getElementById('facebookWeekdays');
-        if (fbWeekdays && !fbWeekdays.querySelector('input[type="checkbox"]')) {
-            fbWeekdays.innerHTML = generateWeekdayCheckboxes('facebook-weekday', [0, 1, 2, 3, 4]);
-        }
-
-        const pinterestWeekdays = document.getElementById('pinterestWeekdays');
-        if (pinterestWeekdays && !pinterestWeekdays.querySelector('input[type="checkbox"]')) {
-            pinterestWeekdays.innerHTML = generateWeekdayCheckboxes('pinterest-weekday', [1, 2, 3, 4, 5]);
-        }
-
-        const wordpressWeekdays = document.getElementById('wordpressWeekdays');
-        if (wordpressWeekdays && !wordpressWeekdays.querySelector('input[type="checkbox"]')) {
-            wordpressWeekdays.innerHTML = generateWeekdayCheckboxes('wordpress-weekday', [1, 2, 3, 4, 5]);
-        }
+        Object.entries(weekdayConfigs).forEach(([elId, cfg]) => {
+            const el = document.getElementById(elId);
+            if (el && !el.querySelector('input[type="checkbox"]')) {
+                el.innerHTML = generateWeekdayCheckboxes(cfg.prefix, cfg.days);
+            }
+        });
     }
 
     // Initialize time fields
+    updateScheduleTime();
+    updateVkScheduleTime();
+    updateOkScheduleTime();
+    updateYoutubeScheduleTime();
     updateInstagramScheduleTime();
     updateFacebookScheduleTime();
     updatePinterestScheduleTime();
+
+    // Initialize moderator field visibility
+    toggleTelegramModeratorField();
+    toggleVkModeratorField();
+    toggleOkModeratorField();
+    toggleYoutubeModeratorField();
+    if (typeof toggleInstagramModeratorField === 'function') toggleInstagramModeratorField();
+    if (typeof toggleFacebookModeratorField === 'function') toggleFacebookModeratorField();
+    if (typeof togglePinterestModeratorField === 'function') togglePinterestModeratorField();
+    if (typeof toggleWordpressModeratorField === 'function') toggleWordpressModeratorField();
 }
 
 // === Переключение табов каналов ===
@@ -493,16 +502,14 @@ function updateScheduleTz() {
 function setScheduleTzInput(tzValue) {
     const tzSelect = document.getElementById('contentScheduleTz');
     if (!tzSelect || !tzValue) return;
-    const optionExists = Array.from(tzSelect.options).some((opt) => opt.value === tzValue);
-    if (optionExists) {
-        tzSelect.value = tzValue;
-        return;
+    tzSelect.value = tzValue;
+    if (!tzSelect.value) {
+        const opt = document.createElement('option');
+        opt.value = tzValue;
+        opt.textContent = tzValue;
+        opt.selected = true;
+        tzSelect.appendChild(opt);
     }
-    const newOption = document.createElement('option');
-    newOption.value = tzValue;
-    newOption.text = `${tzValue} (custom)`;
-    newOption.selected = true;
-    tzSelect.insertBefore(newOption, tzSelect.firstChild);
 }
 
 async function loadContentSettings() {
@@ -530,10 +537,8 @@ async function loadContentSettings() {
         const premoderEl = document.getElementById('contentPremoderation');
         if (premoderEl) premoderEl.checked = s.premoderationEnabled !== false;
         const weekdays = Array.isArray(s.allowedWeekdays) ? s.allowedWeekdays : [1, 2, 3, 4, 5];
-        for (let d = 0; d <= 6; d++) {
-            const cb = document.getElementById('weekday' + d);
-            if (cb) cb.checked = weekdays.includes(d);
-        }
+        setWeekdays('telegram-weekday', weekdays);
+        toggleTelegramModeratorField();
     } catch (e) {
         console.error('loadContentSettings', e);
     }
@@ -557,7 +562,7 @@ async function saveContentSettings() {
                 publish_interval_hours: parseFloat(document.getElementById('contentPublishInterval')?.value || '24'),
                 random_publish: !!document.getElementById('contentRandomPublish')?.checked,
                 premoderation_enabled: !!document.getElementById('contentPremoderation')?.checked,
-                allowed_weekdays: [0,1,2,3,4,5,6].filter(d => document.getElementById('weekday' + d)?.checked)
+                allowed_weekdays: getWeekdays('telegram-weekday')
             })
         });
         const data = await res.json().catch(() => ({}));
@@ -1330,15 +1335,13 @@ async function loadVkStatus() {
             }
             const tzSelect = document.getElementById('vkScheduleTz');
             if (tzSelect && s.schedule_tz) {
-                const optionExists = Array.from(tzSelect.options).some((opt) => opt.value === s.schedule_tz);
-                if (optionExists) {
-                    tzSelect.value = s.schedule_tz;
-                } else {
-                    const newOption = document.createElement('option');
-                    newOption.value = s.schedule_tz;
-                    newOption.text = `${s.schedule_tz} (custom)`;
-                    newOption.selected = true;
-                    tzSelect.insertBefore(newOption, tzSelect.firstChild);
+                tzSelect.value = s.schedule_tz;
+                if (!tzSelect.value) {
+                    const opt = document.createElement('option');
+                    opt.value = s.schedule_tz;
+                    opt.textContent = s.schedule_tz;
+                    opt.selected = true;
+                    tzSelect.appendChild(opt);
                 }
             }
             if (s.daily_limit) document.getElementById('vkDailyLimit').value = s.daily_limit;
@@ -1359,6 +1362,7 @@ async function loadVkStatus() {
             if (moderatorEl) {
                 moderatorEl.value = s.moderator_user_id || chatId;
             }
+            toggleVkModeratorField();
         } else {
             statusEl.textContent = '';
             if (disconnectBtn) disconnectBtn.style.display = 'none';
@@ -1553,15 +1557,13 @@ async function loadOkStatus() {
             }
             const tzSelect = document.getElementById('okScheduleTz');
             if (tzSelect && s.schedule_tz) {
-                const optionExists = Array.from(tzSelect.options).some((opt) => opt.value === s.schedule_tz);
-                if (optionExists) {
-                    tzSelect.value = s.schedule_tz;
-                } else {
-                    const newOption = document.createElement('option');
-                    newOption.value = s.schedule_tz;
-                    newOption.text = `${s.schedule_tz} (custom)`;
-                    newOption.selected = true;
-                    tzSelect.insertBefore(newOption, tzSelect.firstChild);
+                tzSelect.value = s.schedule_tz;
+                if (!tzSelect.value) {
+                    const opt = document.createElement('option');
+                    opt.value = s.schedule_tz;
+                    opt.textContent = s.schedule_tz;
+                    opt.selected = true;
+                    tzSelect.appendChild(opt);
                 }
             }
             if (s.daily_limit) document.getElementById('okDailyLimit').value = s.daily_limit;
@@ -1582,6 +1584,7 @@ async function loadOkStatus() {
             if (moderatorEl) {
                 moderatorEl.value = s.moderator_user_id || chatId;
             }
+            toggleOkModeratorField();
         } else {
             statusEl.textContent = '';
             if (disconnectBtn) disconnectBtn.style.display = 'none';
@@ -1955,6 +1958,30 @@ function setYoutubeScheduleTzInput(tzValue) {
         opt.textContent = tzValue;
         opt.selected = true;
         tzSelect.appendChild(opt);
+    }
+}
+
+function toggleTelegramModeratorField() {
+    const premoderation = document.getElementById('contentPremoderation')?.checked || false;
+    const moderatorField = document.getElementById('telegramModeratorField');
+    if (moderatorField) {
+        moderatorField.classList.toggle('visible', premoderation);
+    }
+}
+
+function toggleVkModeratorField() {
+    const premoderation = document.getElementById('vkPremoderation')?.checked || false;
+    const moderatorField = document.getElementById('vkModeratorField');
+    if (moderatorField) {
+        moderatorField.classList.toggle('visible', premoderation);
+    }
+}
+
+function toggleOkModeratorField() {
+    const premoderation = document.getElementById('okPremoderation')?.checked || false;
+    const moderatorField = document.getElementById('okModeratorField');
+    if (moderatorField) {
+        moderatorField.classList.toggle('visible', premoderation);
     }
 }
 

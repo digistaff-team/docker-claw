@@ -9,9 +9,9 @@
 - **Per-user isolated sandbox** — Each user gets a separate Docker container with CPU and memory limits
 - **AI agent in the loop** — Agent decides which commands to run, checks results, and forms responses (30+ tools available)
 - **Multi-channel management** — Telegram bot, Email (IMAP/SMTP), HTTP webhooks
-- **Multi-platform publishing** — Publish content to Telegram, VK, OK (Odnoklassniki), Instagram, Pinterest, YouTube Shorts
+- **Multi-platform publishing** — Publish content to Telegram, VK, OK (Odnoklassniki), Instagram, Pinterest, YouTube Shorts, Facebook
 - **WordPress/Дзен publishing** — Generate and publish blog articles to WordPress sites and Yandex Zen with AI-powered content generation, SEO optimization, and image cover generation
-- **Central moderation system** — Single moderation bot (CW_BOT) handles approval workflows for all platforms
+- **Central moderation system** — Single moderation bot (CW_BOT) handles approval workflows for all platforms (Telegram, VK, OK, Instagram, YouTube, Pinterest, Facebook)
 - **Web interface** — Dashboard for sessions, files, tasks, apps, channels, skills, balance, and AI settings
 - **Persistent storage** — Data survives restarts via bind-mount and per-user PostgreSQL
 - **Snapshots** — Multi-level undo for files, old snapshots auto-cleaned
@@ -39,7 +39,7 @@
 | **AI Integration** | ProTalk router, OpenAI, OpenRouter |
 | **Image Generation** | Kie.ai API, OpenAI Images (fallback) |
 | **Video Generation** | RunwayML, Pika, Kie.ai (optional) |
-| **Social Media** | VK API, OK API, Instagram API, Pinterest API, YouTube API, Buffer.com GraphQL API |
+| **Social Media** | VK API, OK API, Instagram API, Pinterest API, YouTube API, Facebook Graph API, Buffer.com GraphQL API |
 | **Blog Publishing** | WordPress REST API v2 (Application Passwords), Yandex Zen |
 | **Session Management** | express-session + FileStore |
 | **Image Processing** | Sharp |
@@ -78,14 +78,15 @@
 │   ├── ai_router_service.js   # LLM routing (ProTalk/OpenAI/OpenRouter)
 │   ├── balance.service.js     # Balance checking & token management
 │   ├── blogGenerator.service.js # Blog article generation (WordPress/Дзен)
-│   ├── buffer.service.js      # Buffer.com GraphQL API (Pinterest, IG, YouTube)
+│   ├── buffer.service.js      # Buffer.com GraphQL API (Pinterest, IG, YouTube, Facebook)
 │   ├── contentMvp.service.js  # Content generation & publishing (Telegram)
 │   ├── deps.service.js        # Dependency graph
 │   ├── docker.service.js      # Container lifecycle management
+│   ├── facebookMvp.service.js # Facebook content pipeline with moderation
 │   ├── image.service.js       # Image processing (watermarks, etc.)
 │   ├── imageGen.service.js    # Image generation (Kie.ai + OpenAI fallback)
 │   ├── instagram.service.js   # Instagram native API
-│   ├── instagramMvp.service.js # Instagram content pipeline
+│   ├── instagramMvp.service.js # Instagram content pipeline (via Buffer API)
 │   ├── mysql.service.js       # MySQL skills DB connection
 │   ├── ok.service.js          # Odnoklassniki native API
 │   ├── okMvp.service.js       # OK content pipeline
@@ -117,7 +118,8 @@
 │       ├── pinterest.repository.js # Pinterest DB repository
 │       ├── vk.repository.js   # VK DB repository
 │       ├── wordpress.repository.js # WordPress DB repository
-│       └── youtube.repository.js # YouTube DB repository
+│       ├── youtube.repository.js # YouTube DB repository
+│       └── facebook.repository.js # Facebook DB repository
 │
 ├── manage/                    # Channel integrations & AI agent
 │   ├── telegram/              # Telegram bot implementation
@@ -177,7 +179,8 @@
 │
 ├── migrations/                # Database migration scripts
 │   ├── 001_add_billing_tables.sql     # Billing tables
-│   └── 20260325_add_vk_integration.sql # VK integration
+│   ├── 20260325_add_vk_integration.sql # VK integration
+│   └── 20260406_add_facebook_integration.sql # Facebook integration
 │
 ├── tests/                     # Test files
 │   ├── content.status.test.js       # Content status tests
@@ -324,6 +327,8 @@ docker-compose up -d
 | `VIDEO_FALLBACK_ENABLED` | `true` | Fallback to image on video failure |
 | `VK_*` | — | VK API credentials |
 | `OK_*` | — | OK API credentials |
+| `FACEBOOK_DAILY_LIMIT` | `10` | Daily Facebook post limit |
+| `FACEBOOK_MODERATION_TIMEOUT_HOURS` | `24` | Facebook moderation timeout |
 | `ADMIN_PASSWORD` | — | Admin panel password |
 | `BACKUP_ROOT` | `/var/sandbox-backups` | Backup storage root |
 | `SNAPSHOT_ROOT` | `/var/sandbox-snapshots` | Snapshot storage root |
@@ -341,7 +346,7 @@ All routes prefixed with `/api`.
 | `/api/execute/*` | Execute commands in container |
 | `/api/files/*` | Upload/download/list files |
 | `/api/database/*` | Per-user PostgreSQL management |
-| `/api/manage/*` | Channel (Telegram/Email) & AI settings |
+| `/api/manage/*` | Channel (Telegram/Email/Facebook/WordPress) & AI settings |
 | `/api/content/*` | Content generation & publishing |
 | `/api/plans/*` | Task plan management |
 | `/api/apps/*` | App registry |
@@ -490,20 +495,22 @@ New blog publishing infrastructure for WordPress sites and Yandex Zen:
 
 ### Multi-Platform Content Publishing System
 
-Major expansion of content publishing capabilities with 5 new social media platforms:
+Major expansion of content publishing capabilities with 6 social media platforms:
 
 **New Content Pipelines:**
 - `vkMvp.service.js` — VKontakte content pipeline with moderation
 - `okMvp.service.js` — Odnoklassniki content pipeline with moderation
-- `instagramMvp.service.js` — Instagram content pipeline with moderation
+- `instagramMvp.service.js` — Instagram content pipeline with moderation (via Buffer API)
 - `pinterestMvp.service.js` — Pinterest content pipeline with moderation
 - `youtubeMvp.service.js` — YouTube Shorts content pipeline with moderation
+- `facebookMvp.service.js` — Facebook content pipeline with moderation (via Buffer API)
 
 Each pipeline includes:
 - Content generation (text + media)
 - Moderator approval workflow via central CW_BOT
 - Platform-specific publishing logic
 - Status tracking and error handling
+- Scheduled publishing with timezone support
 
 **Shared Content Modules (`services/content/`):**
 - `repository.js` — Main content repository with DB operations
@@ -524,14 +531,23 @@ A single Telegram bot handles moderation for ALL platforms with distinct callbac
 - `ig_mod:` — Instagram moderation actions
 - `yt_mod:` — YouTube moderation actions
 - `pin_mod:` — Pinterest moderation actions
+- `fb_mod:` — Facebook moderation actions
 - `content:` — Telegram content moderation
 
 ### Buffer.com Integration
 
 New `buffer.service.js` provides a unified GraphQL API for publishing to:
 - Pinterest
-- Instagram
+- Instagram (migrated from direct Graph API)
 - YouTube
+- Facebook
+
+**Instagram Migration to Buffer API:**
+- Instagram now publishes exclusively through Buffer API (no direct Graph API)
+- Removed direct Instagram Graph API client dependencies
+- Updated Instagram database schema for Buffer fields
+- All Instagram endpoints in `manage/routes.js` migrated to Buffer-based config
+- Buffer service handles Instagram authentication and posting automatically
 
 ### Token Billing System
 
@@ -600,6 +616,57 @@ New admin pages:
 - `balance.html` — Token balance and usage
 - `channels.html` — Channel configuration
 - `skills.html` — AI skills management
+
+### Facebook Integration
+
+Complete Facebook publishing pipeline with Buffer API integration:
+
+**New Services:**
+- `facebookMvp.service.js` — Facebook content pipeline (791 lines)
+  - Content generation with AI
+  - Moderator approval workflow
+  - Scheduled publishing with timezone support
+  - Buffer GraphQL API integration for publishing
+  
+**New Database Repository:**
+- `services/content/facebook.repository.js` — Facebook DB repository (327 lines)
+  - `facebook_jobs` table for tracking Facebook posts
+  - `facebook_publish_logs` table for audit trail
+  - Auto-schema creation per user database
+
+**API Routes:**
+- `GET /api/manage/channels/facebook` — Get Facebook channel configuration
+- `POST /api/manage/channels/facebook` — Save Facebook channel configuration
+- `DELETE /api/manage/channels/facebook` — Disable Facebook channel
+- `POST /api/manage/channels/facebook/test-buffer` — Test Buffer connection
+
+**Frontend:**
+- `public/js/channels-facebook.js` — Facebook channel UI
+- `public/channels.html` — Updated with Facebook support
+- `public/js/channels.js` — Facebook integration
+- `public/templates/channel-scheduler-template.html` — Unified scheduler template
+- `public/js/timezone-helper.js` — Timezone utilities
+
+**Database Migration:**
+- `migrations/20260406_add_facebook_integration.sql`
+  - Added `fb_buffer_channel_id`, `fb_page_name`, `fb_buffer_api_key` to `content_channels`
+  - Index `idx_content_channels_fb` for performance
+
+**Configuration:**
+- `manage/store.js` — `getFacebookConfig()`, `setFacebookConfig()`, `clearFacebookConfig()`
+- `services/content/alerts.js` — Facebook alert thresholds (consecutive failures, queue backlog, rate limits)
+- `services/content/limits.js` — Facebook publication quotas
+- `services/content/index.js` — Exports `facebookRepo`
+
+**Environment Variables:**
+- `FACEBOOK_DAILY_LIMIT` — Daily post limit (default: `10`)
+- `FACEBOOK_MODERATION_TIMEOUT_HOURS` — Auto-reject timeout (default: `24`)
+
+**server.js Integration:**
+- Imported and initialized `facebookMvpService`
+- `facebookMvpService.startScheduler()` — Scheduled publishing
+- `facebookMvpService.stopScheduler()` — Graceful shutdown
+- Facebook moderation callbacks registered with CW_BOT
 
 ### CI/CD Infrastructure
 
@@ -713,8 +780,11 @@ psql -h 172.17.0.1 -U postgres -d clientzavod
 ### Social Media Integration Issues
 
 1. Verify API credentials in `.env` (VK_*, OK_*, etc.)
-2. Check Buffer.com API status (if using Buffer service)
+2. Check Buffer.com API status for Instagram, YouTube, Facebook
 3. Review moderation approvals in CW_BOT
+4. Test Buffer connections via `/api/manage/channels/{platform}/test-buffer` endpoints
+5. Check content queue: `node check-queue.js`
+6. Verify Facebook config: `manage/store.js` → `getFacebookConfig(chatId)`
 
 ## Related Documentation
 
@@ -746,11 +816,25 @@ npm run test:e2e:ci    # CI mode with HTML reporter
 
 ---
 
-## Document Update Summary (April 9, 2026)
+## Document Update Summary (April 10, 2026)
 
 This document has been updated to reflect the current state of the codebase:
 
-**Added:**
+**Added (April 10, 2026):**
+- Facebook integration — complete publishing pipeline via Buffer API
+- New service: `facebookMvp.service.js` (791 lines)
+- New repository: `services/content/facebook.repository.js` (327 lines)
+- Facebook database migration: `20260406_add_facebook_integration.sql`
+- Facebook API routes: GET/POST/DELETE `/api/manage/channels/facebook`
+- Facebook UI: `public/js/channels-facebook.js`, updated channels.html
+- New configuration variables: `FACEBOOK_DAILY_LIMIT`, `FACEBOOK_MODERATION_TIMEOUT_HOURS`
+- Facebook moderation callback: `fb_mod:` pattern for CW_BOT
+- Updated Buffer.com integration to include Facebook
+- Instagram migration to Buffer API (removed direct Graph API)
+- New frontend utilities: `public/js/timezone-helper.js`, channel scheduler template
+- Updated content modules: `alerts.js`, `limits.js`, `index.js` for Facebook
+
+**Previously Added (April 9, 2026):**
 - WordPress/Дзен blog publishing system capabilities
 - New services: `blogGenerator.service.js`, `wordpressMvp.service.js`, `imageGen.service.js`
 - New content repository: `wordpress.repository.js`
@@ -765,7 +849,12 @@ This document has been updated to reflect the current state of the codebase:
 - Package.json dependency updates
 
 **Updated:**
-- Service directory structure with all 41 service files
+- Service directory structure with 42 service files (added `facebookMvp.service.js`)
+- Multi-platform publishing now includes Facebook (6 platforms total)
+- Buffer.com integration expanded to 4 platforms (Pinterest, Instagram, YouTube, Facebook)
+- Instagram now uses Buffer API exclusively (direct Graph API removed)
+- Central moderation bot now handles 7 platforms (added Facebook)
 - Test file listing with new WordPress/blog tests
 - Configuration variable defaults and descriptions
-- Recent changes section with comprehensive WordPress integration details
+- API endpoints documentation
+- Troubleshooting section with Facebook-specific guidance
