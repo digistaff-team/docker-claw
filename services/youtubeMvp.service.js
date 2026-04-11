@@ -18,6 +18,7 @@ const dockerService = require('./docker.service');
 const storageService = require('./storage.service');
 const imageService = require('./image.service');
 const videoService = require('./content/video.service');
+const videoPipeline = require('./videoPipeline.service');
 const youtubeRepo = require('./content/youtube.repository');
 const bufferService = require('./buffer.service');
 
@@ -316,22 +317,39 @@ async function handleYoutubeGenerateJob(chatId, queueJob, bot, correlationId) {
     return { success: false, error: `Content generation failed: ${e.message}`, retry: true };
   }
 
-  // Генерация видео (синхронно с polling)
+  // Получение видео из общего пайплайна или генерация нового
   let videoPath = '';
   let videoErr = '';
-  const videoPrompt = `YouTube Shorts video. Topic: ${topic.topic}. Title: ${ytContent.videoTitle}. Description: ${ytContent.videoDescription}. Style: dynamic, engaging, vertical format (9:16), visually compelling, no text, no logos, cinematic quality.`;
 
   try {
-    const videoBuffer = await generateVideo(chatId, videoPrompt, topic.sheetRow);
-    const tempId = `${topic.sheetRow}_${Date.now()}`;
-    const saved = await saveVideoToHost(chatId, videoBuffer, tempId);
-    videoPath = saved.filename;
+    // Сначала пробуем забрать готовое видео из общего пула
+    const claimResult = await videoPipeline.claimVideo(chatId, 'youtube');
+
+    if (claimResult.success) {
+      // Нашли готовое видео — используем его
+      videoPath = claimResult.videoPath;
+      console.log(`[YOUTUBE-MVP] Using shared video: videoId=${claimResult.videoId}, path=${videoPath}`);
+
+      // Если это первое использование (все каналы ещё не использовали) — видео готово
+      // Если уже кто-то использовал — просто берём путь
+    } else {
+      // Нет доступного видео — генерируем новое
+      console.log(`[YOUTUBE-MVP] No shared video available, generating new one`);
+
+      const genResult = await videoPipeline.generateVideo(chatId, 'youtube');
+      if (!genResult.success) {
+        await repository.updateTopicStatus(chatId, topic.sheetRow, 'pending', `yt_video_failed: ${genResult.error}`);
+        return { success: false, error: `Video generation failed: ${genResult.error}`, retry: true };
+      }
+
+      videoPath = genResult.videoPath;
+      console.log(`[YOUTUBE-MVP] New video generated: videoId=${genResult.videoId}, path=${videoPath}`);
+    }
   } catch (e) {
     videoErr = e?.message || String(e);
-    console.error(`[YOUTUBE-MVP] Video generation failed: ${videoErr}`);
-    // Fallback: продолжаем без видео (только превью + текст) — но для YouTube это критично
+    console.error(`[YOUTUBE-MVP] Video pipeline failed: ${videoErr}`);
     await repository.updateTopicStatus(chatId, topic.sheetRow, 'pending', `yt_video_failed: ${videoErr}`);
-    return { success: false, error: `Video generation failed: ${videoErr}`, retry: true };
+    return { success: false, error: `Video pipeline failed: ${videoErr}`, retry: true };
   }
 
   // Запись в БД

@@ -1370,4 +1370,53 @@ router.post('/channels/facebook/test-buffer', async (req, res) => {
     }
 });
 
+// ============================================
+// TikTok Channel
+// ============================================
+
+/**
+ * GET /api/manage/channels/tiktok — получить конфигурацию TikTok
+ */
+router.get('/channels/tiktok', (req, res) => {
+    const { chatId } = req.session || {};
+    if (!chatId) {
+        return res.status(401).json({ error: 'Не авторизован' });
+    }
+    const config = manageStore.getTiktokConfig(chatId);
+    res.json({ success: true, config: config || {} });
+});
+
+/**
+ * POST /api/manage/channels/tiktok — сохранить конфигурацию TikTok
+ */
+router.post('/channels/tiktok', async (req, res) => {
+    const { chatId } = req.session || {};
+    if (!chatId) {
+        return res.status(401).json({ error: 'Не авторизован' });
+    }
+    const patch = req.body;
+    try {
+        manageStore.setTiktokConfig(chatId, patch);
+        res.json({ success: true, message: 'Конфигурация TikTok сохранена' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * DELETE /api/manage/channels/tiktok — отключить TikTok
+ */
+router.delete('/channels/tiktok', async (req, res) => {
+    const { chatId } = req.session || {};
+    if (!chatId) {
+        return res.status(401).json({ error: 'Не авторизован' });
+    }
+    try {
+        manageStore.clearTiktokConfig(chatId);
+        res.json({ success: true, message: 'TikTok отключён' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 module.exports = router;
