@@ -129,8 +129,11 @@ router.post('/:chat_id/upload', upload.single('file'), async (req, res) => {
         try {
             const storageService = require('../services/storage.service');
             const dataDir = storageService.getDataDir(chat_id);
+            await fs.mkdir(dataDir, { recursive: true }); // Создаем директорию если не существует
             const destPath = path.join(dataDir, filename);
-            await fs.rename(req.file.path, destPath);
+            // Используем copyFile вместо rename для поддержки разных файловых систем
+            await fs.copyFile(req.file.path, destPath);
+            await fs.unlink(req.file.path).catch(() => {});
             
             const projectCacheService = require('../services/projectCache.service');
             const containerPath = `/workspace/${filename}`;
