@@ -18,7 +18,6 @@ let cwBot = null;
 
 const SCHEDULE_TZ = process.env.CONTENT_MVP_TZ || 'Europe/Moscow';
 const DAILY_VK_VIDEO_LIMIT = parseInt(process.env.VK_VIDEO_DAILY_LIMIT || '3', 10);
-const VK_VIDEO_MODERATION_TIMEOUT_HOURS = parseInt(process.env.VK_VIDEO_MODERATION_TIMEOUT_HOURS || '24', 10);
 const PROFILE_FILES = ['IDENTITY.md', 'SOUL.md'];
 const VK_API = 'https://api.vk.com/method';
 const VK_API_VERSION = '5.199';
@@ -375,41 +374,53 @@ async function publishVkVideoPost(chatId, bot, jobId) {
   console.log(`[VK-VIDEO-MVP] Got upload_url, video_id=${videoVkId}`);
 
   // Шаг 2: загружаем MP4
-  const videoFullPath = path.join(videoPipeline.VIDEO_TEMP_ROOT, chatId, draft.videoPath);
-  const videoBuffer = await fs.readFile(videoFullPath);
-  const uploadResult = await uploadVideoToVk(uploadUrl, videoBuffer, `video_${draft.videoId}.mp4`);
-
-  if (!uploadResult?.video_id && !uploadResult?.video_hash) {
-    throw new Error(`VK upload failed: ${JSON.stringify(uploadResult)}`);
+  if (!draft.videoPath) {
+    throw new Error('[VK-VIDEO] videoPath is missing in draft, cannot publish');
   }
 
-  console.log(`[VK-VIDEO-MVP] Video uploaded successfully`);
+  const videoFullPath = path.join(videoPipeline.VIDEO_TEMP_ROOT, chatId, draft.videoPath);
+  const videoBuffer = await fs.readFile(videoFullPath);
 
-  // Шаг 3: wall.post
-  const attachment = `video${ownVkId}_${videoVkId}`;
-  const message = [
-    draft.description,
-    draft.tags.length ? draft.tags.map(t => `#${t}`).join(' ') : ''
-  ].filter(Boolean).join('\n\n');
+  try {
+    const uploadResult = await uploadVideoToVk(uploadUrl, videoBuffer, `video_${draft.videoId}.mp4`);
 
-  await vkApiCall('wall.post', {
-    access_token: accessToken,
-    owner_id: ownerId,
-    message,
-    attachments: attachment
-  });
+    if (!uploadResult?.video_id && !uploadResult?.video_hash) {
+      throw new Error(`VK upload failed: ${JSON.stringify(uploadResult)}`);
+    }
 
-  console.log(`[VK-VIDEO-MVP] Published to wall: ${attachment}`);
+    console.log(`[VK-VIDEO-MVP] Video uploaded successfully`);
 
-  draft.status = 'published';
-  draft.publishedAt = new Date().toISOString();
-  await setVkVideoDraft(chatId, String(jobId), draft);
+    // Шаг 3: wall.post
+    const attachment = `video${ownVkId}_${videoVkId}`;
+    const message = [
+      draft.description,
+      draft.tags.length ? draft.tags.map(t => `#${t}`).join(' ') : ''
+    ].filter(Boolean).join('\n\n');
 
-  if (bot?.telegram) {
-    await bot.telegram.sendMessage(
-      chatId,
-      `✅ VK Видео опубликовано!\n\n📹 ${draft.title}\n📝 ${draft.description}`
-    ).catch(() => {});
+    await vkApiCall('wall.post', {
+      access_token: accessToken,
+      owner_id: ownerId,
+      message,
+      attachments: attachment
+    });
+
+    console.log(`[VK-VIDEO-MVP] Published to wall: ${attachment}`);
+
+    draft.status = 'published';
+    draft.publishedAt = new Date().toISOString();
+    await setVkVideoDraft(chatId, String(jobId), draft);
+
+    if (bot?.telegram) {
+      await bot.telegram.sendMessage(
+        chatId,
+        `✅ VK Видео опубликовано!\n\n📹 ${draft.title}\n📝 ${draft.description}`
+      ).catch(() => {});
+    }
+  } catch (e) {
+    draft.status = 'failed';
+    draft.errorText = e.message;
+    await setVkVideoDraft(chatId, String(jobId), draft);
+    throw e; // rethrow so the outer catch in handleVkVideoGenerateJob also sees it
   }
 }
 
@@ -490,6 +501,10 @@ async function handleVkVideoModerationAction(chatId, bot, jobId, action) {
 
   switch (action) {
     case 'approve':
+      if (draft.status === 'approved' || draft.status === 'published') {
+        await bot.telegram.sendMessage(chatId, `[VK Video] Пост уже ${draft.status}, пропускаем.`).catch(() => {});
+        return { ok: true, message: `Пост уже ${draft.status}` };
+      }
       draft.status = 'approved';
       await setVkVideoDraft(chatId, String(jobId), draft);
       await publishVkVideoPost(chatId, bot, jobId);
@@ -561,17 +576,16 @@ function stopScheduler() {
 
 async function publishScheduledPosts() {
   const allStates = manageStore.getAllStates();
-  const now = new Date();
 
   for (const [chatId] of Object.entries(allStates)) {
     try {
       const settings = getVkVideoSettings(chatId);
       if (!settings.isActive) continue;
 
-      const { time: nowTime } = getNowInTz(settings.scheduleTz);
+      const { date, time: nowTime } = getNowInTz(settings.scheduleTz);
       if (nowTime !== settings.scheduleTime) continue;
 
-      const dayOfWeek = now.getDay();
+      const dayOfWeek = new Date(date + 'T00:00:00').getDay(); // date is in user's TZ, so this gives correct day
       if (!settings.allowedWeekdays.includes(dayOfWeek)) continue;
 
       if (settings.stats.posts_today >= settings.dailyLimit) continue;
