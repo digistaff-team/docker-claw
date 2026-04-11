@@ -45,7 +45,7 @@ test('videoPipeline.repository.js exports all functions', () => {
   assert.strictEqual(typeof vpRepo.withClient, 'function');
   assert.strictEqual(typeof vpRepo.withTransaction, 'function');
   assert.ok(Array.isArray(vpRepo.CHANNELS));
-  assert.strictEqual(vpRepo.CHANNELS.length, 3);
+  assert.strictEqual(vpRepo.CHANNELS.length, 4);
 });
 
 // Test 2: CHANNELS constant
