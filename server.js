@@ -546,7 +546,6 @@ async function startServer() {
         });
 
         // VK Video moderation callbacks for CW_BOT_TOKEN users
-        const vkVideoMvpService = require('./services/vkVideoMvp.service');
         cwBot.action(/^vk_vid_mod:(\d+):(approve|reject|regen_text)$/, async (ctx) => {
             const fromId = String(ctx.from?.id || '');
             const jobId = Number(ctx.match?.[1]);
@@ -659,6 +658,7 @@ async function startServer() {
     okMvpService.setOkCwBot(cwBot);
     instagramMvpService.setIgCwBot(cwBot);
     youtubeMvpService.setYtCwBot(cwBot);
+    const vkVideoMvpService = require('./services/vkVideoMvp.service');
     vkVideoMvpService.setVkVideoCwBot(cwBot);
 
     // Инициализация WordPress worker handlers
