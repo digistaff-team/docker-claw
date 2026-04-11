@@ -581,7 +581,6 @@ async function startServer() {
             }
 
             try {
-                const vkVideoMvpService = require('./services/vkVideoMvp.service');
                 const result = await vkVideoMvpService.handleVkVideoModerationAction(resolvedChatId, { telegram: ctx.telegram }, jobId, action);
                 await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
                 await ctx.reply(result?.message || 'Операция выполнена.').catch(() => {});
@@ -660,7 +659,6 @@ async function startServer() {
     okMvpService.setOkCwBot(cwBot);
     instagramMvpService.setIgCwBot(cwBot);
     youtubeMvpService.setYtCwBot(cwBot);
-    const vkVideoMvpService = require('./services/vkVideoMvp.service');
     vkVideoMvpService.setVkVideoCwBot(cwBot);
 
     // Инициализация WordPress worker handlers
@@ -711,6 +709,10 @@ async function startServer() {
 
     // Запуск VK Video-планировщика
     vkVideoMvpService.startScheduler(() => telegramRunner.bots);
+
+    // Запуск ежедневной очистки /workspace/output/content (05:00 Москва)
+    const outputContentCleanup = require('./services/outputContentCleanup.service');
+    outputContentCleanup.initCleanupScheduler();
 
     // Подключение Webhook API
     const webhookRoutes = require('./routes/webhook.routes');
@@ -795,6 +797,7 @@ async function gracefulShutdown() {
         try { require('./services/tiktokMvp.service').stopScheduler(); } catch (_) {}
         try { require('./services/vkVideoMvp.service').stopScheduler(); } catch (_) {}
         try { require('./services/videoPipeline.service').stopCleanupScheduler(); } catch (_) {}
+        try { require('./services/outputContentCleanup.service').stopCleanupScheduler(); } catch (_) {}
         await manageStore.persist();
     } catch (e) {
         // ignore
