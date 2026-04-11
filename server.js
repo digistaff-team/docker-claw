@@ -7,7 +7,7 @@ const routes = require('./routes');
 const sessionService = require('./services/session.service');
 const storageService = require('./services/storage.service');
 const snapshotService = require('./services/snapshot.service');
-const contentMvpService = require('./services/contentMvp.service');
+const telegramMvpService = require('./services/telegramMvp.service');
 const session = require('express-session');
 const FileStore = require('session-file-store')(session);
 
@@ -246,7 +246,7 @@ async function startServer() {
             
             console.log(`[CW-BOT] ${action} job ${jobId} for chatId=${resolvedChatId} (fromId=${fromId})`);
             try {
-                const result = await contentMvpService.handleModerationAction(resolvedChatId, { telegram: ctx.telegram }, action, jobId);
+                const result = await telegramMvpService.handleModerationAction(resolvedChatId, { telegram: ctx.telegram }, action, jobId);
                 await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
                 if (result?.ok) {
                     await ctx.reply(result.message || 'Операция выполнена.').catch(() => {});
@@ -543,7 +543,7 @@ async function startServer() {
     }
     
     // Делаем cwBot доступным для всех сервисов
-    contentMvpService.setContentBot(cwBot);
+    telegramMvpService.setContentBot(cwBot);
 
     // Передаём cwBot в другие сервисы (Pinterest, VK, OK, Instagram, YouTube, Facebook)
     const pinterestMvpService = require('./services/pinterestMvp.service');
@@ -582,7 +582,7 @@ async function startServer() {
 
     // Запуск Telegram-ботов (передаём cwBot, чтобы зарегистрировать пользователей с CW_BOT_TOKEN в bots Map)
     await telegramRunner.startAllBots(cwBot);
-    contentMvpService.startScheduler(() => telegramRunner.bots);
+    telegramMvpService.startScheduler(() => telegramRunner.bots);
 
     // Запуск Pinterest-планировщика
     pinterestMvpService.startScheduler(() => telegramRunner.bots);
@@ -656,7 +656,7 @@ async function gracefulShutdown() {
         const telegramRunner = require('./manage/telegram/runner');
         const authBot = require('./manage/telegram/authBot');
         const manageStore = require('./manage/store');
-        const contentMvpService = require('./services/contentMvp.service');
+        const telegramMvpService = require('./services/telegramMvp.service');
         let emailProcessor;
         try {
             emailProcessor = require('./manage/email/processor');
@@ -674,7 +674,7 @@ async function gracefulShutdown() {
         if (emailProcessor) {
             emailProcessor.stopEmailCron();
         }
-        contentMvpService.stopScheduler();
+        telegramMvpService.stopScheduler();
         try { require('./services/pinterestMvp.service').stopScheduler(); } catch (_) {}
         try { require('./services/youtubeMvp.service').stopScheduler(); } catch (_) {}
         try { require('./services/facebookMvp.service').stopScheduler(); } catch (_) {}

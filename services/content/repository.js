@@ -58,7 +58,10 @@ async function ensureSchema(chatId) {
     await client.query(`ALTER TABLE content_topics ADD COLUMN IF NOT EXISTS focus VARCHAR(255)`);
     await client.query(`ALTER TABLE content_topics ADD COLUMN IF NOT EXISTS secondary VARCHAR(255)`);
     await client.query(`ALTER TABLE content_topics ADD COLUMN IF NOT EXISTS lsi VARCHAR(255)`);
+    await client.query(`ALTER TABLE content_topics ADD COLUMN IF NOT EXISTS channel VARCHAR(50) DEFAULT NULL`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_content_topics_status_created_at ON content_topics(status, created_at, id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_content_topics_channel ON content_topics(channel)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_content_topics_status_channel ON content_topics(status, channel, created_at, id)`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS content_materials (
         id SERIAL PRIMARY KEY,
@@ -968,15 +971,16 @@ async function listTopics(chatId, options = {}) {
 async function createTopic(chatId, data) {
   return withClient(chatId, async (client) => {
     const result = await client.query(
-      `INSERT INTO content_topics (topic, focus, secondary, lsi, status)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, topic, focus, secondary, lsi, status, created_at, used_at`,
+      `INSERT INTO content_topics (topic, focus, secondary, lsi, status, channel)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, topic, focus, secondary, lsi, status, channel, created_at, used_at`,
       [
         data.topic,
         data.focus || null,
         data.secondary || null,
         data.lsi || null,
-        data.status || 'pending'
+        data.status || 'pending',
+        data.channel || null
       ]
     );
     return result.rows[0];
@@ -986,7 +990,7 @@ async function createTopic(chatId, data) {
 async function getTopicById(chatId, topicId) {
   return withClient(chatId, async (client) => {
     const result = await client.query(
-      `SELECT id, topic, focus, secondary, lsi, status, created_at, used_at
+      `SELECT id, topic, focus, secondary, lsi, status, channel, created_at, used_at
        FROM content_topics
        WHERE id = $1
        LIMIT 1`,
@@ -1019,9 +1023,13 @@ async function updateTopic(chatId, topicId, data) {
       values.push(data.lsi);
     }
     if (data.status !== undefined) {
-      fields.push(`status = $${paramIndex++}::text`);
+      fields.push(`status = ${paramIndex++}::text`);
       values.push(data.status);
-      fields.push(`used_at = CASE WHEN $${paramIndex - 1}::text = 'pending' THEN NULL ELSE COALESCE(used_at, NOW()) END`);
+      fields.push(`used_at = CASE WHEN ${paramIndex - 1}::text = 'pending' THEN NULL ELSE COALESCE(used_at, NOW()) END`);
+    }
+    if (data.channel !== undefined) {
+      fields.push(`channel = ${paramIndex++}::text`);
+      values.push(data.channel);
     }
 
     if (!fields.length) {
@@ -1033,8 +1041,8 @@ async function updateTopic(chatId, topicId, data) {
     const result = await client.query(
       `UPDATE content_topics
        SET ${fields.join(', ')}
-       WHERE id = $${paramIndex}
-       RETURNING id, topic, focus, secondary, lsi, status, created_at, used_at`,
+       WHERE id = ${paramIndex}
+       RETURNING id, topic, focus, secondary, lsi, status, channel, created_at, used_at`,
       values
     );
     return result.rows[0] || null;

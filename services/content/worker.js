@@ -9,7 +9,7 @@ const videoService = require('./video.service');
 const wordpressMvp = require('../../services/wordpressMvp.service');
 const blogGenerator = require('../../services/blogGenerator.service');
 const wpRepo = require('./wordpress.repository');
-const contentMvp = require('../../services/contentMvp.service');
+const telegramMvp = require('../../services/telegramMvp.service');
 const contentLimits = require('./limits');
 const manageStore = require('../../manage/store');
 const alerts = require('./alerts');
@@ -653,7 +653,7 @@ async function handleWordPressPublish(chatId, job, bot) {
  */
 async function publishBlogAnnouncement(chatId, post) {
   try {
-    const settings = contentMvp.getContentSettings(chatId);
+    const settings = telegramMvp.getContentSettings(chatId);
     if (!settings.channelId) {
       console.warn('[CONTENT-WORKER-BLOG] No Telegram channel configured for announcement');
       return;

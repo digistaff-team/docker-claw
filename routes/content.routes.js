@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { Telegraf } = require('telegraf');
 
-const contentMvpService = require('../services/contentMvp.service');
+const telegramMvpService = require('../services/telegramMvp.service');
 const vkMvpService = require('../services/vkMvp.service');
 const okMvpService = require('../services/okMvp.service');
 const pinterestMvpService = require('../services/pinterestMvp.service');
@@ -54,7 +54,7 @@ router.post('/run-now', async (req, res) => {
     return res.status(409).json({ error: 'Telegram bot is not running for chat_id' });
   }
   try {
-    const result = await contentMvpService.runNow(chatId, bot, reason);
+    const result = await telegramMvpService.runNow(chatId, bot, reason);
     return res.json(result);
   } catch (e) {
     return res.status(500).json({ error: e.message });
@@ -72,7 +72,7 @@ router.get('/topics', async (req, res) => {
   const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
 
   try {
-    const result = await contentMvpService.listTopics(chatId, { status, limit, offset });
+    const result = await telegramMvpService.listTopics(chatId, { status, limit, offset });
     return res.json(result);
   } catch (e) {
     return res.status(500).json({ error: e.message });
@@ -86,7 +86,7 @@ router.post('/topics', async (req, res) => {
   }
 
   try {
-    const topic = await contentMvpService.createTopic(chatId, req.body || {});
+    const topic = await telegramMvpService.createTopic(chatId, req.body || {});
     return res.status(201).json({ topic });
   } catch (e) {
     return res.status(400).json({ error: e.message });
@@ -104,7 +104,7 @@ router.patch('/topics/:id', async (req, res) => {
   }
 
   try {
-    const topic = await contentMvpService.updateTopic(chatId, topicId, req.body || {});
+    const topic = await telegramMvpService.updateTopic(chatId, topicId, req.body || {});
     return res.json({ topic });
   } catch (e) {
     return res.status(/not found/i.test(e.message) ? 404 : 400).json({ error: e.message });
@@ -122,7 +122,7 @@ router.delete('/topics/:id', async (req, res) => {
   }
 
   try {
-    const topic = await contentMvpService.deleteTopic(chatId, topicId);
+    const topic = await telegramMvpService.deleteTopic(chatId, topicId);
     return res.json({ topic });
   } catch (e) {
     return res.status(/not found/i.test(e.message) ? 404 : 400).json({ error: e.message });
@@ -139,7 +139,7 @@ router.get('/materials', async (req, res) => {
   const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
 
   try {
-    const result = await contentMvpService.listMaterials(chatId, { limit, offset });
+    const result = await telegramMvpService.listMaterials(chatId, { limit, offset });
     return res.json(result);
   } catch (e) {
     return res.status(500).json({ error: e.message });
@@ -153,7 +153,7 @@ router.post('/materials', async (req, res) => {
   }
 
   try {
-    const material = await contentMvpService.createMaterial(chatId, req.body || {});
+    const material = await telegramMvpService.createMaterial(chatId, req.body || {});
     return res.status(201).json({ material });
   } catch (e) {
     return res.status(400).json({ error: e.message });
@@ -171,7 +171,7 @@ router.patch('/materials/:id', async (req, res) => {
   }
 
   try {
-    const material = await contentMvpService.updateMaterial(chatId, materialId, req.body || {});
+    const material = await telegramMvpService.updateMaterial(chatId, materialId, req.body || {});
     return res.json({ material });
   } catch (e) {
     return res.status(/not found/i.test(e.message) ? 404 : 400).json({ error: e.message });
@@ -189,7 +189,7 @@ router.delete('/materials/:id', async (req, res) => {
   }
 
   try {
-    const material = await contentMvpService.deleteMaterial(chatId, materialId);
+    const material = await telegramMvpService.deleteMaterial(chatId, materialId);
     return res.json({ material });
   } catch (e) {
     return res.status(/not found/i.test(e.message) ? 404 : 400).json({ error: e.message });
@@ -203,7 +203,7 @@ router.post('/import-google-sheet/preview', async (req, res) => {
   }
 
   try {
-    const result = await contentMvpService.previewContentImport(chatId, req.body || {});
+    const result = await telegramMvpService.previewContentImport(chatId, req.body || {});
     return res.json(result);
   } catch (e) {
     return res.status(400).json({ error: e.message });
@@ -217,7 +217,7 @@ router.post('/import-google-sheet', async (req, res) => {
   }
 
   try {
-    const result = await contentMvpService.importContentFromGoogleSheet(chatId, req.body || {});
+    const result = await telegramMvpService.importContentFromGoogleSheet(chatId, req.body || {});
     return res.json(result);
   } catch (e) {
     return res.status(400).json({ error: e.message });
@@ -231,7 +231,7 @@ router.post('/import-pinterest-boards/preview', async (req, res) => {
   if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
 
   try {
-    const result = await contentMvpService.previewPinterestBoardsImport(chatId, req.body || {});
+    const result = await telegramMvpService.previewPinterestBoardsImport(chatId, req.body || {});
     return res.json(result);
   } catch (e) {
     return res.status(400).json({ error: e.message });
@@ -243,7 +243,7 @@ router.post('/import-pinterest-boards', async (req, res) => {
   if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
 
   try {
-    const result = await contentMvpService.importPinterestBoardsFromSheet(chatId, req.body || {});
+    const result = await telegramMvpService.importPinterestBoardsFromSheet(chatId, req.body || {});
     return res.json(result);
   } catch (e) {
     return res.status(400).json({ error: e.message });
@@ -276,7 +276,7 @@ router.get('/profile', async (req, res) => {
   }
 
   try {
-    const profile = await contentMvpService.getProfile(chatId);
+    const profile = await telegramMvpService.getProfile(chatId);
     return res.json(profile);
   } catch (e) {
     return res.status(500).json({ error: e.message });
@@ -294,7 +294,7 @@ router.post('/profile', async (req, res) => {
   }
 
   try {
-    const profile = await contentMvpService.saveProfile(chatId, files);
+    const profile = await telegramMvpService.saveProfile(chatId, files);
     return res.json(profile);
   } catch (e) {
     return res.status(400).json({ error: e.message });
@@ -311,7 +311,7 @@ router.get('/jobs', async (req, res) => {
   const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
 
   try {
-    const result = await contentMvpService.listJobs(chatId, { status, limit, offset });
+    const result = await telegramMvpService.listJobs(chatId, { status, limit, offset });
     return res.json(result);
   } catch (e) {
     return res.status(500).json({ error: e.message });
@@ -329,7 +329,7 @@ router.get('/jobs/:id', async (req, res) => {
   }
 
   try {
-    const result = await contentMvpService.getJobById(chatId, jobId);
+    const result = await telegramMvpService.getJobById(chatId, jobId);
     if (!result) return res.status(404).json({ error: 'job not found' });
     return res.json({ job: result });
   } catch (e) {
@@ -360,7 +360,7 @@ router.post('/jobs/:id/:action', async (req, res) => {
   }
 
   try {
-    const result = await contentMvpService.handleModerationAction(chatId, bot, action, jobId);
+    const result = await telegramMvpService.handleModerationAction(chatId, bot, action, jobId);
     return res.json(result);
   } catch (e) {
     return res.status(500).json({ error: e.message });
@@ -373,7 +373,7 @@ router.get('/metrics', async (req, res) => {
     return res.status(400).json({ error: 'chat_id is required' });
   }
   try {
-    const metrics = await contentMvpService.getMetrics(chatId);
+    const metrics = await telegramMvpService.getMetrics(chatId);
     return res.json(metrics);
   } catch (e) {
     return res.status(500).json({ error: e.message });

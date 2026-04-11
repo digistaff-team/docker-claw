@@ -594,6 +594,11 @@ function buildTextPrompt(topic, materialsText, personaText = '') {
 - Следуй контексту персонажа из блока "Профиль".
 - Используй только факты из блока "Материалы" и допустимые сведения из блока "Профиль".
 - Добавь в конце 2-3 релевантных хэштега.
+- Вместо длинных тире используй запятые или глагольные связки.
+- Вместо антитезы формата «Это не X — это Y» перепиши смысл фразы без противопоставления.
+- Вместо трёх прилагательных подряд — оставь одно, самое точное
+- Пиши предложения короче: если больше 20 слов — раздели на два
+- Вместо списка с нумерацией или буллитам ты должен написать тот же смысл связным текстом
 
 Тема: ${topic.topic}
 Фокусный ключ: ${topic.focus || 'нет'}
@@ -611,7 +616,7 @@ ${materialsText || 'Материалы недоступны'}
 
 async function generatePostText(chatId, topic, materialsText, personaText = '') {
   const data = manageStore.getState(chatId);
-  // Проверка конфигурации AI:支持 OpenAI (aiCustomApiKey) и ProTalk (aiAuthToken)
+  // Проверка конфигурации AI: OpenAI (aiCustomApiKey) и ProTalk (aiAuthToken)
   const hasApiKey = data.aiCustomApiKey || data.aiAuthToken;
   if (!data || !hasApiKey || !data.aiModel) {
     throw new Error('AI model is not configured for chat');

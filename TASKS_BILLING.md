@@ -27,7 +27,7 @@ Implement a centralized token billing system for the **Docker-Claw (Клиент
 
 - **Token Consumption Points:**
   1. **Agent Loop** (`manage/telegram/agentLoop.js`) — main consumer (LLM + tool-calling)
-  2. **Content Pipeline** (`services/contentMvp.service.js`, `vkMvp.service.js`, `okMvp.service.js`, `pinterestMvp.service.js`) — draft generation
+  2. **Content Pipeline** (`services/telegramMvp.service.js`, `vkMvp.service.js`, `okMvp.service.js`, `pinterestMvp.service.js`) — draft generation
 
 - **AI Router** (`services/ai_router_service.js`) — unified interface for ProTalk/OpenAI/OpenRouter
 
@@ -372,7 +372,7 @@ async function executeAgentLoop(chatId, userMessage, mode, onStep) {
 
 Update each content service to bill tokens:
 
-**File:** `services/contentMvp.service.js` (Telegram)
+**File:** `services/telegramMvp.service.js` (Telegram)
 
 ```javascript
 // At the top

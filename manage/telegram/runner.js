@@ -10,7 +10,7 @@ const { TOOLS_CHAT, TOOLS_WORKSPACE, TOOLS_TERMINAL } = require('./tools');
 const { executeAgentLoop, classifyTask } = require('./agentLoop');
 const { getSystemInstruction } = require('../prompts');
 const { enqueue } = require('../agentQueue');
-const contentMvpService = require('../../services/contentMvp.service');
+const telegramMvpService = require('../../services/telegramMvp.service');
 const pinterestMvpService = require('../../services/pinterestMvp.service');
 const vkMvpService = require('../../services/vkMvp.service');
 const okMvpService = require('../../services/okMvp.service');
@@ -294,7 +294,7 @@ async function handleTextMessage(ctx, chatId) {
 
     if (lower === '/post_now') {
         try {
-            const result = await contentMvpService.runNow(chatId, { telegram: ctx.telegram }, 'manual');
+            const result = await telegramMvpService.runNow(chatId, { telegram: ctx.telegram }, 'manual');
             await ctx.reply(result?.message || 'Операция выполнена.');
         } catch (e) {
             await ctx.reply(`Ошибка запуска публикации: ${e.message}`);
@@ -691,7 +691,7 @@ function startBot(chatId, token) {
     const cwBotToken = process.env.CW_BOT_TOKEN;
     if (cwBotToken && token === cwBotToken) {
         // Не создаём дублирующий polling — регистрируем через уже запущенный cwBot
-        const cwBot = require('../../services/contentMvp.service').getContentBot();
+        const cwBot = require('../../services/telegramMvp.service').getContentBot();
         if (cwBot) {
             bots.set(chatId, { bot: cwBot, token: cwBotToken });
             console.log(`[MANAGE-TG] Registered (via CW_BOT) for chatId: ${chatId}`);
@@ -913,8 +913,8 @@ function startBot(chatId, token) {
             resolvedChatId = chatId;
         }
         
-        const settings = contentMvpService.getContentSettings
-            ? contentMvpService.getContentSettings(resolvedChatId)
+        const settings = telegramMvpService.getContentSettings
+            ? telegramMvpService.getContentSettings(resolvedChatId)
             : {};
         const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
         const data = manageStore.getState(resolvedChatId);
@@ -928,7 +928,7 @@ function startBot(chatId, token) {
 
         console.log(`[CONTENT-MOD] ${action} job ${jobId} for chatId=${resolvedChatId} (fromId=${fromId})`);
         try {
-            const result = await contentMvpService.handleModerationAction(resolvedChatId, { telegram: ctx.telegram }, action, jobId);
+            const result = await telegramMvpService.handleModerationAction(resolvedChatId, { telegram: ctx.telegram }, action, jobId);
             await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
             if (result?.ok) {
                 await ctx.reply(result.message || 'Операция выполнена.');
@@ -986,8 +986,8 @@ function startBot(chatId, token) {
             resolvedChatId = chatId;
         }
 
-        const settings = contentMvpService.getContentSettings
-            ? contentMvpService.getContentSettings(resolvedChatId)
+        const settings = telegramMvpService.getContentSettings
+            ? telegramMvpService.getContentSettings(resolvedChatId)
             : {};
         const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
         const data = manageStore.getState(resolvedChatId);
@@ -1054,8 +1054,8 @@ function startBot(chatId, token) {
         if (!resolvedChatId) resolvedChatId = chatId;
         console.log(`[VK-MOD-CALLBACK] resolvedChatId=${resolvedChatId}`);
 
-        const settings = contentMvpService.getContentSettings
-            ? contentMvpService.getContentSettings(resolvedChatId)
+        const settings = telegramMvpService.getContentSettings
+            ? telegramMvpService.getContentSettings(resolvedChatId)
             : {};
         const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
         const data = manageStore.getState(resolvedChatId);
@@ -1115,8 +1115,8 @@ function startBot(chatId, token) {
         if (!resolvedChatId) resolvedChatId = manageStore.getByVerifiedTelegramId(fromId);
         if (!resolvedChatId) resolvedChatId = chatId;
 
-        const settings = contentMvpService.getContentSettings
-            ? contentMvpService.getContentSettings(resolvedChatId)
+        const settings = telegramMvpService.getContentSettings
+            ? telegramMvpService.getContentSettings(resolvedChatId)
             : {};
         const okSettings = manageStore.getOkSettings?.(resolvedChatId) || {};
         const moderatorId = String(okSettings.moderatorUserId || settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
@@ -1175,8 +1175,8 @@ function startBot(chatId, token) {
         if (!resolvedChatId) resolvedChatId = manageStore.getByVerifiedTelegramId(fromId);
         if (!resolvedChatId) resolvedChatId = chatId;
 
-        const settings = contentMvpService.getContentSettings
-            ? contentMvpService.getContentSettings(resolvedChatId)
+        const settings = telegramMvpService.getContentSettings
+            ? telegramMvpService.getContentSettings(resolvedChatId)
             : {};
         const moderatorId = String(settings.moderatorUserId || process.env.CONTENT_MVP_MODERATOR_USER_ID || '');
         const data = manageStore.getState(resolvedChatId);

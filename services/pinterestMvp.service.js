@@ -1,6 +1,6 @@
 /**
  * Pinterest MVP Service — генерация, модерация, публикация пинов
- * Самостоятельный пайплайн, не зависит от contentMvp.service.js
+ * Самостоятельный пайплайн, не зависит от telegramMvp.service.js
  */
 const path = require('path');
 const os = require('os');

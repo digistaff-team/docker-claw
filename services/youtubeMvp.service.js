@@ -1,6 +1,6 @@
 /**
  * YouTube Shorts MVP Service — генерация, модерация, публикация
- * Самостоятельный пайплайн, не зависит от contentMvp.service.js
+ * Самостоятельный пайплайн, не зависит от telegramMvp.service.js
  *
  * Тип контента: только YouTube Shorts (9:16)
  * Видео: KIE.ai Veo 3 API (через video.service.js)
