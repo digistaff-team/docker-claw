@@ -49,13 +49,17 @@ pending → scene_generating → scene_ready → video_generating → video_read
 ```
 /workspace/input (фото товаров)
          ↓
-  [случайный выбор]
+  [случайный выбор фото товара]
          ↓
-  interiors (БД) → случайный интерьер
+  interiors (БД) → случайный интерьер (description + style)
          ↓
-  KIE.ai Image API → сцена (1080×1920 PNG)
+  ШАГ 1 — image-to-image (KIE.ai Image API)
+  Вход:  фото товара (imageUrls) + промпт на основе description/style интерьера
+  Выход: сцена PNG 1080×1920 — товар вписан в интерьер, первый кадр будущего видео
          ↓
-  KIE.ai Video API (Veo 3.1 / Seedance 2.0 / Grok Imagine) → видео (MP4, ~8 сек, 9:16)
+  ШАГ 2 — image-to-video (KIE.ai: Veo 3.1 / Seedance 2.0 / Grok Imagine)
+  Вход:  сцена PNG (используется как первый кадр видео)
+  Выход: MP4 ~8 сек, 9:16 — анимация сцены с товаром в интерьере
          ↓
   VIDEO_TEMP_ROOT/{chatId}/video_{id}.mp4
          ↓
@@ -181,14 +185,20 @@ const CHANNELS = (process.env.VIDEO_CHANNELS || 'youtube,tiktok,instagram,vk')
 
 ### Шаг 2 — Генерация сцены (image-to-image)
 
-- AI-роутер улучшает промпт (до 500 символов) по имени файла + стилю интерьера
+Цель: создать композитное изображение — фото товара, вписанное в интерьер. Это изображение станет первым кадром видео.
+
+- Из таблицы `interiors` берётся `description` (текстовое описание) и `style` (стиль: modern, loft и т.д.)
+- AI-роутер формирует промпт (до 500 символов): имя файла товара + `description` + `style` интерьера
 - `POST https://api.kie.ai/api/v1/image/generate` с `imageUrls: [productPublicUrl]`
 - Публичный URL товара: `{APP_URL}/api/video/input/{chatId}/{filename}`
 - Polling: каждые 3 сек, максимум 30 попыток
-- Результат: PNG 1080×1920, `scene_{corrId}_{attempt}.png`
+- Результат: PNG 1080×1920 — товар органично вписан в описанный интерьер
+- Сохраняется как `scene_{corrId}_{attempt}.png`, путь записывается в `video_assets.scene_image_path`
 - До 3 попыток при ошибке, задержка 2/4/6 сек
 
 ### Шаг 3 — Генерация видео (image-to-video)
+
+**Режим: IMAGE_2_VIDEO.** Сгенерированная сцена (PNG с товаром в интерьере) передаётся как первый кадр видео. Модель анимирует эту сцену — товар и интерьер оживают в видеоролике.
 
 Выбор адаптера определяется per-user настройкой модели (хранится в `manageStore`), с fallback на `VIDEO_MODEL` из ENV.
 
@@ -198,7 +208,7 @@ const CHANNELS = (process.env.VIDEO_CHANNELS || 'youtube,tiktok,instagram,vk')
 POST /api/v1/veo/generate
   model: "veo3.1"
   generationType: "IMAGE_2_VIDEO"
-  imageUrls: [scenePublicUrl]
+  imageUrls: [scenePublicUrl]   ← сцена (товар в интерьере) как первый кадр
   aspect_ratio: "9:16"
 
 Polling: GET /api/v1/veo/get-1080p-video?taskId=...&index=0
@@ -210,7 +220,7 @@ Polling: GET /api/v1/veo/get-1080p-video?taskId=...&index=0
 ```
 POST /api/v1/jobs/createTask
   model: "bytedance/seedance-2"
-  first_frame_url: scenePublicUrl
+  first_frame_url: scenePublicUrl   ← сцена (товар в интерьере) как первый кадр
   aspect_ratio: "9:16"
   duration: 8
   resolution: "720p"
@@ -228,7 +238,7 @@ Polling: GET /api/v1/jobs/recordInfo?taskId=...
 POST /api/v1/jobs/createTask
   model: "grok-imagine/image-to-video"
   input:
-    image_urls: [scenePublicUrl]
+    image_urls: [scenePublicUrl]   ← сцена (товар в интерьере) как первый кадр
     aspect_ratio: "9:16"
     duration: 8
     resolution: "720p"
