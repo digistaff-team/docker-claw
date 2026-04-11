@@ -102,6 +102,15 @@ async function startServer() {
     // Инициализация снапшотов
     await snapshotService.initSnapshots();
 
+    // Инициализация видео-пайплайна (временная папка + scheduler очистки)
+    try {
+        const videoPipeline = require('./services/videoPipeline.service');
+        await videoPipeline.init();
+        console.log('[VIDEO-PIPELINE] ✅ Initialized');
+    } catch (e) {
+        console.warn('[VIDEO-PIPELINE] ⚠️  Initialization skipped:', e.message);
+    }
+
     // Восстановление существующих сессий
     await sessionService.recoverAllSessions();
 
@@ -491,6 +500,98 @@ async function startServer() {
             }
         });
 
+        // TikTok moderation callbacks for CW_BOT_TOKEN users
+        cwBot.action(/^tt_mod:(\d+):(approve|reject|regen_text)$/, async (ctx) => {
+            const fromId = String(ctx.from?.id || '');
+            const jobId = Number(ctx.match?.[1]);
+            const action = ctx.match?.[2];
+
+            console.log(`[CW-BOT-TT] ${action} job ${jobId} (fromId=${fromId})`);
+
+            // Находим chatId по черновику
+            let resolvedChatId = null;
+            const allStatesTt = manageStore.getAllStates();
+            for (const [cid, data] of Object.entries(allStatesTt)) {
+                const drafts = data.tiktokDrafts || {};
+                if (!drafts[String(jobId)]) continue;
+
+                const ttSettings = manageStore.getTiktokConfig?.(cid) || {};
+                const globalSettings = data.contentSettings || {};
+                const channelModeratorId = ttSettings.moderatorUserId ||
+                                           globalSettings.moderatorUserId ||
+                                           process.env.CONTENT_MVP_MODERATOR_USER_ID;
+                const ownerTgId = String(data.verifiedTelegramId || '');
+                const allowedIds = new Set([ownerTgId, channelModeratorId].filter(Boolean));
+
+                if (allowedIds.has(fromId)) {
+                    resolvedChatId = cid;
+                    break;
+                }
+            }
+
+            if (!resolvedChatId) {
+                await ctx.answerCbQuery('Черновик не найден').catch(() => {});
+                return;
+            }
+
+            try {
+                const result = await tiktokMvpService.handleTiktokModerationAction(resolvedChatId, { telegram: ctx.telegram }, jobId, action);
+                await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
+                await ctx.reply(result?.message || 'Операция выполнена.').catch(() => {});
+            } catch (e) {
+                console.error(`[CW-BOT-TT] Error:`, e);
+                await ctx.answerCbQuery('Ошибка').catch(() => {});
+                await ctx.reply(`Ошибка модерации TikTok: ${e.message}`).catch(() => {});
+            }
+        });
+
+        // VK Video moderation callbacks for CW_BOT_TOKEN users
+        const vkVideoMvpService = require('./services/vkVideoMvp.service');
+        cwBot.action(/^vk_vid_mod:(\d+):(approve|reject|regen_text)$/, async (ctx) => {
+            const fromId = String(ctx.from?.id || '');
+            const jobId = Number(ctx.match?.[1]);
+            const action = ctx.match?.[2];
+
+            console.log(`[CW-BOT-VK-VID] ${action} job ${jobId} (fromId=${fromId})`);
+
+            // Находим chatId по черновику
+            let resolvedChatId = null;
+            const allStatesVkVid = manageStore.getAllStates();
+            for (const [cid, data] of Object.entries(allStatesVkVid)) {
+                const drafts = data.vkVideoDrafts || {};
+                if (!drafts[String(jobId)]) continue;
+
+                const vkVidSettings = manageStore.getVkVideoConfig?.(cid) || {};
+                const globalSettings = data.contentSettings || {};
+                const channelModeratorId = vkVidSettings.moderator_user_id ||
+                                           globalSettings.moderatorUserId ||
+                                           process.env.CONTENT_MVP_MODERATOR_USER_ID;
+                const ownerTgId = String(data.verifiedTelegramId || '');
+                const allowedIds = new Set([ownerTgId, channelModeratorId].filter(Boolean));
+
+                if (allowedIds.has(fromId)) {
+                    resolvedChatId = cid;
+                    break;
+                }
+            }
+
+            if (!resolvedChatId) {
+                await ctx.answerCbQuery('Черновик не найден').catch(() => {});
+                return;
+            }
+
+            try {
+                const vkVideoMvpService = require('./services/vkVideoMvp.service');
+                const result = await vkVideoMvpService.handleVkVideoModerationAction(resolvedChatId, { telegram: ctx.telegram }, jobId, action);
+                await ctx.answerCbQuery(result?.ok ? 'Готово' : 'Ошибка').catch(() => {});
+                await ctx.reply(result?.message || 'Операция выполнена.').catch(() => {});
+            } catch (e) {
+                console.error(`[CW-BOT-VK-VID] Error:`, e);
+                await ctx.answerCbQuery('Ошибка').catch(() => {});
+                await ctx.reply(`Ошибка модерации VK Video: ${e.message}`).catch(() => {});
+            }
+        });
+
         // API endpoint для получения username CW бота
         app.get('/api/manage/cw-bot-info', (req, res) => {
             res.json({ username: cwBotUsername || null });
@@ -559,6 +660,8 @@ async function startServer() {
     okMvpService.setOkCwBot(cwBot);
     instagramMvpService.setIgCwBot(cwBot);
     youtubeMvpService.setYtCwBot(cwBot);
+    const vkVideoMvpService = require('./services/vkVideoMvp.service');
+    vkVideoMvpService.setVkVideoCwBot(cwBot);
 
     // Инициализация WordPress worker handlers
     wordpressMvpService.initWorkerHandlers();
@@ -602,13 +705,24 @@ async function startServer() {
     // Запуск Facebook-планировщика
     facebookMvpService.startScheduler(() => telegramRunner.bots);
 
+    // Запуск TikTok-планировщика
+    const tiktokMvpService = require('./services/tiktokMvp.service');
+    tiktokMvpService.startScheduler(() => telegramRunner.bots);
+
+    // Запуск VK Video-планировщика
+    vkVideoMvpService.startScheduler(() => telegramRunner.bots);
+
     // Подключение Webhook API
     const webhookRoutes = require('./routes/webhook.routes');
     app.use('/', webhookRoutes);
-    
+
     // Подключение пользовательских вебхуков
     const userHooksRoutes = require('./routes/user_hooks.routes');
     app.use('/hook', userHooksRoutes);
+
+    // Подключение видео-пайплайна
+    const videoRoutes = require('./routes/video.routes');
+    app.use('/api/video', videoRoutes);
     
     // Запуск сервера
     app.listen(config.PORT, () => {
@@ -678,6 +792,9 @@ async function gracefulShutdown() {
         try { require('./services/pinterestMvp.service').stopScheduler(); } catch (_) {}
         try { require('./services/youtubeMvp.service').stopScheduler(); } catch (_) {}
         try { require('./services/facebookMvp.service').stopScheduler(); } catch (_) {}
+        try { require('./services/tiktokMvp.service').stopScheduler(); } catch (_) {}
+        try { require('./services/vkVideoMvp.service').stopScheduler(); } catch (_) {}
+        try { require('./services/videoPipeline.service').stopCleanupScheduler(); } catch (_) {}
         await manageStore.persist();
     } catch (e) {
         // ignore

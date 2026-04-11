@@ -428,6 +428,72 @@ module.exports = {
 4. **Per-user PostgreSQL**: Database named `db_{chatId}` auto-provisioned
 5. **Agent loop**: Tool-calling pattern for AI autonomy
 
+## Recent Changes (April 10, 2026)
+
+### Separate Video Pipeline — Shared Video Content for Multiple Channels
+
+New independent video generation pipeline that allows YouTube, TikTok, and Instagram to share the same video content while adding platform-specific text, tags, and descriptions.
+
+**Concept:**
+- First channel (YouTube/TikTok/Instagram) initiates video generation
+- One vertical 9:16 video is generated — "clean", no text/tags
+- Other channels reuse the same video, adding their own metadata
+- After all 3 channels use the video → 60-minute timer → deletion
+- If video is deleted and a channel needs one → new generation
+
+**New Files:**
+- `migrations/20260410_add_video_pipeline.sql` — 3 tables: `interiors`, `video_assets`, `video_channel_usage`
+- `services/content/videoPipeline.repository.js` — Database CRUD operations
+- `services/videoPipeline.service.js` — Main pipeline service (800+ lines)
+- `routes/video.routes.js` — API endpoints
+- `public/video.html` — Video management UI
+- `public/js/video.js` — Frontend logic
+- `documents/video-pipeline-plan.md` — Architecture documentation
+
+**Pipeline Process:**
+1. Random product image from `/workspace/input`
+2. Random interior description from `interiors` table
+3. KIE.ai: product + interior → scene (image-to-image)
+4. KIE.ai Veo 3.1: scene → video (image-to-video, 9:16)
+5. Saved to temp folder `/var/sandbox-data/.video-temp/`
+6. Channels claim videos and mark usage (youtube/instagram/tiktok_used)
+7. All marks received → scheduled deletion in 60 minutes
+8. Cleanup scheduler runs every 5 minutes
+
+**Database Schema:**
+- `interiors` — Interior descriptions and styles for scene generation
+- `video_assets` — Video assets with status tracking and channel marks
+- `video_channel_usage` — Channel usage marks (unique video_id + channel_type)
+
+**API Endpoints:**
+- `POST /api/video/generate` — Start video generation
+- `POST /api/video/claim` — Channel claims available video
+- `GET /api/video/assets` — List video assets
+- `POST /api/video/assets/:id/use` — Mark video as used
+- `POST/GET/DELETE /api/video/interiors` — Interior management
+- `GET /api/video/stats` — Video statistics
+- `GET /api/video/product-images` — List product images from input folder
+
+**Video Statuses:**
+`pending` → `scene_generating` → `scene_ready` → `video_generating` → `video_ready` → `published` → `expired`
+
+**Configuration Variables:**
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VIDEO_TEMP_ROOT` | `/var/sandbox-data/.video-temp` | Temp storage folder |
+| `VIDEO_CLEANUP_INTERVAL_MS` | `300000` (5 min) | Cleanup scheduler interval |
+| `VIDEO_DELETION_DELAY_MIN` | `60` | Minutes before deletion after all channels used |
+| `VIDEO_MODEL` | `veo3.1` | KIE.ai video model |
+| `VIDEO_ASPECT_RATIO` | `9:16` | Video format (vertical) |
+
+**Integration Points:**
+- `server.js` — Video pipeline init, routes, graceful shutdown
+- `services/content/index.js` — Exports `videoPipelineRepo`
+- Future: `youtubeMvp.service.js` — Use `claimVideo` instead of `generateVideo`
+- Future: `instagramMvp.service.js` — Use `claimVideo` instead of `generateVideo`
+
+---
+
 ## Recent Changes (April 9, 2026)
 
 ### Session Lifecycle — Containers Preserved on Idle Cleanup
@@ -820,19 +886,25 @@ npm run test:e2e:ci    # CI mode with HTML reporter
 
 This document has been updated to reflect the current state of the codebase:
 
-**Added (April 10, 2026):**
+**Added (April 10, 2026) — Video Pipeline:**
+- Complete separate video pipeline for shared video content across channels
+- New migration: `20260410_add_video_pipeline.sql` (3 tables)
+- New repository: `services/content/videoPipeline.repository.js`
+- New service: `services/videoPipeline.service.js` (800+ lines)
+- New routes: `routes/video.routes.js` (10 endpoints)
+- New UI: `public/video.html`, `public/js/video.js`
+- Documentation: `documents/video-pipeline-plan.md`
+- Updated `server.js` — pipeline init, routes, shutdown
+- Updated `services/content/index.js` — exports videoPipelineRepo
+- Updated QWEN.md — comprehensive video pipeline documentation
+
+**Previously Added (April 10, 2026 — earlier):**
 - Facebook integration — complete publishing pipeline via Buffer API
 - New service: `facebookMvp.service.js` (791 lines)
 - New repository: `services/content/facebook.repository.js` (327 lines)
 - Facebook database migration: `20260406_add_facebook_integration.sql`
-- Facebook API routes: GET/POST/DELETE `/api/manage/channels/facebook`
-- Facebook UI: `public/js/channels-facebook.js`, updated channels.html
-- New configuration variables: `FACEBOOK_DAILY_LIMIT`, `FACEBOOK_MODERATION_TIMEOUT_HOURS`
-- Facebook moderation callback: `fb_mod:` pattern for CW_BOT
-- Updated Buffer.com integration to include Facebook
+- Facebook API routes, UI, configuration variables
 - Instagram migration to Buffer API (removed direct Graph API)
-- New frontend utilities: `public/js/timezone-helper.js`, channel scheduler template
-- Updated content modules: `alerts.js`, `limits.js`, `index.js` for Facebook
 
 **Previously Added (April 9, 2026):**
 - WordPress/Дзен blog publishing system capabilities
@@ -849,11 +921,12 @@ This document has been updated to reflect the current state of the codebase:
 - Package.json dependency updates
 
 **Updated:**
-- Service directory structure with 42 service files (added `facebookMvp.service.js`)
+- Service directory structure with 43 service files (added `facebookMvp.service.js`, `videoPipeline.service.js`)
 - Multi-platform publishing now includes Facebook (6 platforms total)
 - Buffer.com integration expanded to 4 platforms (Pinterest, Instagram, YouTube, Facebook)
 - Instagram now uses Buffer API exclusively (direct Graph API removed)
 - Central moderation bot now handles 7 platforms (added Facebook)
+- New video pipeline with shared video content across YouTube, TikTok, Instagram
 - Test file listing with new WordPress/blog tests
 - Configuration variable defaults and descriptions
 - API endpoints documentation
