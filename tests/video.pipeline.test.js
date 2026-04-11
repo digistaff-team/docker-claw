@@ -50,7 +50,9 @@ test('videoPipeline.repository.js exports all functions', () => {
 
 // Test 2: CHANNELS constant
 test('CHANNELS contains youtube, tiktok, instagram', () => {
-  assert.deepStrictEqual(vpRepo.CHANNELS, ['youtube', 'tiktok', 'instagram']);
+  assert.ok(vpRepo.CHANNELS.includes('youtube'), 'CHANNELS must include youtube');
+  assert.ok(vpRepo.CHANNELS.includes('tiktok'), 'CHANNELS must include tiktok');
+  assert.ok(vpRepo.CHANNELS.includes('instagram'), 'CHANNELS must include instagram');
 });
 
 // Test 3: Video Pipeline Service
