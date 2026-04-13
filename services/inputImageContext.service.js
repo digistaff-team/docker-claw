@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require('path');
+const fetch = require('node-fetch');
 const sessionService = require('./session.service');
 const dockerService = require('./docker.service');
 const config = require('../config');
@@ -61,6 +62,7 @@ async function _readFileContent(chatId, filepath) {
     );
     return result.stdout;
   } catch (e) {
+    console.warn(`[IMAGE-CTX] readFileContent error ${filepath}: ${e.message}`);
     return null;
   }
 }
