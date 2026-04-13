@@ -12,9 +12,9 @@ const manageStore = require('../manage/store');
 const sessionService = require('./session.service');
 const dockerService = require('./docker.service');
 const storageService = require('./storage.service');
-const imageService = require('./image.service');
 const pinterestRepo = require('./content/pinterest.repository');
 const bufferService = require('./buffer.service');
+const inputImageContext = require('./inputImageContext.service');
 
 const contentModules = require('./content/index');
 const {
@@ -223,63 +223,9 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
   };
 }
 
-async function generatePinImage(topic, pinTitle) {
-  const apiKey = process.env.KIE_API_KEY;
-  if (!apiKey) throw new Error('KIE_API_KEY is not set');
-
-  const prompt = `Pinterest pin image. Topic: ${topic.topic}. Title: ${pinTitle}. Style: vertical, aesthetic, clean, visually appealing, no text overlay, no logos, professional photography style.`.slice(0, 800);
-
-  const createResp = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'grok-imagine/text-to-image',
-      input: {
-        prompt,
-        aspect_ratio: '2:3',
-        nsfw_checker: true
-      }
-    }),
-    timeout: 30000
-  });
-
-  if (!createResp.ok) {
-    const err = await createResp.text();
-    throw new Error(`Image API createTask failed: ${createResp.status} ${err.slice(0, 300)}`);
-  }
-  const createData = await createResp.json();
-  if (createData.code !== 200) {
-    throw new Error(`Image API createTask error: ${createData.msg}`);
-  }
-  const taskId = createData?.data?.taskId;
-  if (!taskId) throw new Error('Image API: no taskId');
-
-  // Polling (max 90 sec)
-  const pollUrl = `https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${taskId}`;
-  const pollHeaders = { Authorization: `Bearer ${apiKey}` };
-
-  for (let attempt = 0; attempt < 18; attempt++) {
-    await new Promise(r => setTimeout(r, 5000));
-    const pollResp = await fetch(pollUrl, { headers: pollHeaders, timeout: 15000 });
-    if (!pollResp.ok) continue;
-    const pollData = await pollResp.json();
-    const state = pollData?.data?.state;
-    if (state === 'success') {
-      const resultJson = JSON.parse(pollData.data.resultJson || '{}');
-      const imageUrl = resultJson?.resultUrls?.[0];
-      if (!imageUrl) throw new Error('Image API: no result URL');
-      const imgResp = await fetch(imageUrl, { timeout: 30000 });
-      if (!imgResp.ok) throw new Error(`Image download failed: ${imgResp.status}`);
-      return await imgResp.buffer();
-    }
-    if (state === 'fail') {
-      throw new Error(`Image generation failed: ${pollData.data.failMsg || 'unknown'}`);
-    }
-  }
-  throw new Error('Image generation timeout');
+async function generatePinImage(chatId, topic, pinTitle) {
+  const basePrompt = (`Pinterest pin image. Topic: ${topic.topic}. Title: ${pinTitle || ''}. Style: vertical, aesthetic, clean, visually appealing, no text overlay, no logos, professional photography style.`).slice(0, 800);
+  return inputImageContext.generateImage(chatId, basePrompt, '2:3', 'grok-imagine/text-to-image');
 }
 
 async function saveImageToContainer(chatId, buffer, jobId) {
@@ -378,7 +324,7 @@ async function handlePinterestGenerateJob(chatId, queueJob, bot, correlationId) 
   for (let i = 1; i <= MAX_IMAGE_ATTEMPTS; i++) {
     try {
       imageAttempts = i;
-      const imageBuffer = await generatePinImage(topic, pinText.pinTitle);
+      const imageBuffer = await generatePinImage(chatId, topic, pinText.pinTitle);
       // Создаём временный job id для сохранения
       const tempId = `${topic.sheetRow}_${Date.now()}`;
       imagePath = await saveImageToContainer(chatId, imageBuffer, tempId);
@@ -452,17 +398,6 @@ async function publishPin(chatId, bot, jobId, correlationId) {
 
   let imageBuffer = await fs.readFile(tempPath);
   await fs.unlink(tempPath).catch(() => {});
-
-  // Водяной знак
-  const logoPath = '/workspace/brand/logo.png';
-  const logoLocalPath = path.join(os.tmpdir(), `pin-logo-${chatId}.png`);
-  try {
-    await dockerService.copyFromContainer(session.containerId, logoPath, logoLocalPath);
-    imageBuffer = await imageService.overlayWatermark(imageBuffer, logoLocalPath);
-    await fs.unlink(logoLocalPath).catch(() => {});
-  } catch (e) {
-    console.log(`[PINTEREST-MVP] Watermark skipped: ${e.message}`);
-  }
 
   // Сохраняем финальное изображение на хост для публичного доступа
   const hostDir = path.join(storageService.getDataDir(chatId), 'output', 'content');
@@ -625,7 +560,7 @@ async function handlePinModerationAction(chatId, bot, jobId, action) {
 
   if (action === 'regen_image') {
     try {
-      const imageBuffer = await generatePinImage(draft.topic, draft.pinTitle);
+      const imageBuffer = await generatePinImage(chatId, draft.topic, draft.pinTitle);
       const imagePath = await saveImageToContainer(chatId, imageBuffer, `${jobId}_regen_${Date.now()}`);
       draft.imagePath = imagePath;
       await pinterestRepo.updateJob(chatId, jobId, { imagePath });
@@ -653,7 +588,7 @@ async function handlePinModerationAction(chatId, bot, jobId, action) {
         loadUserPersona(chatId)
       ]);
       const pinText = await generatePinText(chatId, draft.topic, draft.board, materialsText, personaText);
-      const imageBuffer = await generatePinImage(draft.topic, pinText.pinTitle);
+      const imageBuffer = await generatePinImage(chatId, draft.topic, pinText.pinTitle);
       const imagePath = await saveImageToContainer(chatId, imageBuffer, `${jobId}_reject_${Date.now()}`);
 
       draft.pinTitle = pinText.pinTitle;
