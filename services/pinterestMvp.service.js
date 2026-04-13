@@ -65,6 +65,7 @@ function getPinterestSettings(chatId) {
     websiteUrl: cfg?.website_url || '',
     lastBoardIndex: cfg?.last_board_index || 0,
     scheduleTime: cfg?.schedule_time || '10:00',
+    scheduleEndTime: cfg?.schedule_end_time || null,
     publishIntervalHours: Number.isFinite(cfg?.publish_interval_hours) ? cfg.publish_interval_hours : 4,
     randomPublish: !!cfg?.random_publish,
     moderatorUserId: cfg?.moderator_user_id || null,
@@ -637,6 +638,12 @@ async function tickPinterestSchedule(chatId, bot) {
   const [nowH, nowM] = now.time.split(':').map(Number);
   const startMinutes = startH * 60 + startM;
   const nowMinutes = nowH * 60 + nowM;
+
+  if (settings.scheduleEndTime) {
+    const [endH, endM] = settings.scheduleEndTime.split(':').map(Number);
+    if (nowMinutes >= endH * 60 + endM) return;
+  }
+
   const intervalMinutes = Math.round((settings.publishIntervalHours || 4) * 60);
 
   const data = manageStore.getState(chatId) || {};

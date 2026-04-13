@@ -3115,6 +3115,32 @@ select {
     margin-bottom: 12px;
 }
 
+/* Пара временных полей "Начать в" / "Завершить в" в одну строку */
+.scheduler-time-pair {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+
+.scheduler-time-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.scheduler-time-group label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 0;
+}
+
+.scheduler-time-group .scheduler-time-row {
+    margin-bottom: 0;
+}
+
 .scheduler-time-row select,
 .scheduler-time-row input[type="text"] {
     padding: 8px 12px;

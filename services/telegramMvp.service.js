@@ -1703,6 +1703,13 @@ async function tickScheduleForChat(chatId, bot) {
   const nowMinutes = nowH * 60 + nowM;
   const intervalMinutes = Math.round((settings.publishIntervalHours || 24) * 60);
 
+  // Если задано время окончания — не публиковать после него
+  if (settings.scheduleEndTime) {
+    const [endH, endM] = settings.scheduleEndTime.split(':').map(Number);
+    const endMinutes = endH * 60 + endM;
+    if (nowMinutes >= endMinutes) return;
+  }
+
   const data = manageStore.getState(chatId) || {};
 
   if (settings.randomPublish) {

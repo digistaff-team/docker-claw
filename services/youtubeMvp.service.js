@@ -16,7 +16,6 @@ const manageStore = require('../manage/store');
 const sessionService = require('./session.service');
 const dockerService = require('./docker.service');
 const storageService = require('./storage.service');
-const imageService = require('./image.service');
 const videoService = require('./content/video.service');
 const videoPipeline = require('./videoPipeline.service');
 const youtubeRepo = require('./content/youtube.repository');
@@ -65,6 +64,7 @@ function getYoutubeSettings(chatId) {
     isActive: !!cfg?.is_active,
     autoPublish: !!cfg?.auto_publish,
     scheduleTime: cfg?.schedule_time || '10:00',
+    scheduleEndTime: cfg?.schedule_end_time || null,
     publishIntervalHours: Number.isFinite(cfg?.publish_interval_hours) ? cfg.publish_interval_hours : 24,
     randomPublish: !!cfg?.random_publish,
     moderatorUserId: cfg?.moderator_user_id || null,
@@ -640,6 +640,12 @@ async function tickYoutubeSchedule(chatId, bot) {
   const [nowH, nowM] = now.time.split(':').map(Number);
   const startMinutes = startH * 60 + startM;
   const nowMinutes = nowH * 60 + nowM;
+
+  if (settings.scheduleEndTime) {
+    const [endH, endM] = settings.scheduleEndTime.split(':').map(Number);
+    if (nowMinutes >= endH * 60 + endM) return;
+  }
+
   const intervalMinutes = Math.round((settings.publishIntervalHours || 24) * 60);
 
   const data = manageStore.getState(chatId) || {};

@@ -88,6 +88,7 @@ function getVkSettings(chatId) {
     groupId: cfg?.group_id || null,
     serviceKey: cfg?.service_key || null,
     scheduleTime: settings.schedule_time || '10:00',
+    scheduleEndTime: settings.schedule_end_time || null,
     scheduleTz: isValidTz(settings.schedule_tz) ? settings.schedule_tz : SCHEDULE_TZ,
     dailyLimit: settings.daily_limit || DAILY_VK_LIMIT,
     publishIntervalHours: Number.isFinite(settings.publish_interval_hours) ? settings.publish_interval_hours : 4,
@@ -693,6 +694,12 @@ async function tickVkSchedule(chatId, bot) {
   const [nowH, nowM] = now.time.split(':').map(Number);
   const startMinutes = startH * 60 + startM;
   const nowMinutes = nowH * 60 + nowM;
+
+  if (settings.scheduleEndTime) {
+    const [endH, endM] = settings.scheduleEndTime.split(':').map(Number);
+    if (nowMinutes >= endH * 60 + endM) return;
+  }
+
   const intervalMinutes = Math.round((settings.publishIntervalHours || 4) * 60);
 
   const data = manageStore.getState(chatId) || {};

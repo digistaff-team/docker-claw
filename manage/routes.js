@@ -474,6 +474,7 @@ router.post('/content/settings', async (req, res) => {
         channel_id: channelId,
         moderator_user_id: moderatorUserId,
         schedule_time: scheduleTime,
+        schedule_end_time: scheduleEndTime,
         schedule_tz: scheduleTz,
         daily_limit: dailyLimit,
         publish_interval_hours: publishIntervalHours,
@@ -490,6 +491,7 @@ router.post('/content/settings', async (req, res) => {
             channelId,
             moderatorUserId,
             scheduleTime,
+            scheduleEndTime,
             scheduleTz,
             dailyLimit,
             publishIntervalHours,
@@ -541,6 +543,7 @@ router.post('/channels/pinterest', async (req, res) => {
         if (buffer_api_key !== undefined) patch.buffer_api_key = buffer_api_key;
         if (buffer_channel_id !== undefined) patch.buffer_channel_id = buffer_channel_id;
         if (schedule_time !== undefined) patch.schedule_time = schedule_time;
+        if (req.body.schedule_end_time !== undefined) patch.schedule_end_time = req.body.schedule_end_time;
         if (schedule_tz !== undefined) patch.schedule_tz = schedule_tz;
         if (daily_limit !== undefined) patch.daily_limit = daily_limit;
         if (publish_interval_hours !== undefined) patch.publish_interval_hours = publish_interval_hours;
@@ -740,7 +743,7 @@ router.post('/channels/instagram', async (req, res) => {
         const fields = [
             'buffer_api_key', 'buffer_channel_id',
             'is_active', 'auto_publish',
-            'schedule_time', 'schedule_tz', 'daily_limit',
+            'schedule_time', 'schedule_end_time', 'schedule_tz', 'daily_limit',
             'publish_interval_hours', 'allowed_weekdays',
             'random_publish', 'moderator_user_id'
         ];
@@ -856,6 +859,7 @@ router.post('/channels/vk/settings', async (req, res) => {
         const {
             chat_id,
             schedule_time,
+            schedule_end_time,
             schedule_tz,
             daily_limit,
             publish_interval_hours,
@@ -877,6 +881,7 @@ router.post('/channels/vk/settings', async (req, res) => {
 
         manageStore.setVkSettings(chat_id, {
             schedule_time,
+            schedule_end_time,
             schedule_tz,
             daily_limit,
             publish_interval_hours,
@@ -968,6 +973,7 @@ router.post('/channels/ok/settings', async (req, res) => {
         const {
             chat_id,
             schedule_time,
+            schedule_end_time,
             schedule_tz,
             daily_limit,
             publish_interval_hours,
@@ -984,6 +990,7 @@ router.post('/channels/ok/settings', async (req, res) => {
 
         manageStore.setOkSettings(chat_id, {
             schedule_time,
+            schedule_end_time,
             schedule_tz,
             daily_limit,
             publish_interval_hours,
@@ -1167,7 +1174,7 @@ router.post('/channels/youtube', async (req, res) => {
     try {
         const {
             chat_id: chatId, buffer_api_key, buffer_channel_id,
-            is_active, auto_publish, schedule_time, schedule_tz,
+            is_active, auto_publish, schedule_time, schedule_end_time, schedule_tz,
             daily_limit, publish_interval_hours, allowed_weekdays,
             moderator_user_id, random_publish
         } = req.body;
@@ -1182,6 +1189,7 @@ router.post('/channels/youtube', async (req, res) => {
         if (is_active !== undefined) patch.is_active = is_active;
         if (auto_publish !== undefined) patch.auto_publish = auto_publish;
         if (schedule_time !== undefined) patch.schedule_time = schedule_time;
+        if (schedule_end_time !== undefined) patch.schedule_end_time = schedule_end_time;
         if (schedule_tz !== undefined) patch.schedule_tz = schedule_tz;
         if (daily_limit !== undefined) patch.daily_limit = daily_limit;
         if (publish_interval_hours !== undefined) patch.publish_interval_hours = publish_interval_hours;
@@ -1317,7 +1325,7 @@ router.post('/channels/facebook', async (req, res) => {
         const fields = [
             'buffer_api_key', 'buffer_channel_id', 'page_name',
             'is_active', 'auto_publish',
-            'schedule_time', 'schedule_tz', 'daily_limit',
+            'schedule_time', 'schedule_end_time', 'schedule_tz', 'daily_limit',
             'publish_interval_hours', 'allowed_weekdays',
             'random_publish', 'moderator_user_id'
         ];

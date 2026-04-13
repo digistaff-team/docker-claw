@@ -89,6 +89,7 @@
       $('wordpressScheduleHour').value = time[0] || '09';
       $('wordpressScheduleMinute').value = (time[1] || '00').padStart(2, '0');
       updateWordpressScheduleTime();
+      if (c.scheduleEndTime) setWordpressScheduleEndTimeInputs(c.scheduleEndTime);
       if (c.scheduleTz) setWordpressScheduleTzInput(c.scheduleTz);
       $('wordpressDailyLimit').value = c.dailyLimit || 1;
       // Map minIntervalHours to publishInterval
@@ -123,6 +124,7 @@
     const chatId = chat();
     if (!chatId) return;
     updateWordpressScheduleTime();
+    updateWordpressScheduleEndTime();
     const days = getWeekdays('wordpress-weekday');
     const cfg = {
       // Legacy fields for backward compatibility
@@ -132,6 +134,7 @@
       useKnowledgeBase: $('wordpressUseKnowledgeBase').checked,
       // New standard fields
       scheduleTime: $('wordpressScheduleTime').value || '09:00',
+      scheduleEndTime: ($('wordpressScheduleEndTime')?.value || '').trim() || null,
       scheduleTz: $('wordpressScheduleTz').value || 'Europe/Moscow',
       scheduleDays: days,
       dailyLimit: parseInt($('wordpressDailyLimit').value, 10) || 1,
@@ -173,6 +176,27 @@
     if ($('wordpressScheduleHour')) $('wordpressScheduleHour').value = (h || '09').padStart(2, '0');
     if ($('wordpressScheduleMinute')) $('wordpressScheduleMinute').value = (m || '00').padStart(2, '0');
     updateWordpressScheduleTime();
+  };
+
+  window.updateWordpressScheduleEndTime = function () {
+    const h = ($('wordpressScheduleEndHour')?.value || '00');
+    const m = ($('wordpressScheduleEndMinute')?.value || '00').padStart(2, '0');
+    if ($('wordpressScheduleEndTime')) $('wordpressScheduleEndTime').value = `${h}:${m}`;
+  };
+  window.validateWordpressEndMinutes = function () {
+    const el = $('wordpressScheduleEndMinute');
+    if (!el) return;
+    let v = el.value.replace(/\D/g, '').slice(0, 2);
+    if (v && parseInt(v, 10) > 59) v = '59';
+    el.value = v;
+    updateWordpressScheduleEndTime();
+  };
+  window.setWordpressScheduleEndTimeInputs = function(timeValue) {
+    if (!timeValue) return;
+    const [h, m] = timeValue.split(':');
+    if ($('wordpressScheduleEndHour')) $('wordpressScheduleEndHour').value = (h || '00').padStart(2, '0');
+    if ($('wordpressScheduleEndMinute')) $('wordpressScheduleEndMinute').value = (m || '00').padStart(2, '0');
+    updateWordpressScheduleEndTime();
   };
   window.setWordpressScheduleTzInput = function(tzValue) {
     const tzSelect = $('wordpressScheduleTz');

@@ -90,20 +90,41 @@
                                 <div class="schedule-settings-block">
                                     <h3>📅 Расписание публикаций</h3>
 
-                                    <label>Время публикации</label>
-                                    <div class="scheduler-time-row">
-                                        <select id="contentScheduleHour" onchange="updateScheduleTime()">
-                                            <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
-                                            <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
-                                            <option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option>
-                                            <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
-                                            <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
-                                            <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
-                                        </select>
-                                        <span>:</span>
-                                        <input type="text" id="contentScheduleMinute" maxlength="2" placeholder="00"
-                                               oninput="validateMinutes(); updateScheduleTime()">
-                                        <input type="hidden" id="contentScheduleTime">
+                                    <div class="scheduler-time-pair">
+                                        <div class="scheduler-time-group">
+                                            <label>Начать в</label>
+                                            <div class="scheduler-time-row">
+                                                <select id="contentScheduleHour" onchange="updateScheduleTime()">
+                                                    <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
+                                                    <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
+                                                    <option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option>
+                                                    <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                                                    <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
+                                                    <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                                                </select>
+                                                <span>:</span>
+                                                <input type="text" id="contentScheduleMinute" maxlength="2" placeholder="00"
+                                                       oninput="validateMinutes(); updateScheduleTime()">
+                                                <input type="hidden" id="contentScheduleTime">
+                                            </div>
+                                        </div>
+                                        <div class="scheduler-time-group">
+                                            <label>Завершить в</label>
+                                            <div class="scheduler-time-row">
+                                                <select id="contentScheduleEndHour" onchange="updateScheduleEndTime()">
+                                                    <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
+                                                    <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
+                                                    <option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option>
+                                                    <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                                                    <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
+                                                    <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                                                </select>
+                                                <span>:</span>
+                                                <input type="text" id="contentScheduleEndMinute" maxlength="2" placeholder="00"
+                                                       oninput="validateEndMinutes(); updateScheduleEndTime()">
+                                                <input type="hidden" id="contentScheduleEndTime">
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <div class="scheduler-tz-row">
@@ -239,20 +260,41 @@
                                 <div class="schedule-settings-block">
                                     <h3>📅 Расписание публикаций</h3>
 
-                                    <label>Время публикации</label>
-                                    <div class="scheduler-time-row">
-                                        <select id="pinterestScheduleHour" onchange="updatePinterestScheduleTime()">
-                                            <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
-                                            <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
-                                            <option value="08">08</option><option value="09" selected>09</option><option value="10">10</option><option value="11">11</option>
-                                            <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
-                                            <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
-                                            <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
-                                        </select>
-                                        <span>:</span>
-                                        <input type="text" id="pinterestScheduleMinute" maxlength="2" placeholder="00"
-                                               oninput="validatePinterestMinutes(); updatePinterestScheduleTime()">
-                                        <input type="hidden" id="pinterestScheduleTime">
+                                    <div class="scheduler-time-pair">
+                                        <div class="scheduler-time-group">
+                                            <label>Начать в</label>
+                                            <div class="scheduler-time-row">
+                                                <select id="pinterestScheduleHour" onchange="updatePinterestScheduleTime()">
+                                                    <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
+                                                    <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
+                                                    <option value="08">08</option><option value="09" selected>09</option><option value="10">10</option><option value="11">11</option>
+                                                    <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                                                    <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
+                                                    <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                                                </select>
+                                                <span>:</span>
+                                                <input type="text" id="pinterestScheduleMinute" maxlength="2" placeholder="00"
+                                                       oninput="validatePinterestMinutes(); updatePinterestScheduleTime()">
+                                                <input type="hidden" id="pinterestScheduleTime">
+                                            </div>
+                                        </div>
+                                        <div class="scheduler-time-group">
+                                            <label>Завершить в</label>
+                                            <div class="scheduler-time-row">
+                                                <select id="pinterestScheduleEndHour" onchange="updatePinterestScheduleEndTime()">
+                                                    <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
+                                                    <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
+                                                    <option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option>
+                                                    <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                                                    <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
+                                                    <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                                                </select>
+                                                <span>:</span>
+                                                <input type="text" id="pinterestScheduleEndMinute" maxlength="2" placeholder="00"
+                                                       oninput="validatePinterestEndMinutes(); updatePinterestScheduleEndTime()">
+                                                <input type="hidden" id="pinterestScheduleEndTime">
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <div class="scheduler-tz-row">
@@ -392,15 +434,31 @@
                                     <h3>📅 Расписание публикаций</h3>
                                     
                                     <!-- Time Picker -->
-                                    <label>Время публикации</label>
-                                    <div class="scheduler-time-row">
-                                        <select id="instagramScheduleHour" onchange="updateInstagramScheduleTime()">
-                                            <!-- Hours generated by JS -->
-                                        </select>
-                                        <span>:</span>
-                                        <input type="text" id="instagramScheduleMinute" maxlength="2" placeholder="00" 
-                                               oninput="validateInstagramMinutes(); updateInstagramScheduleTime()">
-                                        <input type="hidden" id="instagramScheduleTime">
+                                    <div class="scheduler-time-pair">
+                                        <div class="scheduler-time-group">
+                                            <label>Начать в</label>
+                                            <div class="scheduler-time-row">
+                                                <select id="instagramScheduleHour" onchange="updateInstagramScheduleTime()">
+                                                    <!-- Hours generated by JS -->
+                                                </select>
+                                                <span>:</span>
+                                                <input type="text" id="instagramScheduleMinute" maxlength="2" placeholder="00"
+                                                       oninput="validateInstagramMinutes(); updateInstagramScheduleTime()">
+                                                <input type="hidden" id="instagramScheduleTime">
+                                            </div>
+                                        </div>
+                                        <div class="scheduler-time-group">
+                                            <label>Завершить в</label>
+                                            <div class="scheduler-time-row">
+                                                <select id="instagramScheduleEndHour" onchange="updateInstagramScheduleEndTime()">
+                                                    <!-- Hours generated by JS -->
+                                                </select>
+                                                <span>:</span>
+                                                <input type="text" id="instagramScheduleEndMinute" maxlength="2" placeholder="00"
+                                                       oninput="validateInstagramEndMinutes(); updateInstagramScheduleEndTime()">
+                                                <input type="hidden" id="instagramScheduleEndTime">
+                                            </div>
+                                        </div>
                                     </div>
                                     
                                     <!-- Timezone -->
@@ -513,20 +571,41 @@
                                 <div class="schedule-settings-block">
                                     <h3>📅 Расписание публикаций</h3>
 
-                                    <label>Время публикации</label>
-                                    <div class="scheduler-time-row">
-                                        <select id="vkScheduleHour" onchange="updateVkScheduleTime()">
-                                            <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
-                                            <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
-                                            <option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option>
-                                            <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
-                                            <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
-                                            <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
-                                        </select>
-                                        <span>:</span>
-                                        <input type="text" id="vkScheduleMinute" maxlength="2" placeholder="00"
-                                               oninput="validateVkMinutes(); updateVkScheduleTime()">
-                                        <input type="hidden" id="vkScheduleTime">
+                                    <div class="scheduler-time-pair">
+                                        <div class="scheduler-time-group">
+                                            <label>Начать в</label>
+                                            <div class="scheduler-time-row">
+                                                <select id="vkScheduleHour" onchange="updateVkScheduleTime()">
+                                                    <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
+                                                    <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
+                                                    <option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option>
+                                                    <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                                                    <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
+                                                    <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                                                </select>
+                                                <span>:</span>
+                                                <input type="text" id="vkScheduleMinute" maxlength="2" placeholder="00"
+                                                       oninput="validateVkMinutes(); updateVkScheduleTime()">
+                                                <input type="hidden" id="vkScheduleTime">
+                                            </div>
+                                        </div>
+                                        <div class="scheduler-time-group">
+                                            <label>Завершить в</label>
+                                            <div class="scheduler-time-row">
+                                                <select id="vkScheduleEndHour" onchange="updateVkScheduleEndTime()">
+                                                    <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
+                                                    <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
+                                                    <option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option>
+                                                    <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                                                    <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
+                                                    <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                                                </select>
+                                                <span>:</span>
+                                                <input type="text" id="vkScheduleEndMinute" maxlength="2" placeholder="00"
+                                                       oninput="validateVkEndMinutes(); updateVkScheduleEndTime()">
+                                                <input type="hidden" id="vkScheduleEndTime">
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <div class="scheduler-tz-row">
@@ -628,20 +707,41 @@
                                 <div class="schedule-settings-block">
                                     <h3>📅 Расписание публикаций</h3>
 
-                                    <label>Время публикации</label>
-                                    <div class="scheduler-time-row">
-                                        <select id="youtubeScheduleHour" onchange="updateYoutubeScheduleTime()">
-                                            <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
-                                            <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
-                                            <option value="08">08</option><option value="09" selected>09</option><option value="10">10</option><option value="11">11</option>
-                                            <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
-                                            <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
-                                            <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
-                                        </select>
-                                        <span>:</span>
-                                        <input type="text" id="youtubeScheduleMinute" maxlength="2" placeholder="00" value="00"
-                                               oninput="validateYoutubeMinutes(); updateYoutubeScheduleTime()">
-                                        <input type="hidden" id="youtubeScheduleTime" value="09:00">
+                                    <div class="scheduler-time-pair">
+                                        <div class="scheduler-time-group">
+                                            <label>Начать в</label>
+                                            <div class="scheduler-time-row">
+                                                <select id="youtubeScheduleHour" onchange="updateYoutubeScheduleTime()">
+                                                    <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
+                                                    <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
+                                                    <option value="08">08</option><option value="09" selected>09</option><option value="10">10</option><option value="11">11</option>
+                                                    <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                                                    <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
+                                                    <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                                                </select>
+                                                <span>:</span>
+                                                <input type="text" id="youtubeScheduleMinute" maxlength="2" placeholder="00" value="00"
+                                                       oninput="validateYoutubeMinutes(); updateYoutubeScheduleTime()">
+                                                <input type="hidden" id="youtubeScheduleTime" value="09:00">
+                                            </div>
+                                        </div>
+                                        <div class="scheduler-time-group">
+                                            <label>Завершить в</label>
+                                            <div class="scheduler-time-row">
+                                                <select id="youtubeScheduleEndHour" onchange="updateYoutubeScheduleEndTime()">
+                                                    <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
+                                                    <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
+                                                    <option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option>
+                                                    <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                                                    <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
+                                                    <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                                                </select>
+                                                <span>:</span>
+                                                <input type="text" id="youtubeScheduleEndMinute" maxlength="2" placeholder="00"
+                                                       oninput="validateYoutubeEndMinutes(); updateYoutubeScheduleEndTime()">
+                                                <input type="hidden" id="youtubeScheduleEndTime">
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <div class="scheduler-tz-row">
@@ -740,15 +840,31 @@
                                     <h3>📅 Расписание публикаций</h3>
                                     
                                     <!-- Time Picker -->
-                                    <label>Время публикации</label>
-                                    <div class="scheduler-time-row">
-                                        <select id="facebookScheduleHour" onchange="updateFacebookScheduleTime()">
-                                            <!-- Hours generated by JS -->
-                                        </select>
-                                        <span>:</span>
-                                        <input type="text" id="facebookScheduleMinute" maxlength="2" placeholder="00" 
-                                               oninput="validateFacebookMinutes(); updateFacebookScheduleTime()">
-                                        <input type="hidden" id="facebookScheduleTime">
+                                    <div class="scheduler-time-pair">
+                                        <div class="scheduler-time-group">
+                                            <label>Начать в</label>
+                                            <div class="scheduler-time-row">
+                                                <select id="facebookScheduleHour" onchange="updateFacebookScheduleTime()">
+                                                    <!-- Hours generated by JS -->
+                                                </select>
+                                                <span>:</span>
+                                                <input type="text" id="facebookScheduleMinute" maxlength="2" placeholder="00"
+                                                       oninput="validateFacebookMinutes(); updateFacebookScheduleTime()">
+                                                <input type="hidden" id="facebookScheduleTime">
+                                            </div>
+                                        </div>
+                                        <div class="scheduler-time-group">
+                                            <label>Завершить в</label>
+                                            <div class="scheduler-time-row">
+                                                <select id="facebookScheduleEndHour" onchange="updateFacebookScheduleEndTime()">
+                                                    <!-- Hours generated by JS -->
+                                                </select>
+                                                <span>:</span>
+                                                <input type="text" id="facebookScheduleEndMinute" maxlength="2" placeholder="00"
+                                                       oninput="validateFacebookEndMinutes(); updateFacebookScheduleEndTime()">
+                                                <input type="hidden" id="facebookScheduleEndTime">
+                                            </div>
+                                        </div>
                                     </div>
                                     
                                     <!-- Timezone -->
@@ -868,20 +984,41 @@
                                 <div class="schedule-settings-block">
                                     <h3>📅 Расписание публикаций</h3>
 
-                                    <label>Время публикации</label>
-                                    <div class="scheduler-time-row">
-                                        <select id="wordpressScheduleHour" onchange="updateWordpressScheduleTime()">
-                                            <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
-                                            <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
-                                            <option value="08">08</option><option value="09" selected>09</option><option value="10">10</option><option value="11">11</option>
-                                            <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
-                                            <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
-                                            <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
-                                        </select>
-                                        <span>:</span>
-                                        <input type="text" id="wordpressScheduleMinute" maxlength="2" placeholder="00"
-                                               oninput="validateWordpressMinutes(); updateWordpressScheduleTime()">
-                                        <input type="hidden" id="wordpressScheduleTime">
+                                    <div class="scheduler-time-pair">
+                                        <div class="scheduler-time-group">
+                                            <label>Начать в</label>
+                                            <div class="scheduler-time-row">
+                                                <select id="wordpressScheduleHour" onchange="updateWordpressScheduleTime()">
+                                                    <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
+                                                    <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
+                                                    <option value="08">08</option><option value="09" selected>09</option><option value="10">10</option><option value="11">11</option>
+                                                    <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                                                    <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
+                                                    <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                                                </select>
+                                                <span>:</span>
+                                                <input type="text" id="wordpressScheduleMinute" maxlength="2" placeholder="00"
+                                                       oninput="validateWordpressMinutes(); updateWordpressScheduleTime()">
+                                                <input type="hidden" id="wordpressScheduleTime">
+                                            </div>
+                                        </div>
+                                        <div class="scheduler-time-group">
+                                            <label>Завершить в</label>
+                                            <div class="scheduler-time-row">
+                                                <select id="wordpressScheduleEndHour" onchange="updateWordpressScheduleEndTime()">
+                                                    <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
+                                                    <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
+                                                    <option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option>
+                                                    <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                                                    <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
+                                                    <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                                                </select>
+                                                <span>:</span>
+                                                <input type="text" id="wordpressScheduleEndMinute" maxlength="2" placeholder="00"
+                                                       oninput="validateWordpressEndMinutes(); updateWordpressScheduleEndTime()">
+                                                <input type="hidden" id="wordpressScheduleEndTime">
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <div class="scheduler-tz-row">
@@ -1125,20 +1262,41 @@
                                 <div class="schedule-settings-block">
                                     <h3>📅 Расписание публикаций</h3>
 
-                                    <label>Время публикации</label>
-                                    <div class="scheduler-time-row">
-                                        <select id="okScheduleHour" onchange="updateOkScheduleTime()">
-                                            <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
-                                            <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
-                                            <option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option>
-                                            <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
-                                            <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
-                                            <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
-                                        </select>
-                                        <span>:</span>
-                                        <input type="text" id="okScheduleMinute" maxlength="2" placeholder="00"
-                                               oninput="validateOkMinutes(); updateOkScheduleTime()">
-                                        <input type="hidden" id="okScheduleTime">
+                                    <div class="scheduler-time-pair">
+                                        <div class="scheduler-time-group">
+                                            <label>Начать в</label>
+                                            <div class="scheduler-time-row">
+                                                <select id="okScheduleHour" onchange="updateOkScheduleTime()">
+                                                    <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
+                                                    <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
+                                                    <option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option>
+                                                    <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                                                    <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
+                                                    <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                                                </select>
+                                                <span>:</span>
+                                                <input type="text" id="okScheduleMinute" maxlength="2" placeholder="00"
+                                                       oninput="validateOkMinutes(); updateOkScheduleTime()">
+                                                <input type="hidden" id="okScheduleTime">
+                                            </div>
+                                        </div>
+                                        <div class="scheduler-time-group">
+                                            <label>Завершить в</label>
+                                            <div class="scheduler-time-row">
+                                                <select id="okScheduleEndHour" onchange="updateOkScheduleEndTime()">
+                                                    <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
+                                                    <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
+                                                    <option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option>
+                                                    <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                                                    <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
+                                                    <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                                                </select>
+                                                <span>:</span>
+                                                <input type="text" id="okScheduleEndMinute" maxlength="2" placeholder="00"
+                                                       oninput="validateOkEndMinutes(); updateOkScheduleEndTime()">
+                                                <input type="hidden" id="okScheduleEndTime">
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <div class="scheduler-tz-row">

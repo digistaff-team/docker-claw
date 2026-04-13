@@ -147,6 +147,9 @@ window.loadFacebookConfig = async function() {
             if (minuteEl) minuteEl.value = '00';
             updateFacebookScheduleTime();
         }
+        if (cfg.schedule_end_time) {
+            setFacebookScheduleEndTimeInputs(cfg.schedule_end_time);
+        }
         
         if (cfg.schedule_tz) {
             setFacebookScheduleTzInput(cfg.schedule_tz);
@@ -218,6 +221,35 @@ function validateFacebookMinutes() {
     minuteInput.value = val;
 }
 
+function setFacebookScheduleEndTimeInputs(timeValue) {
+    const [hour, minute] = timeValue.split(':');
+    const hourEl = document.getElementById('facebookScheduleEndHour');
+    const minuteEl = document.getElementById('facebookScheduleEndMinute');
+    if (hourEl) hourEl.value = hour || '00';
+    if (minuteEl) minuteEl.value = (minute || '00').padStart(2, '0');
+    updateFacebookScheduleEndTime();
+}
+
+function updateFacebookScheduleEndTime() {
+    const hour = document.getElementById('facebookScheduleEndHour')?.value || '00';
+    const minute = document.getElementById('facebookScheduleEndMinute')?.value || '00';
+    const timeField = document.getElementById('facebookScheduleEndTime');
+    if (timeField) {
+        timeField.value = `${hour}:${minute.padStart(2, '0')}`;
+    }
+}
+window.updateFacebookScheduleEndTime = updateFacebookScheduleEndTime;
+
+function validateFacebookEndMinutes() {
+    const minuteInput = document.getElementById('facebookScheduleEndMinute');
+    if (!minuteInput) return;
+    let val = minuteInput.value.replace(/\D/g, '');
+    if (val.length > 2) val = val.slice(0, 2);
+    if (val !== '' && parseInt(val, 10) > 59) val = '59';
+    minuteInput.value = val;
+}
+window.validateFacebookEndMinutes = validateFacebookEndMinutes;
+
 function setFacebookScheduleTzInput(tzValue) {
     const tzSelect = document.getElementById('facebookScheduleTz');
     if (!tzSelect || !tzValue) return;
@@ -252,7 +284,9 @@ window.saveFacebookConfig = async function() {
     try {
         setFbStatus('Сохранение...', '#666');
 
+        updateFacebookScheduleEndTime();
         const scheduleTime = document.getElementById('facebookScheduleTime')?.value || '10:00';
+        const scheduleEndTime = (document.getElementById('facebookScheduleEndTime')?.value || '').trim();
         const scheduleTz = document.getElementById('facebookScheduleTz')?.value || 'Europe/Moscow';
         const dailyLimit = parseInt(document.getElementById('facebookDailyLimit')?.value || '10', 10);
         const publishInterval = parseFloat(document.getElementById('facebookPublishInterval')?.value || '4');
@@ -267,6 +301,7 @@ window.saveFacebookConfig = async function() {
             buffer_channel_id: $('fbBufferChannelId').value || null,
             page_name: window.facebookConfig?.page_name || null,
             schedule_time: scheduleTime,
+            schedule_end_time: scheduleEndTime,
             schedule_tz: scheduleTz,
             daily_limit: dailyLimit,
             publish_interval_hours: publishInterval,

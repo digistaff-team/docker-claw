@@ -4,7 +4,7 @@ const API_CONTENT = `${window.location.origin}/api/content`;
 // === Инициализация scheduler элементов ===
 function initSchedulerChannels() {
     // Generate hour options for channels that use JS-generated selects
-    ['instagramScheduleHour', 'facebookScheduleHour'].forEach(id => {
+    ['instagramScheduleHour', 'instagramScheduleEndHour', 'facebookScheduleHour', 'facebookScheduleEndHour'].forEach(id => {
         const el = document.getElementById(id);
         if (el && el.options.length <= 1) {
             for (let h = 0; h < 24; h++) {
@@ -62,6 +62,12 @@ function initSchedulerChannels() {
     updateInstagramScheduleTime();
     updateFacebookScheduleTime();
     updatePinterestScheduleTime();
+    updateVkScheduleEndTime();
+    updateOkScheduleEndTime();
+    updateYoutubeScheduleEndTime();
+    updateInstagramScheduleEndTime();
+    updateFacebookScheduleEndTime();
+    updatePinterestScheduleEndTime();
 
     // Initialize moderator field visibility
     toggleTelegramModeratorField();
@@ -495,6 +501,36 @@ function setScheduleTimeInputs(timeValue) {
     updateScheduleTime();
 }
 
+function updateScheduleEndTime() {
+    const hour = document.getElementById('contentScheduleEndHour')?.value || '00';
+    const minute = document.getElementById('contentScheduleEndMinute')?.value || '00';
+    const timeField = document.getElementById('contentScheduleEndTime');
+    if (timeField) {
+        timeField.value = `${hour}:${minute.padStart(2, '0')}`;
+    }
+}
+
+function validateEndMinutes() {
+    const minuteInput = document.getElementById('contentScheduleEndMinute');
+    if (!minuteInput) return;
+    let val = minuteInput.value.replace(/[^0-9]/g, '');
+    if (val.length > 2) val = val.slice(0, 2);
+    if (val !== '' && parseInt(val, 10) > 59) val = '59';
+    minuteInput.value = val;
+    updateScheduleEndTime();
+}
+
+function setScheduleEndTimeInputs(timeValue) {
+    if (!timeValue) return;
+    const parts = timeValue.split(':');
+    if (parts.length < 2) return;
+    const hourSelect = document.getElementById('contentScheduleEndHour');
+    const minuteInput = document.getElementById('contentScheduleEndMinute');
+    if (hourSelect) hourSelect.value = parts[0].padStart(2, '0');
+    if (minuteInput) minuteInput.value = parts[1].padStart(2, '0');
+    updateScheduleEndTime();
+}
+
 function updateScheduleTz() {
     return;
 }
@@ -528,6 +564,9 @@ async function loadContentSettings() {
         if (moderatorEl) moderatorEl.value = s.moderatorUserId || chatId;
         if (timeEl) timeEl.value = s.scheduleTime || '';
         if (s.scheduleTime) setScheduleTimeInputs(s.scheduleTime);
+        const endTimeEl = document.getElementById('contentScheduleEndTime');
+        if (endTimeEl) endTimeEl.value = s.scheduleEndTime || '';
+        if (s.scheduleEndTime) setScheduleEndTimeInputs(s.scheduleEndTime);
         setScheduleTzInput(s.scheduleTz || 'Europe/Moscow');
         if (limitEl) limitEl.value = s.dailyLimit || '';
         const intervalEl = document.getElementById('contentPublishInterval');
@@ -548,6 +587,7 @@ async function saveContentSettings() {
     const chatId = getChatId();
     if (!chatId) return;
     updateScheduleTime();
+    updateScheduleEndTime();
     try {
         const res = await fetch(`${API_MANAGE}/content/settings`, {
             method: 'POST',
@@ -557,6 +597,7 @@ async function saveContentSettings() {
                 channel_id: (document.getElementById('contentChannelId')?.value || '').trim(),
                 moderator_user_id: (document.getElementById('contentModeratorUserId')?.value || '').trim(),
                 schedule_time: (document.getElementById('contentScheduleTime')?.value || '').trim(),
+                schedule_end_time: (document.getElementById('contentScheduleEndTime')?.value || '').trim(),
                 schedule_tz: (document.getElementById('contentScheduleTz')?.value || '').trim(),
                 daily_limit: (document.getElementById('contentDailyLimit')?.value || '').trim(),
                 publish_interval_hours: parseFloat(document.getElementById('contentPublishInterval')?.value || '24'),
@@ -670,6 +711,9 @@ async function loadPinterestConfig() {
             // Планировщик
             if (cfg.schedule_time) {
                 setPinterestScheduleTimeInputs(cfg.schedule_time);
+            }
+            if (cfg.schedule_end_time) {
+                setPinterestScheduleEndTimeInputs(cfg.schedule_end_time);
             }
             if (cfg.schedule_tz) {
                 setPinterestScheduleTzInput(cfg.schedule_tz);
@@ -836,6 +880,33 @@ function setPinterestScheduleTimeInputs(timeValue) {
     updatePinterestScheduleTime();
 }
 
+function updatePinterestScheduleEndTime() {
+    const hour = document.getElementById('pinterestScheduleEndHour')?.value || '00';
+    const minute = document.getElementById('pinterestScheduleEndMinute')?.value || '00';
+    const timeField = document.getElementById('pinterestScheduleEndTime');
+    if (timeField) timeField.value = `${hour}:${minute.padStart(2, '0')}`;
+}
+
+function validatePinterestEndMinutes() {
+    const minuteInput = document.getElementById('pinterestScheduleEndMinute');
+    if (!minuteInput) return;
+    let val = minuteInput.value.replace(/[^0-9]/g, '');
+    if (val.length > 2) val = val.slice(0, 2);
+    if (val !== '' && parseInt(val, 10) > 59) val = '59';
+    minuteInput.value = val;
+}
+
+function setPinterestScheduleEndTimeInputs(timeValue) {
+    if (!timeValue) return;
+    const parts = timeValue.split(':');
+    if (parts.length < 2) return;
+    const hourSelect = document.getElementById('pinterestScheduleEndHour');
+    const minuteInput = document.getElementById('pinterestScheduleEndMinute');
+    if (hourSelect) hourSelect.value = parts[0].padStart(2, '0');
+    if (minuteInput) minuteInput.value = parts[1].padStart(2, '0');
+    updatePinterestScheduleEndTime();
+}
+
 function setPinterestScheduleTzInput(tzValue) {
     const tzSelect = document.getElementById('pinterestScheduleTz');
     if (!tzSelect || !tzValue) return;
@@ -897,7 +968,9 @@ async function savePinterestConfig() {
     const bufferChannelId = (document.getElementById('bufferChannelId')?.value || '').trim();
 
     // Планировщик
+    updatePinterestScheduleEndTime();
     const scheduleTime = document.getElementById('pinterestScheduleTime')?.value || '09:00';
+    const scheduleEndTime = (document.getElementById('pinterestScheduleEndTime')?.value || '').trim();
     const scheduleTz = document.getElementById('pinterestScheduleTz')?.value || 'Europe/Moscow';
     const dailyLimit = parseInt(document.getElementById('pinterestDailyLimit')?.value, 10) || 5;
     const publishInterval = parseFloat(document.getElementById('pinterestPublishInterval')?.value || '3');
@@ -922,6 +995,7 @@ async function savePinterestConfig() {
                 purpose,
                 keywords,
                 schedule_time: scheduleTime,
+                schedule_end_time: scheduleEndTime,
                 schedule_tz: scheduleTz,
                 daily_limit: dailyLimit,
                 publish_interval_hours: publishInterval,
@@ -1049,6 +1123,9 @@ async function loadInstagramConfig() {
                 if (minuteEl) minuteEl.value = '00';
                 updateInstagramScheduleTime();
             }
+            if (cfg.schedule_end_time) {
+                setInstagramScheduleEndTimeInputs(cfg.schedule_end_time);
+            }
             
             if (cfg.schedule_tz) {
                 setInstagramScheduleTzInput(cfg.schedule_tz);
@@ -1123,6 +1200,32 @@ function validateInstagramMinutes() {
     if (val.length > 2) val = val.slice(0, 2);
     if (val !== '' && parseInt(val, 10) > 59) val = '59';
     minuteInput.value = val;
+}
+
+function updateInstagramScheduleEndTime() {
+    const hour = document.getElementById('instagramScheduleEndHour')?.value || '00';
+    const minute = document.getElementById('instagramScheduleEndMinute')?.value || '00';
+    const timeField = document.getElementById('instagramScheduleEndTime');
+    if (timeField) timeField.value = `${hour}:${minute.padStart(2, '0')}`;
+}
+
+function validateInstagramEndMinutes() {
+    const minuteInput = document.getElementById('instagramScheduleEndMinute');
+    if (!minuteInput) return;
+    let val = minuteInput.value.replace(/\D/g, '');
+    if (val.length > 2) val = val.slice(0, 2);
+    if (val !== '' && parseInt(val, 10) > 59) val = '59';
+    minuteInput.value = val;
+}
+
+function setInstagramScheduleEndTimeInputs(timeValue) {
+    if (!timeValue) return;
+    const [hour, minute] = timeValue.split(':');
+    const hourEl = document.getElementById('instagramScheduleEndHour');
+    const minuteEl = document.getElementById('instagramScheduleEndMinute');
+    if (hourEl) hourEl.value = hour || '00';
+    if (minuteEl) minuteEl.value = (minute || '00').padStart(2, '0');
+    updateInstagramScheduleEndTime();
 }
 
 function setInstagramScheduleTzInput(tzValue) {
@@ -1204,7 +1307,9 @@ async function saveInstagramConfig() {
     const dailyLimit = parseInt(document.getElementById('instagramDailyLimit')?.value || '5', 10);
     
     // New scheduler fields
+    updateInstagramScheduleEndTime();
     const scheduleTime = document.getElementById('instagramScheduleTime')?.value || '09:00';
+    const scheduleEndTime = (document.getElementById('instagramScheduleEndTime')?.value || '').trim();
     const scheduleTz = document.getElementById('instagramScheduleTz')?.value || 'Europe/Moscow';
     const publishInterval = parseFloat(document.getElementById('instagramPublishInterval')?.value || '5');
     const allowedWeekdays = getWeekdays('instagram-weekday');
@@ -1227,6 +1332,7 @@ async function saveInstagramConfig() {
                 is_reel: isReel,
                 daily_limit: dailyLimit,
                 schedule_time: scheduleTime,
+                schedule_end_time: scheduleEndTime,
                 schedule_tz: scheduleTz,
                 publish_interval_hours: publishInterval,
                 allowed_weekdays: allowedWeekdays,
@@ -1293,6 +1399,34 @@ function validateVkMinutes() {
     updateVkScheduleTime();
 }
 
+function updateVkScheduleEndTime() {
+    const hour = document.getElementById('vkScheduleEndHour')?.value || '00';
+    const minute = document.getElementById('vkScheduleEndMinute')?.value || '00';
+    const timeField = document.getElementById('vkScheduleEndTime');
+    if (timeField) timeField.value = `${hour}:${minute.padStart(2, '0')}`;
+}
+
+function validateVkEndMinutes() {
+    const minuteInput = document.getElementById('vkScheduleEndMinute');
+    if (!minuteInput) return;
+    let val = minuteInput.value.replace(/[^0-9]/g, '');
+    if (val.length > 2) val = val.slice(0, 2);
+    if (val !== '' && parseInt(val, 10) > 59) val = '59';
+    minuteInput.value = val;
+    updateVkScheduleEndTime();
+}
+
+function setVkScheduleEndTimeInputs(timeValue) {
+    if (!timeValue) return;
+    const parts = timeValue.split(':');
+    if (parts.length < 2) return;
+    const hourSelect = document.getElementById('vkScheduleEndHour');
+    const minuteInput = document.getElementById('vkScheduleEndMinute');
+    if (hourSelect) hourSelect.value = parts[0].padStart(2, '0');
+    if (minuteInput) minuteInput.value = parts[1].padStart(2, '0');
+    updateVkScheduleEndTime();
+}
+
 function updateVkScheduleTz() {
     return;
 }
@@ -1332,6 +1466,9 @@ async function loadVkStatus() {
             if (s.schedule_time) {
                 document.getElementById('vkScheduleTime').value = s.schedule_time;
                 setVkScheduleTimeInputs(s.schedule_time);
+            }
+            if (s.schedule_end_time) {
+                setVkScheduleEndTimeInputs(s.schedule_end_time);
             }
             const tzSelect = document.getElementById('vkScheduleTz');
             if (tzSelect && s.schedule_tz) {
@@ -1426,6 +1563,7 @@ async function saveVkSettings() {
     const chatId = getChatId();
     if (!chatId) return;
     updateVkScheduleTime();
+    updateVkScheduleEndTime();
 
     const moderatorUserId = (document.getElementById('vkModeratorUserId')?.value || '').trim() || chatId;
 
@@ -1436,6 +1574,7 @@ async function saveVkSettings() {
             body: JSON.stringify({
                 chat_id: chatId,
                 schedule_time: (document.getElementById('vkScheduleTime')?.value || '').trim(),
+                schedule_end_time: (document.getElementById('vkScheduleEndTime')?.value || '').trim(),
                 schedule_tz: (document.getElementById('vkScheduleTz')?.value || '').trim(),
                 daily_limit: (document.getElementById('vkDailyLimit')?.value || '').trim(),
                 publish_interval_hours: parseFloat(document.getElementById('vkPublishInterval')?.value || '24'),
@@ -1528,6 +1667,34 @@ function setOkScheduleTimeInputs(timeValue) {
     updateOkScheduleTime();
 }
 
+function updateOkScheduleEndTime() {
+    const hour = document.getElementById('okScheduleEndHour')?.value || '00';
+    const minute = document.getElementById('okScheduleEndMinute')?.value || '00';
+    const timeField = document.getElementById('okScheduleEndTime');
+    if (timeField) timeField.value = `${hour}:${minute.padStart(2, '0')}`;
+}
+
+function validateOkEndMinutes() {
+    const minuteInput = document.getElementById('okScheduleEndMinute');
+    if (!minuteInput) return;
+    let val = minuteInput.value.replace(/[^0-9]/g, '');
+    if (val.length > 2) val = val.slice(0, 2);
+    if (val !== '' && parseInt(val, 10) > 59) val = '59';
+    minuteInput.value = val;
+    updateOkScheduleEndTime();
+}
+
+function setOkScheduleEndTimeInputs(timeValue) {
+    if (!timeValue) return;
+    const parts = timeValue.split(':');
+    if (parts.length < 2) return;
+    const hourSelect = document.getElementById('okScheduleEndHour');
+    const minuteInput = document.getElementById('okScheduleEndMinute');
+    if (hourSelect) hourSelect.value = parts[0].padStart(2, '0');
+    if (minuteInput) minuteInput.value = parts[1].padStart(2, '0');
+    updateOkScheduleEndTime();
+}
+
 async function loadOkStatus() {
     const chatId = getChatId();
     if (!chatId) return;
@@ -1554,6 +1721,9 @@ async function loadOkStatus() {
             if (s.schedule_time) {
                 document.getElementById('okScheduleTime').value = s.schedule_time;
                 setOkScheduleTimeInputs(s.schedule_time);
+            }
+            if (s.schedule_end_time) {
+                setOkScheduleEndTimeInputs(s.schedule_end_time);
             }
             const tzSelect = document.getElementById('okScheduleTz');
             if (tzSelect && s.schedule_tz) {
@@ -1652,6 +1822,7 @@ async function saveOkSettings() {
     const chatId = getChatId();
     if (!chatId) return;
     updateOkScheduleTime();
+    updateOkScheduleEndTime();
 
     const moderatorUserId = (document.getElementById('okModeratorUserId')?.value || '').trim() || chatId;
 
@@ -1662,6 +1833,7 @@ async function saveOkSettings() {
             body: JSON.stringify({
                 chat_id: chatId,
                 schedule_time: (document.getElementById('okScheduleTime')?.value || '').trim(),
+                schedule_end_time: (document.getElementById('okScheduleEndTime')?.value || '').trim(),
                 schedule_tz: (document.getElementById('okScheduleTz')?.value || '').trim(),
                 daily_limit: (document.getElementById('okDailyLimit')?.value || '').trim(),
                 publish_interval_hours: parseFloat(document.getElementById('okPublishInterval')?.value || '24'),
@@ -1785,6 +1957,9 @@ async function loadYoutubeConfig() {
             document.getElementById('youtubeScheduleMinute').value = m;
             updateYoutubeScheduleTime();
         }
+        if (cfg.schedule_end_time) {
+            setYoutubeScheduleEndTimeInputs(cfg.schedule_end_time);
+        }
         if (cfg.schedule_tz) document.getElementById('youtubeScheduleTz').value = cfg.schedule_tz;
         if (cfg.daily_limit) document.getElementById('youtubeDailyLimit').value = cfg.daily_limit;
         if (cfg.publish_interval_hours) document.getElementById('youtubePublishInterval').value = cfg.publish_interval_hours;
@@ -1827,6 +2002,7 @@ async function saveYoutubeConfig() {
     if (statusEl) statusEl.textContent = '⏳ Сохранение...';
 
     updateYoutubeScheduleTime();
+    updateYoutubeScheduleEndTime();
 
     // Channel ID берём из скрытого input (обновляется при выборе из select)
     const bufferChannelId = document.getElementById('youtubeBufferChannelId')?.value?.trim();
@@ -1840,6 +2016,7 @@ async function saveYoutubeConfig() {
                 buffer_api_key: document.getElementById('youtubeBufferApiKey').value,
                 buffer_channel_id: bufferChannelId,
                 schedule_time: document.getElementById('youtubeScheduleTime')?.value || '09:00',
+                schedule_end_time: (document.getElementById('youtubeScheduleEndTime')?.value || '').trim(),
                 schedule_tz: document.getElementById('youtubeScheduleTz').value,
                 daily_limit: parseInt(document.getElementById('youtubeDailyLimit').value, 10),
                 publish_interval_hours: parseInt(document.getElementById('youtubePublishInterval').value, 10),
@@ -1946,6 +2123,34 @@ function setYoutubeScheduleTimeInputs(timeValue) {
     if (hourSelect) hourSelect.value = parts[0].padStart(2, '0');
     if (minuteInput) minuteInput.value = parts[1].padStart(2, '0');
     updateYoutubeScheduleTime();
+}
+
+function updateYoutubeScheduleEndTime() {
+    const hour = document.getElementById('youtubeScheduleEndHour')?.value || '00';
+    const minute = document.getElementById('youtubeScheduleEndMinute')?.value || '00';
+    const timeField = document.getElementById('youtubeScheduleEndTime');
+    if (timeField) timeField.value = `${hour}:${minute.padStart(2, '0')}`;
+}
+
+function validateYoutubeEndMinutes() {
+    const minuteInput = document.getElementById('youtubeScheduleEndMinute');
+    if (!minuteInput) return;
+    let val = minuteInput.value.replace(/[^0-9]/g, '');
+    if (val.length > 2) val = val.slice(0, 2);
+    if (val !== '' && parseInt(val, 10) > 59) val = '59';
+    minuteInput.value = val;
+    updateYoutubeScheduleEndTime();
+}
+
+function setYoutubeScheduleEndTimeInputs(timeValue) {
+    if (!timeValue) return;
+    const parts = timeValue.split(':');
+    if (parts.length < 2) return;
+    const hourSelect = document.getElementById('youtubeScheduleEndHour');
+    const minuteInput = document.getElementById('youtubeScheduleEndMinute');
+    if (hourSelect) hourSelect.value = parts[0].padStart(2, '0');
+    if (minuteInput) minuteInput.value = parts[1].padStart(2, '0');
+    updateYoutubeScheduleEndTime();
 }
 
 function setYoutubeScheduleTzInput(tzValue) {

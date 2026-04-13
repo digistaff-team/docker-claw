@@ -514,6 +514,13 @@ function setContentSettings(chatId, patch = {}) {
         }
         next.scheduleTime = scheduleTime || null;
     }
+    if (patch.scheduleEndTime !== undefined) {
+        const scheduleEndTime = String(patch.scheduleEndTime || '').trim();
+        if (scheduleEndTime && !/^\d{2}:\d{2}$/.test(scheduleEndTime)) {
+            throw new Error('scheduleEndTime must be in HH:MM format');
+        }
+        next.scheduleEndTime = scheduleEndTime || null;
+    }
     if (patch.scheduleTz !== undefined) {
         next.scheduleTz = String(patch.scheduleTz || '').trim() || null;
     }
@@ -579,6 +586,15 @@ function setPinterestConfig(chatId, patch = {}) {
     if (patch.buffer_channel_id !== undefined) next.buffer_channel_id = String(patch.buffer_channel_id || '').trim() || null;
     if (patch.board_rotation !== undefined) next.board_rotation = patch.board_rotation || 'random';
     if (patch.last_board_index !== undefined) next.last_board_index = parseInt(patch.last_board_index, 10) || 0;
+    if (patch.schedule_time !== undefined) next.schedule_time = patch.schedule_time || null;
+    if (patch.schedule_end_time !== undefined) next.schedule_end_time = patch.schedule_end_time || null;
+    if (patch.schedule_tz !== undefined) next.schedule_tz = patch.schedule_tz || null;
+    if (patch.daily_limit !== undefined) next.daily_limit = parseInt(patch.daily_limit, 10) || null;
+    if (patch.publish_interval_hours !== undefined) next.publish_interval_hours = parseFloat(patch.publish_interval_hours) || null;
+    if (patch.allowed_weekdays !== undefined && Array.isArray(patch.allowed_weekdays)) next.allowed_weekdays = patch.allowed_weekdays;
+    if (patch.random_publish !== undefined) next.random_publish = !!patch.random_publish;
+    if (patch.premoderation_enabled !== undefined) next.premoderation_enabled = !!patch.premoderation_enabled;
+    if (patch.moderator_user_id !== undefined) next.moderator_user_id = String(patch.moderator_user_id || '').trim() || null;
     if (patch.stats !== undefined) next.stats = { ...(next.stats || {}), ...patch.stats };
 
     statesCache[chatId].pinterestConfig = next;
@@ -607,6 +623,7 @@ function setInstagramConfig(chatId, patch = {}) {
     if (patch.is_active !== undefined) next.is_active = !!patch.is_active;
     if (patch.auto_publish !== undefined) next.auto_publish = !!patch.auto_publish;
     if (patch.schedule_time !== undefined) next.schedule_time = patch.schedule_time || null;
+    if (patch.schedule_end_time !== undefined) next.schedule_end_time = patch.schedule_end_time || null;
     if (patch.schedule_tz !== undefined) next.schedule_tz = patch.schedule_tz || null;
     if (patch.daily_limit !== undefined) next.daily_limit = Math.min(Math.max(parseInt(patch.daily_limit, 10) || 3, 1), 25);
     if (patch.publish_interval_hours !== undefined) next.publish_interval_hours = parseFloat(patch.publish_interval_hours) || 4;
@@ -643,6 +660,7 @@ function setYoutubeConfig(chatId, patch = {}) {
     if (patch.is_active !== undefined) next.is_active = !!patch.is_active;
     if (patch.auto_publish !== undefined) next.auto_publish = !!patch.auto_publish;
     if (patch.schedule_time !== undefined) next.schedule_time = patch.schedule_time || null;
+    if (patch.schedule_end_time !== undefined) next.schedule_end_time = patch.schedule_end_time || null;
     if (patch.schedule_tz !== undefined) next.schedule_tz = patch.schedule_tz || null;
     if (patch.daily_limit !== undefined) next.daily_limit = parseInt(patch.daily_limit, 10) || 1;
     if (patch.publish_interval_hours !== undefined) next.publish_interval_hours = parseInt(patch.publish_interval_hours, 10) || 24;
@@ -680,6 +698,7 @@ function setFacebookConfig(chatId, patch = {}) {
     if (patch.is_active !== undefined) next.is_active = !!patch.is_active;
     if (patch.auto_publish !== undefined) next.auto_publish = !!patch.auto_publish;
     if (patch.schedule_time !== undefined) next.schedule_time = patch.schedule_time || null;
+    if (patch.schedule_end_time !== undefined) next.schedule_end_time = patch.schedule_end_time || null;
     if (patch.schedule_tz !== undefined) next.schedule_tz = patch.schedule_tz || null;
     if (patch.daily_limit !== undefined) next.daily_limit = Number.isFinite(patch.daily_limit) ? patch.daily_limit : 10;
     if (patch.publish_interval_hours !== undefined) next.publish_interval_hours = Number.isFinite(patch.publish_interval_hours) ? patch.publish_interval_hours : 4;
@@ -832,6 +851,14 @@ function setVkSettings(chatId, patch = {}) {
         next.schedule_time = scheduleTime || null;
     }
 
+    if (patch.schedule_end_time !== undefined) {
+        const scheduleEndTime = String(patch.schedule_end_time || '').trim();
+        if (scheduleEndTime && !/^\d{2}:\d{2}$/.test(scheduleEndTime)) {
+            throw new Error('schedule_end_time must be in HH:MM format');
+        }
+        next.schedule_end_time = scheduleEndTime || null;
+    }
+
     if (patch.schedule_tz !== undefined) {
         next.schedule_tz = String(patch.schedule_tz || '').trim() || null;
     }
@@ -948,6 +975,14 @@ function setOkSettings(chatId, patch = {}) {
             throw new Error('schedule_time must be in HH:MM format');
         }
         next.schedule_time = scheduleTime || null;
+    }
+
+    if (patch.schedule_end_time !== undefined) {
+        const scheduleEndTime = String(patch.schedule_end_time || '').trim();
+        if (scheduleEndTime && !/^\d{2}:\d{2}$/.test(scheduleEndTime)) {
+            throw new Error('schedule_end_time must be in HH:MM format');
+        }
+        next.schedule_end_time = scheduleEndTime || null;
     }
 
     if (patch.schedule_tz !== undefined) {
@@ -1349,6 +1384,7 @@ module.exports = {
         if (patch.announceTelegram !== undefined) next.announceTelegram = !!patch.announceTelegram;
         if (patch.useKnowledgeBase !== undefined) next.useKnowledgeBase = !!patch.useKnowledgeBase;
         if (patch.scheduleTime !== undefined) next.scheduleTime = patch.scheduleTime || null;
+        if (patch.scheduleEndTime !== undefined) next.scheduleEndTime = patch.scheduleEndTime || null;
         if (patch.scheduleTz !== undefined) next.scheduleTz = patch.scheduleTz || null;
         if (patch.scheduleDays !== undefined) {
             if (Array.isArray(patch.scheduleDays)) {

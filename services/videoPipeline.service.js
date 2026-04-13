@@ -21,7 +21,6 @@ const config = require('../config');
 const aiRouterService = require('./ai_router_service');
 const dockerService = require('./docker.service');
 const storageService = require('./storage.service');
-const imageService = require('./image.service');
 const sessionService = require('./session.service');
 const manageStore = require('../manage/store');
 const vpRepo = require('./content/videoPipeline.repository');
