@@ -12,9 +12,9 @@ const manageStore = require('../manage/store');
 const sessionService = require('./session.service');
 const dockerService = require('./docker.service');
 const storageService = require('./storage.service');
-const imageService = require('./image.service');
 const bufferService = require('./buffer.service');
 const fbRepo = require('./content/facebook.repository');
+const inputImageContext = require('./inputImageContext.service');
 
 const contentModules = require('./content/index');
 const {
@@ -179,68 +179,8 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
 }
 
 async function generateFbImage(chatId, topic, imagePrompt, jobId) {
-  // Попытка использовать KIE API
-  try {
-    const apiKey = process.env.KIE_API_KEY;
-    if (apiKey) {
-      const prompt = (imagePrompt || `Facebook post image. Topic: ${topic.topic}. Style: professional, Facebook-optimized, 1.91:1 ratio, no text overlay.`).slice(0, 800);
-
-      const createResp = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'grok-imagine/text-to-image',
-          input: {
-            prompt,
-            aspect_ratio: FB_IMAGE_ASPECT_RATIO,
-            nsfw_checker: true
-          }
-        }),
-        timeout: 30000
-      });
-
-      if (createResp.ok) {
-        const createData = await createResp.json();
-        if (createData.code === 200 && createData.data?.taskId) {
-          const taskId = createData.data.taskId;
-
-          // Ожидание генерации
-          const maxAttempts = 60;
-          for (let i = 0; i < maxAttempts; i++) {
-            await new Promise(r => setTimeout(r, 2000));
-
-            const pollResp = await fetch(`https://api.kie.ai/api/v1/jobs/getTaskInfo?taskId=${taskId}`);
-            const pollData = await pollResp.json();
-
-            if (pollData.data?.status === 'success' && pollData.data?.imageUrl) {
-              // Скачивание изображения
-              const imgResp = await fetch(pollData.data.imageUrl);
-              const buffer = await imgResp.buffer();
-              return buffer;
-            }
-
-            if (pollData.data?.status === 'failed') {
-              throw new Error('KIE image generation failed');
-            }
-          }
-        }
-      }
-    }
-  } catch (e) {
-    console.log('[FB] KIE API failed, trying fallback:', e.message);
-  }
-
-  // Fallback на imageService
-  return await imageService.generateImage(chatId, {
-    prompt: imagePrompt || `Facebook post image about ${topic.topic}`,
-    aspectRatio: FB_IMAGE_ASPECT_RATIO,
-    width: FB_IMAGE_WIDTH,
-    height: FB_IMAGE_HEIGHT,
-    style: 'professional'
-  });
+  const basePrompt = (imagePrompt || `Facebook post image about ${topic.topic}. Style: professional, engaging, social media optimized, no text overlay.`).slice(0, 800);
+  return inputImageContext.generateImage(chatId, basePrompt, '1:1', 'grok-imagine/text-to-image');
 }
 
 async function saveImageToContainer(chatId, imageBuffer, jobId) {
