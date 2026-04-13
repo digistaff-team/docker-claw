@@ -17,6 +17,7 @@ const manageStore = require('../manage/store');
 const sessionService = require('./session.service');
 const dockerService = require('./docker.service');
 const storageService = require('./storage.service');
+const inputImageContext = require('./inputImageContext.service');
 
 // Новые модули
 const contentModules = require('./content/index');
@@ -645,174 +646,22 @@ async function generatePostText(chatId, topic, materialsText, personaText = '') 
 }
 
 // ============================================
-// User Input Files Helpers
-// ============================================
-
-/**
- * Получить список файлов в папке input пользователя
- */
-async function getInputFiles(chatId) {
-  try {
-    const session = await sessionService.getOrCreateSession(chatId);
-    const result = await dockerService.executeInContainer(
-      session.containerId,
-      "find /workspace/input -maxdepth 1 -type f -printf '%p\\n' 2>/dev/null"
-    );
-    const files = result.stdout.trim().split('\n').filter(Boolean);
-    return files.map(filepath => ({
-      path: filepath,
-      name: path.basename(filepath),
-      ext: path.extname(filepath).toLowerCase()
-    }));
-  } catch (e) {
-    console.error(`[CONTENT-MVP] Error getting input files for ${chatId}:`, e.message);
-    return [];
-  }
-}
-
-/**
- * Прочитать содержимое файла из input
- */
-async function readInputFile(chatId, filepath) {
-  try {
-    const session = await sessionService.getOrCreateSession(chatId);
-    const result = await dockerService.executeInContainer(
-      session.containerId,
-      `cat "${filepath.replace(/"/g, '\\"')}"`
-    );
-    return result.stdout;
-  } catch (e) {
-    console.error(`[CONTENT-MVP] Error reading input file ${filepath}:`, e.message);
-    return null;
-  }
-}
-
-/**
- * Получить описание для генерации изображения из файлов input
- * Приоритет: .txt/.md файлы с описанием > .png/.jpg изображения (имя файла)
- */
-async function getImageContext(chatId) {
-  const files = await getInputFiles(chatId);
-  if (files.length === 0) {
-    return null;
-  }
-
-  // Ищем текстовые файлы с описанием (приоритет)
-  const textFiles = files.filter(f => ['.txt', '.md'].includes(f.ext));
-  if (textFiles.length > 0) {
-    const descriptions = [];
-    for (const file of textFiles) {
-      const content = await readInputFile(chatId, file.path);
-      if (content && content.trim()) {
-        descriptions.push(`File "${file.name}": ${content.trim().slice(0, 500)}`);
-      }
-    }
-    if (descriptions.length > 0) {
-      return {
-        type: 'text_description',
-        description: descriptions.join('\n\n'),
-        files: textFiles.map(f => f.name)
-      };
-    }
-  }
-
-  // Ищем изображения для использования как референс
-  const imageFiles = files.filter(f => ['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(f.ext));
-  if (imageFiles.length > 0) {
-    return {
-      type: 'image_reference',
-      description: `User uploaded image file: ${imageFiles[0].name}. Use visual elements, colors, and composition from this file as inspiration.`,
-      files: imageFiles.map(f => f.name)
-    };
-  }
-
-  // Другие файлы — используем имена как подсказку
-  return {
-    type: 'filename_hint',
-    description: `User uploaded files: ${files.map(f => f.name).join(', ')}. Consider these when creating the image.`,
-    files: files.map(f => f.name)
-  };
-}
-
-// ============================================
 // Image Generation
 // ============================================
 
 // Генерация изображения с помощью сервиса Kie.ai
 async function generateImage(chatId, topic, text) {
-  const apiKey = process.env.KIE_API_KEY;
-  if (!apiKey) throw new Error('KIE_API_KEY is not set');
+  const basePrompt = `Image for Telegram post. Topic: ${topic.topic}. ` +
+    `You are an advanced AI image generation assistant. Your purpose is to create high-quality, ` +
+    `visually compelling images based on user requests. CORE PRINCIPLES: 1) Quality First - always aim ` +
+    `for highest artistic and technical quality. 2) Safety - never generate harmful, illegal, explicit, ` +
+    `or dangerous content. 3) Respect - create inclusive, non-discriminatory content. 4) Accuracy - ` +
+    `represent subjects truthfully. 5) Creativity - interpret requests creatively while staying true to ` +
+    `user intent. TECHNICAL SPECS: Default aspect ratio 1:1, highest quality, photorealistic or artistic ` +
+    `based on context. OUTPUT: Generate detailed optimized prompt including main subject, lighting, ` +
+    `atmosphere, color scheme, quality level.`;
 
-  // Получаем контекст из файлов пользователя
-  const imageContext = chatId ? await getImageContext(chatId) : null;
-  
-  // Формируем промпт с учётом загруженных файлов
-  let basePrompt = `Image for Telegram post. Topic: ${topic.topic}.`;
-  
-  if (imageContext) {
-    // Добавляем описание из файлов пользователя
-    basePrompt += ` IMPORTANT: ${imageContext.description}`;
-    basePrompt += ` You are an advanced AI image generation assistant. Your purpose is to create high-quality, visually compelling images based on user requests. CORE PRINCIPLES: 1) Quality First - always aim for highest artistic and technical quality. 2) Safety - never generate harmful, illegal, explicit, or dangerous content. 3) Respect - create inclusive, non-discriminatory content. 4) Accuracy - represent subjects truthfully. 5) Creativity - interpret requests creatively while staying true to user intent. WORKFLOW: Analyze request, identify key elements (subject, style, mood, composition, colors), fill missing details with appropriate defaults, apply best practices, optimize prompt for quality. PROMPT ENHANCEMENT: Add details about lighting, composition, perspective, color palette; specify quality modifiers (high resolution, professional, detailed); include style references. TECHNICAL SPECS: Default aspect ratio 1:1, highest quality, photorealistic or artistic based on context. RESTRICTIONS: No violent/gory/harmful content, no explicit sexual content, no hate speech or discriminatory imagery, no real person likeness without consent, no copyrighted material replication, no dangerous activities or illegal acts, no misinformation. HANDLING: If unclear - ask clarification; if violates guidelines - explain and suggest alternatives; if vague - make reasonable assumptions. OUTPUT: Generate detailed optimized prompt including main subject, action, style, aesthetic, composition, framing, lighting, atmosphere, color scheme, quality level. Always prioritize user satisfaction while maintaining ethical standards and safety.`;
-  } else {
-    // Стандартный промпт без пользовательских файлов
-    basePrompt += ` You are an advanced AI image generation assistant. Your purpose is to create high-quality, visually compelling images based on user requests. CORE PRINCIPLES: 1) Quality First - always aim for highest artistic and technical quality. 2) Safety - never generate harmful, illegal, explicit, or dangerous content. 3) Respect - create inclusive, non-discriminatory content. 4) Accuracy - represent subjects truthfully. 5) Creativity - interpret requests creatively while staying true to user intent. WORKFLOW: Analyze request, identify key elements (subject, style, mood, composition, colors), fill missing details with appropriate defaults, apply best practices, optimize prompt for quality. PROMPT ENHANCEMENT: Add details about lighting, composition, perspective, color palette; specify quality modifiers (high resolution, professional, detailed); include style references. TECHNICAL SPECS: Default aspect ratio 1:1, highest quality, photorealistic or artistic based on context. RESTRICTIONS: No violent/gory/harmful content, no explicit sexual content, no hate speech or discriminatory imagery, no real person likeness without consent, no copyrighted material replication, no dangerous activities or illegal acts, no misinformation. HANDLING: If unclear - ask clarification; if violates guidelines - explain and suggest alternatives; if vague - make reasonable assumptions. OUTPUT: Generate detailed optimized prompt including main subject, action, style, aesthetic, composition, framing, lighting, atmosphere, color scheme, quality level. Always prioritize user satisfaction while maintaining ethical standards and safety`;
-  }
-  
-  const prompt = basePrompt.slice(0, 800);
-
-  // Шаг 1: создаём задачу
-  const createResp = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'nano-banana-2',
-      input: {
-        prompt,
-        aspect_ratio: '1:1',
-        nsfw_checker: true
-      }
-    }),
-    timeout: 30000
-  });
-  if (!createResp.ok) {
-    const err = await createResp.text();
-    throw new Error(`Image API createTask failed: ${createResp.status} ${err.slice(0, 300)}`);
-  }
-  const createData = await createResp.json();
-  if (createData.code !== 200) {
-    throw new Error(`Image API createTask error: ${createData.msg}`);
-  }
-  const taskId = createData?.data?.taskId;
-  if (!taskId) throw new Error('Image API: no taskId in response');
-
-  // Шаг 2: polling результата (max 90 секунд)
-  const pollUrl = `https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${taskId}`;
-  const pollHeaders = { Authorization: `Bearer ${apiKey}` };
-  const maxAttempts = 18;
-  const pollInterval = 5000;
-
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    await new Promise((r) => setTimeout(r, pollInterval));
-    const pollResp = await fetch(pollUrl, { headers: pollHeaders, timeout: 15000 });
-    if (!pollResp.ok) continue;
-    const pollData = await pollResp.json();
-    const state = pollData?.data?.state;
-    if (state === 'success') {
-      const resultJson = JSON.parse(pollData.data.resultJson || '{}');
-      const imageUrl = resultJson?.resultUrls?.[0];
-      if (!imageUrl) throw new Error('Image API: no result URL in response');
-      const imgResp = await fetch(imageUrl, { timeout: 30000 });
-      if (!imgResp.ok) throw new Error(`Image download failed: ${imgResp.status}`);
-      return await imgResp.buffer();
-    }
-    if (state === 'fail') {
-      throw new Error(`Image generation failed: ${pollData.data.failMsg || 'unknown error'}`);
-    }
-  }
-  throw new Error('Image generation timeout: task did not complete in 90 seconds');
+  return inputImageContext.generateImage(chatId, basePrompt, '1:1', 'nano-banana-2');
 }
 
 async function saveImageToUserWorkspace(chatId, buffer, jobId) {
