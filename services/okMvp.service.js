@@ -13,9 +13,9 @@ const sessionService = require('./session.service');
 const dockerService = require('./docker.service');
 const storageService = require('./storage.service');
 const okService = require('./ok.service');
-const imageService = require('./image.service');
 const okRepo = require('./content/ok.repository');
 const { databaseExists } = require('./postgres.service');
+const inputImageContext = require('./inputImageContext.service');
 
 const contentModules = require('./content/index');
 const {
@@ -227,63 +227,9 @@ function validateOkContent(text) {
   return { valid: warnings.length === 0, warnings };
 }
 
-async function generateOkImage(topic, imagePrompt) {
-  const apiKey = process.env.KIE_API_KEY;
-  if (!apiKey) throw new Error('KIE_API_KEY is not set');
-
-  const prompt = (imagePrompt || `OK social media post image. Topic: ${topic.topic}. Style: bright, professional, eye-catching, no text overlay, 1:1 ratio.`).slice(0, 800);
-
-  const createResp = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'grok-imagine/text-to-image',
-      input: {
-        prompt,
-        aspect_ratio: '1:1',
-        nsfw_checker: true
-      }
-    }),
-    timeout: 30000
-  });
-
-  if (!createResp.ok) {
-    const err = await createResp.text();
-    throw new Error(`Image API createTask failed: ${createResp.status} ${err.slice(0, 300)}`);
-  }
-  const createData = await createResp.json();
-  if (createData.code !== 200) {
-    throw new Error(`Image API createTask error: ${createData.msg}`);
-  }
-  const taskId = createData?.data?.taskId;
-  if (!taskId) throw new Error('Image API: no taskId');
-
-  // Polling (max 90 sec)
-  const pollUrl = `https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${taskId}`;
-  const pollHeaders = { Authorization: `Bearer ${apiKey}` };
-
-  for (let attempt = 0; attempt < 18; attempt++) {
-    await new Promise(r => setTimeout(r, 5000));
-    const pollResp = await fetch(pollUrl, { headers: pollHeaders, timeout: 15000 });
-    if (!pollResp.ok) continue;
-    const pollData = await pollResp.json();
-    const state = pollData?.data?.state;
-    if (state === 'success') {
-      const resultJson = JSON.parse(pollData.data.resultJson || '{}');
-      const imageUrl = resultJson?.resultUrls?.[0];
-      if (!imageUrl) throw new Error('Image API: no result URL');
-      const imgResp = await fetch(imageUrl, { timeout: 30000 });
-      if (!imgResp.ok) throw new Error(`Image download failed: ${imgResp.status}`);
-      return await imgResp.buffer();
-    }
-    if (state === 'fail') {
-      throw new Error(`Image generation failed: ${pollData.data.failMsg || 'unknown'}`);
-    }
-  }
-  throw new Error('Image generation timeout');
+async function generateOkImage(chatId, topic, imagePrompt) {
+  const basePrompt = (imagePrompt || `OK social media post image. Topic: ${topic.topic}. Style: bright, professional, eye-catching, no text overlay, 1:1 ratio.`).slice(0, 800);
+  return inputImageContext.generateImage(chatId, basePrompt, '1:1', 'grok-imagine/text-to-image');
 }
 
 async function saveImageToContainer(chatId, buffer, jobId) {
@@ -405,7 +351,7 @@ async function handleOkGenerateJob(chatId, queueJob, bot, correlationId) {
   for (let i = 1; i <= MAX_IMAGE_ATTEMPTS; i++) {
     try {
       imageAttempts = i;
-      const imageBuffer = await generateOkImage(topic, okText.imagePrompt);
+      const imageBuffer = await generateOkImage(chatId, topic, okText.imagePrompt);
       const tempId = `${topic.sheetRow}_${Date.now()}`;
       imagePath = await saveImageToContainer(chatId, imageBuffer, tempId);
       imageErr = '';
@@ -495,16 +441,6 @@ async function publishOkPost(chatId, bot, jobId, correlationId) {
     imageBuffer = await fs.readFile(tempPath);
     await fs.unlink(tempPath).catch(() => {});
 
-    // Водяной знак
-    const logoPath = '/workspace/brand/logo.png';
-    const logoLocalPath = path.join(os.tmpdir(), `ok-logo-${chatId}.png`);
-    try {
-      await dockerService.copyFromContainer(session.containerId, logoPath, logoLocalPath);
-      imageBuffer = await imageService.overlayWatermark(imageBuffer, logoLocalPath);
-      await fs.unlink(logoLocalPath).catch(() => {});
-    } catch (e) {
-      console.log(`[OK-MVP] Watermark skipped: ${e.message}`);
-    }
   }
 
   // Публикация через OK API
@@ -693,7 +629,7 @@ async function handleOkModerationAction(chatId, bot, jobId, action) {
 
   if (action === 'regen_image') {
     try {
-      const imageBuffer = await generateOkImage(draft.topic, draft.imagePrompt);
+      const imageBuffer = await generateOkImage(chatId, draft.topic, draft.imagePrompt);
       const imagePath = await saveImageToContainer(chatId, imageBuffer, `${jobId}_regen_${Date.now()}`);
       draft.imagePath = imagePath;
       await okRepo.updateJob(chatId, jobId, { imagePath });
@@ -721,7 +657,7 @@ async function handleOkModerationAction(chatId, bot, jobId, action) {
         loadUserPersona(chatId)
       ]);
       const okText = await generateOkPostText(chatId, draft.topic, materialsText, personaText);
-      const imageBuffer = await generateOkImage(draft.topic, okText.imagePrompt);
+      const imageBuffer = await generateOkImage(chatId, draft.topic, okText.imagePrompt);
       const imagePath = await saveImageToContainer(chatId, imageBuffer, `${jobId}_reject_${Date.now()}`);
 
       draft.postText = okText.postText;
