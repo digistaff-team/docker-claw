@@ -86,26 +86,221 @@ router.get('/:chat_id', async (req, res) => {
 router.get('/:chat_id/download', async (req, res) => {
     const { chat_id } = req.params;
     const { filepath } = req.query;
-    
+
     if (!filepath) {
         return res.status(400).json({ error: 'filepath is required' });
     }
-    
+
     const session = sessionService.getSession(chat_id);
     if (!session) {
         return res.status(404).json({ error: 'Session not found' });
     }
-    
+
     try {
         const tempFile = `/tmp/download-${Date.now()}-${path.basename(filepath)}`;
         await dockerService.copyFromContainer(session.containerId, filepath, tempFile);
-        
+
         const content = await fs.readFile(tempFile);
         await fs.unlink(tempFile).catch(() => {});
-        
+
         res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filepath)}"`);
         res.send(content);
     } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Предпросмотр файла (отображение в браузере)
+router.get('/:chat_id/preview', async (req, res) => {
+    const { chat_id } = req.params;
+    const { filepath } = req.query;
+
+    if (!filepath) {
+        return res.status(400).json({ error: 'filepath is required' });
+    }
+
+    const session = sessionService.getSession(chat_id);
+    if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+    }
+
+    try {
+        const tempFile = `/tmp/preview-${Date.now()}-${path.basename(filepath)}`;
+        await dockerService.copyFromContainer(session.containerId, filepath, tempFile);
+
+        // Определяем MIME-тип по расширению файла
+        const ext = path.extname(filepath).toLowerCase();
+        const mimeTypes = {
+            // Изображения
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp',
+            '.svg': 'image/svg+xml',
+            '.bmp': 'image/bmp',
+            '.ico': 'image/x-icon',
+            // Видео
+            '.mp4': 'video/mp4',
+            '.webm': 'video/webm',
+            '.ogg': 'video/ogg',
+            '.mov': 'video/quicktime',
+            '.avi': 'video/x-msvideo',
+            // Аудио
+            '.mp3': 'audio/mpeg',
+            '.wav': 'audio/wav',
+            '.ogg': 'audio/ogg',
+            '.flac': 'audio/flac',
+            // Документы
+            '.pdf': 'application/pdf',
+        };
+
+        const mimeType = mimeTypes[ext] || 'application/octet-stream';
+        const content = await fs.readFile(tempFile);
+        await fs.unlink(tempFile).catch(() => {});
+
+        // Для изображений и видео оборачиваем в HTML для удобного отображения
+        if (mimeType.startsWith('image/')) {
+            res.send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>${path.basename(filepath)}</title>
+                    <style>
+                        body {
+                            margin: 0;
+                            padding: 20px;
+                            background: #1a1a1a;
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                            min-height: 100vh;
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        }
+                        .image-container {
+                            text-align: center;
+                        }
+                        img {
+                            max-width: 95vw;
+                            max-height: 90vh;
+                            object-fit: contain;
+                            border-radius: 8px;
+                            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                        }
+                        .filename {
+                            color: #ccc;
+                            margin-top: 15px;
+                            font-size: 14px;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="image-container">
+                        <img src="data:${mimeType};base64,${content.toString('base64')}" alt="${path.basename(filepath)}">
+                        <div class="filename">${filepath}</div>
+                    </div>
+                </body>
+                </html>
+            `);
+        } else if (mimeType.startsWith('video/')) {
+            res.send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>${path.basename(filepath)}</title>
+                    <style>
+                        body {
+                            margin: 0;
+                            padding: 20px;
+                            background: #1a1a1a;
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                            min-height: 100vh;
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        }
+                        video {
+                            max-width: 95vw;
+                            max-height: 90vh;
+                            border-radius: 8px;
+                            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                        }
+                        .filename {
+                            color: #ccc;
+                            margin-top: 15px;
+                            font-size: 14px;
+                            text-align: center;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div>
+                        <video controls autoplay>
+                            <source src="data:${mimeType};base64,${content.toString('base64')}">
+                            Ваш браузер не поддерживает видео.
+                        </video>
+                        <div class="filename">${filepath}</div>
+                    </div>
+                </body>
+                </html>
+            `);
+        } else if (mimeType.startsWith('audio/')) {
+            res.send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>${path.basename(filepath)}</title>
+                    <style>
+                        body {
+                            margin: 0;
+                            padding: 20px;
+                            background: #1a1a1a;
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                            min-height: 100vh;
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        }
+                        .audio-container {
+                            text-align: center;
+                            background: #2a2a2a;
+                            padding: 40px;
+                            border-radius: 12px;
+                            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                        }
+                        audio {
+                            width: 400px;
+                            max-width: 90vw;
+                        }
+                        .filename {
+                            color: #ccc;
+                            margin-top: 15px;
+                            font-size: 14px;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="audio-container">
+                        <audio controls autoplay>
+                            <source src="data:${mimeType};base64,${content.toString('base64')}">
+                            Ваш браузер не поддерживает аудио.
+                        </audio>
+                        <div class="filename">${filepath}</div>
+                    </div>
+                </body>
+                </html>
+            `);
+        } else {
+            // Для остальных файлов (PDF и др.) отдаём напрямую
+            res.setHeader('Content-Type', mimeType);
+            res.setHeader('Content-Disposition', `inline; filename="${path.basename(filepath)}"`);
+            res.send(content);
+        }
+    } catch (error) {
+        console.error('[FILES] Preview error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -131,14 +326,15 @@ router.post('/:chat_id/upload', upload.single('file'), async (req, res) => {
             const dataDir = storageService.getDataDir(chat_id);
             await fs.mkdir(dataDir, { recursive: true }); // Создаем директорию если не существует
             const destPath = path.join(dataDir, filename);
-            // Используем copyFile вместо rename для поддержки разных файловых систем
+            // Use copy + unlink instead of rename to handle cross-device moves
+            // /tmp and /var/sandbox-data may be on different filesystems
             await fs.copyFile(req.file.path, destPath);
             await fs.unlink(req.file.path).catch(() => {});
-            
+
             const projectCacheService = require('../services/projectCache.service');
             const containerPath = `/workspace/${filename}`;
             await projectCacheService.updateFileInCache(chat_id, containerPath);
-            
+
             return res.json({
                 success: true,
                 filename: filename,

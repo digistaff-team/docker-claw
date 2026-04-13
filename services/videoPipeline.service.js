@@ -45,6 +45,10 @@ let cleanupHandle = null;
 // Защита от конкурентной генерации — in-memory lock по chatId
 const generatingLocks = new Set();
 
+// Ожидающие webhook-коллбэки от KIE.ai (для Seedance/Grok)
+// Ключ: videoId (число), значение: { resolve, reject, timeoutHandle }
+const pendingCallbacks = new Map();
+
 // ============================================
 // Инициализация
 // ============================================
@@ -302,30 +306,43 @@ async function generateImageViaKIE(chatId, prompt, productImageUrl, correlationI
 // ============================================
 
 /**
- * Сгенерировать видео из сцены через KIE.ai Veo 3.1
+ * Диспетчер генерации видео — выбирает адаптер по модели.
  *
  * @param {string} chatId
- * @param {string} sceneImagePath - путь к файлу сцены
+ * @param {number} videoId     - ID ассета в БД (нужен для webhook-адаптеров)
+ * @param {string} sceneImagePath
  * @param {string} correlationId
- * @returns {Promise<{ videoBuffer, duration }> }
+ * @param {string} model       - 'veo3.1' | 'seedance-2' | 'grok-imagine'
+ * @returns {Promise<{ videoBuffer, duration }>}
  */
-async function generateVideoFromScene(chatId, sceneImagePath, correlationId) {
+async function generateVideoFromScene(chatId, videoId, sceneImagePath, correlationId, model) {
   const apiKey = process.env.KIE_API_KEY;
   if (!apiKey) throw new Error('KIE_API_KEY is not set');
 
-  // Создаём публичный URL для сцены через временный endpoint
-  // Endpoint: /api/video/temp/:chatId/:filename
   const sceneFilename = path.basename(sceneImagePath);
   const scenePublicUrl = `${config.APP_URL}/api/video/temp/${chatId}/${sceneFilename}`;
+  console.log(`[VIDEO-PIPELINE] Scene public URL: ${scenePublicUrl}, model=${model}`);
 
-  console.log(`[VIDEO-PIPELINE] Scene public URL: ${scenePublicUrl}`);
+  if (model === 'seedance-2') {
+    return generateVideoSeedance(chatId, videoId, scenePublicUrl, apiKey);
+  }
+  if (model === 'grok-imagine') {
+    return generateVideoGrok(chatId, videoId, scenePublicUrl, apiKey);
+  }
 
+  // Дефолт: Veo 3.1 (polling)
+  return generateVideoVeo(chatId, scenePublicUrl, correlationId, apiKey);
+}
+
+/**
+ * Veo 3.1 — image-to-video через polling.
+ */
+async function generateVideoVeo(chatId, scenePublicUrl, correlationId, apiKey) {
   const prompt = `Smooth cinematic pan, slow motion product showcase, professional commercial quality, ` +
     `vertical format, elegant camera movement, natural lighting transitions, 8 seconds duration.`;
 
-  console.log(`[VIDEO-PIPELINE] Video generation: scene=${path.basename(sceneImagePath)}, corr=${correlationId}`);
+  console.log(`[VIDEO-PIPELINE][VEO] Starting, corr=${correlationId}`);
 
-  // Создаём задачу генерации видео (IMAGE_2_VIDEO)
   const createResp = await fetch('https://api.kie.ai/api/v1/veo/generate', {
     method: 'POST',
     headers: {
@@ -359,9 +376,8 @@ async function generateVideoFromScene(chatId, sceneImagePath, correlationId) {
   const taskId = createData?.data?.taskId;
   if (!taskId) throw new Error('KIE Veo: no taskId');
 
-  console.log(`[VIDEO-PIPELINE] Video task created: taskId=${taskId}`);
+  console.log(`[VIDEO-PIPELINE][VEO] Task created: taskId=${taskId}`);
 
-  // Polling до готовности 1080p
   const maxAttempts = Math.ceil(VIDEO_TIMEOUT_SEC / VIDEO_POLL_INTERVAL_SEC);
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -375,35 +391,191 @@ async function generateVideoFromScene(chatId, sceneImagePath, correlationId) {
       }
     );
 
-    if (!pollResp.ok) {
-      if (pollResp.status === 400) continue; // processing
-      continue;
-    }
+    if (!pollResp.ok) continue;
 
     const pollData = await pollResp.json();
 
     if (pollData.code === 200 && pollData.data?.resultUrl) {
-      console.log(`[VIDEO-PIPELINE] Video ready: ${pollData.data.resultUrl}`);
-
-      // Скачиваем видео
+      console.log(`[VIDEO-PIPELINE][VEO] Video ready: ${pollData.data.resultUrl}`);
       const videoResp = await fetch(pollData.data.resultUrl, { timeout: 120000 });
       if (!videoResp.ok) throw new Error(`Video download failed: ${videoResp.status}`);
-
       const videoBuffer = await videoResp.buffer();
-      return { videoBuffer, duration: 8 }; // ~8 секунд для Shorts
+      return { videoBuffer, duration: 8 };
     }
 
     if (pollData.code === 501) {
       throw new Error(`Video generation failed: ${pollData.msg || 'unknown'}`);
     }
 
-    // code 400 = processing
     if (attempt % 6 === 0) {
-      console.log(`[VIDEO-PIPELINE] Video still processing... attempt ${attempt + 1}/${maxAttempts}`);
+      console.log(`[VIDEO-PIPELINE][VEO] Still processing... attempt ${attempt + 1}/${maxAttempts}`);
     }
   }
 
   throw new Error('Video generation timeout');
+}
+
+/**
+ * Seedance 2.0 — image-to-video через webhook (callBackUrl).
+ */
+async function generateVideoSeedance(chatId, videoId, scenePublicUrl, apiKey) {
+  const callBackUrl = `${config.APP_URL}/api/video/callback/${chatId}/${videoId}`;
+
+  console.log(`[VIDEO-PIPELINE][SEEDANCE] Starting videoId=${videoId}, callBackUrl=${callBackUrl}`);
+
+  const createResp = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'bytedance/seedance-2',
+      callBackUrl,
+      input: {
+        first_frame_url: scenePublicUrl,
+        web_search: false,
+        aspect_ratio: '9:16',
+        duration: 8
+      }
+    }),
+    timeout: 30000
+  });
+
+  if (!createResp.ok) {
+    const errText = await createResp.text();
+    throw new Error(`KIE Seedance createTask failed: ${createResp.status} ${errText.slice(0, 300)}`);
+  }
+
+  const createData = await createResp.json();
+  if (createData.code !== 200) {
+    if (createData.code === 402) throw new Error('KIE: Insufficient credits');
+    if (createData.code === 422) throw new Error(`KIE: Validation error — ${createData.msg}`);
+    if (createData.code === 429) throw new Error('KIE: Rate limited');
+    throw new Error(`KIE Seedance error: ${createData.msg} (code ${createData.code})`);
+  }
+
+  const taskId = createData?.data?.taskId;
+  if (!taskId) throw new Error('KIE Seedance: no taskId in response');
+
+  console.log(`[VIDEO-PIPELINE][SEEDANCE] Task created: taskId=${taskId}, waiting for webhook...`);
+
+  // Ждём коллбэк от KIE.ai
+  const payload = await waitForCallback(videoId);
+
+  // Скачиваем видео
+  const resultUrl = payload?.data?.resultUrl || payload?.resultUrl;
+  if (!resultUrl) throw new Error('KIE Seedance callback: no resultUrl in payload');
+
+  console.log(`[VIDEO-PIPELINE][SEEDANCE] Video ready: ${resultUrl}`);
+  const videoResp = await fetch(resultUrl, { timeout: 120000 });
+  if (!videoResp.ok) throw new Error(`Seedance video download failed: ${videoResp.status}`);
+  const videoBuffer = await videoResp.buffer();
+  return { videoBuffer, duration: 8 };
+}
+
+/**
+ * Grok Imagine — image-to-video через webhook (callBackUrl).
+ */
+async function generateVideoGrok(chatId, videoId, scenePublicUrl, apiKey) {
+  const callBackUrl = `${config.APP_URL}/api/video/callback/${chatId}/${videoId}`;
+
+  console.log(`[VIDEO-PIPELINE][GROK] Starting videoId=${videoId}, callBackUrl=${callBackUrl}`);
+
+  const createResp = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'grok-imagine/image-to-video',
+      callBackUrl,
+      input: {
+        image_urls: [scenePublicUrl],
+        duration: '8',
+        mode: 'normal',
+        aspect_ratio: '9:16'
+      }
+    }),
+    timeout: 30000
+  });
+
+  if (!createResp.ok) {
+    const errText = await createResp.text();
+    throw new Error(`KIE Grok createTask failed: ${createResp.status} ${errText.slice(0, 300)}`);
+  }
+
+  const createData = await createResp.json();
+  if (createData.code !== 200) {
+    if (createData.code === 402) throw new Error('KIE: Insufficient credits');
+    if (createData.code === 422) throw new Error(`KIE: Validation error — ${createData.msg}`);
+    if (createData.code === 429) throw new Error('KIE: Rate limited');
+    throw new Error(`KIE Grok error: ${createData.msg} (code ${createData.code})`);
+  }
+
+  const taskId = createData?.data?.taskId;
+  if (!taskId) throw new Error('KIE Grok: no taskId in response');
+
+  console.log(`[VIDEO-PIPELINE][GROK] Task created: taskId=${taskId}, waiting for webhook...`);
+
+  const payload = await waitForCallback(videoId);
+
+  const resultUrl = payload?.data?.resultUrl || payload?.resultUrl;
+  if (!resultUrl) throw new Error('KIE Grok callback: no resultUrl in payload');
+
+  console.log(`[VIDEO-PIPELINE][GROK] Video ready: ${resultUrl}`);
+  const videoResp = await fetch(resultUrl, { timeout: 120000 });
+  if (!videoResp.ok) throw new Error(`Grok video download failed: ${videoResp.status}`);
+  const videoBuffer = await videoResp.buffer();
+  return { videoBuffer, duration: 8 };
+}
+
+/**
+ * Ожидать webhook-коллбэк от KIE.ai для данного videoId.
+ * Регистрирует запись в pendingCallbacks и возвращает Promise,
+ * который разрешается когда KIE.ai вызовет resolveVideoCallback().
+ *
+ * @param {number} videoId
+ * @returns {Promise<object>} payload из тела коллбэка
+ */
+function waitForCallback(videoId) {
+  return new Promise((resolve, reject) => {
+    const timeoutHandle = setTimeout(() => {
+      pendingCallbacks.delete(videoId);
+      reject(new Error(`Webhook callback timeout for videoId=${videoId} after ${VIDEO_TIMEOUT_SEC}s`));
+    }, VIDEO_TIMEOUT_SEC * 1000);
+
+    pendingCallbacks.set(videoId, { resolve, reject, timeoutHandle });
+  });
+}
+
+/**
+ * Вызывается из route-обработчика POST /api/video/callback/:chatId/:videoId
+ * когда KIE.ai присылает результат генерации.
+ *
+ * @param {number} videoId
+ * @param {object} payload - тело запроса от KIE.ai
+ */
+function resolveVideoCallback(videoId, payload) {
+  const cb = pendingCallbacks.get(videoId);
+  if (!cb) {
+    console.warn(`[VIDEO-PIPELINE] Received callback for unknown videoId=${videoId}`);
+    return;
+  }
+
+  clearTimeout(cb.timeoutHandle);
+  pendingCallbacks.delete(videoId);
+
+  // Проверяем статус из payload
+  const code = payload?.code;
+  if (code === 501 || payload?.status === 'failed') {
+    cb.reject(new Error(`KIE callback error: ${payload?.msg || 'failed'}`));
+  } else {
+    cb.resolve(payload);
+  }
+
+  console.log(`[VIDEO-PIPELINE] Callback resolved for videoId=${videoId}, code=${code}`);
 }
 
 // ============================================
@@ -505,7 +677,10 @@ async function generateVideo(chatId, initiatingChannel, correlationId) {
     await vpRepo.updateVideoStatus(chatId, videoId, 'video_generating');
 
     // Шаг 6: Сгенерировать видео
-    const videoResult = await generateVideoFromScene(chatId, sceneResult.imagePath, corrId);
+    const settings = manageStore.getVideoPipelineSettings(chatId);
+    const model = settings.model || VIDEO_MODEL;
+    console.log(`[VIDEO-PIPELINE] Using model: ${model}`);
+    const videoResult = await generateVideoFromScene(chatId, videoId, sceneResult.imagePath, corrId, model);
 
     // Шаг 7: Сохранить видео
     const saved = await saveVideoToTemp(chatId, videoResult.videoBuffer, videoId);
@@ -800,6 +975,10 @@ module.exports = {
   // Temp folder
   VIDEO_TEMP_ROOT,
 
+  // Webhook callbacks (Seedance / Grok)
+  resolveVideoCallback,
+
   // Internal (for testing)
-  generatingLocks
+  generatingLocks,
+  pendingCallbacks
 };

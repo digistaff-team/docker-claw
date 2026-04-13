@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Tasks - Docker Claw</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+        }
+        .header {
+            background: #1a1a2e;
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 { font-size: 20px; }
+        .logout-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .logout-btn:hover { background: #c0392b; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 30px; }
+        .chat-selector {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+        .chat-selector label { font-size: 13px; color: #555; display: block; margin-bottom: 4px; }
+        .chat-selector input {
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            width: 220px;
+        }
+        .btn {
+            padding: 8px 18px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .btn-primary { background: #007bff; color: #fff; }
+        .btn-primary:hover { background: #0056b3; }
+        .btn-secondary { background: #6c757d; color: #fff; }
+        .btn-secondary:hover { background: #545b62; }
+        .panel {
+            background: #fff;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .panel h2 { font-size: 18px; margin-bottom: 16px; color: #333; }
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .filters { display: flex; gap: 8px; flex-wrap: wrap; }
+        .filter-btn {
+            padding: 5px 14px;
+            border-radius: 20px;
+            border: 1px solid #dee2e6;
+            background: #fff;
+            font-size: 13px;
+            cursor: pointer;
+            color: #555;
+        }
+        .filter-btn.active { background: #007bff; color: #fff; border-color: #007bff; }
+        .count-badge {
+            background: #f0f0f0;
+            border-radius: 12px;
+            padding: 3px 10px;
+            font-size: 13px;
+            color: #555;
+        }
+        .tasks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+        .task-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 16px;
+            background: #fafafa;
+        }
+        .task-card .task-title {
+            font-weight: 600;
+            font-size: 15px;
+            margin-bottom: 8px;
+            color: #222;
+        }
+        .task-card .task-meta {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 10px;
+        }
+        .task-status {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-pending    { background: #fff3cd; color: #856404; }
+        .status-running    { background: #cce5ff; color: #004085; }
+        .status-done       { background: #d4edda; color: #155724; }
+        .status-failed     { background: #f8d7da; color: #721c24; }
+        .task-progress { margin-top: 10px; font-size: 13px; color: #555; }
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #e0e0e0;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 6px;
+        }
+        .progress-bar .fill { height: 100%; background: #007bff; transition: width 0.3s; }
+        .empty-state {
+            text-align: center;
+            padding: 48px 20px;
+            color: #aaa;
+            font-size: 14px;
+            grid-column: 1/-1;
+        }
+        .cron-section { margin-top: 10px; }
+        .info-box {
+            background: #e8f4fd;
+            border-left: 4px solid #007bff;
+            padding: 10px 14px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #333;
+            margin-bottom: 16px;
+        }
+        .cron-log {
+            margin-top: 12px;
+            max-height: 200px;
+            overflow: auto;
+            background: #f5f5f5;
+            padding: 10px;
+            font-size: 12px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🐳 Docker Claw Admin</h1>
+        <div style="display: flex; gap: 20px; align-items: center;">
+            <a href="/admin/containers" style="color: #aaa; text-decoration: none; font-size: 14px;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#aaa'">📦 Контейнеры</a>
+            <a href="/admin/skills"     style="color: #aaa; text-decoration: none; font-size: 14px;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#aaa'">🎯 Навыки</a>
+            <a href="/admin/chat"       style="color: #aaa; text-decoration: none; font-size: 14px;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#aaa'">💬 Чат</a>
+            <a href="/admin/postgresql" style="color: #aaa; text-decoration: none; font-size: 14px;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#aaa'">🗄️ PostgreSQL</a>
+            <a href="/admin/tasks"      style="color: white; text-decoration: none; font-size: 14px;">📋 Задачи</a>
+            <a href="/admin/apps"       style="color: #aaa; text-decoration: none; font-size: 14px;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#aaa'">🚀 Приложения</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Выбор пользователя -->
+        <div class="chat-selector">
+            <div>
+                <label for="chatIdInput">Chat ID пользователя</label>
+                <input type="text" id="chatIdInput" placeholder="123456789" />
+            </div>
+            <button class="btn btn-primary" onclick="applyUser()">Показать задачи</button>
+        </div>
+
+        <div id="userContent" style="display: none;">
+            <!-- Задачи -->
+            <div class="panel">
+                <h2>📋 Задачи</h2>
+                <div class="info-box">Активные задачи обновляются каждые 5 секунд.</div>
+                <div class="toolbar">
+                    <div class="filters">
+                        <button class="filter-btn active" data-filter="all"    onclick="setFilter('all')">Все <span class="filter-count">0</span></button>
+                        <button class="filter-btn" data-filter="active"  onclick="setFilter('active')">🔄 Активные <span class="filter-count">0</span></button>
+                        <button class="filter-btn" data-filter="done"    onclick="setFilter('done')">✅ Готово <span class="filter-count">0</span></button>
+                        <button class="filter-btn" data-filter="failed"  onclick="setFilter('failed')">❌ Ошибки <span class="filter-count">0</span></button>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <span class="count-badge" id="tasksCountBadge">— задач</span>
+                        <button class="btn btn-secondary" onclick="loadPlans()">🔄 Обновить</button>
+                    </div>
+                </div>
+                <div class="tasks-grid" id="tasksGrid">
+                    <div class="empty-state">⏳ Загрузка…</div>
+                </div>
+            </div>
+
+            <!-- Cron задачи -->
+            <div class="panel">
+                <h2>⏰ Cron задачи</h2>
+                <p style="font-size: 13px; color: #666; margin-bottom: 14px;">
+                    Периодические задачи пользователя — опрос email и др.
+                </p>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                    <button class="btn btn-primary"   onclick="loadCronStatus()">🔄 Обновить статус</button>
+                    <button class="btn btn-secondary" onclick="testPollNow()">🧪 Тест poll сейчас</button>
+                </div>
+                <div id="cronStatus" class="cron-section" style="font-size: 14px; white-space: pre-line;"></div>
+                <div id="cronLogs"   class="cron-log" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_MANAGE = '/api/manage';
+        let currentChatId = null;
+        let currentFilter = 'all';
+        let allPlans = [];
+        let autoRefreshTimer = null;
+
+        // ── Init ──────────────────────────────────────────────────────────────
+
+        (async () => {
+            // Проверить авторизацию
+            try {
+                const res = await fetch('/admin/check-auth');
+                if (!res.ok) { window.location.href = '/admin/login'; return; }
+            } catch (e) {
+                window.location.href = '/admin/login';
+                return;
+            }
+
+            // chatId из URL-параметра
+            const params = new URLSearchParams(window.location.search);
+            const urlChatId = params.get('chatId') || params.get('chat_id');
+            if (urlChatId) {
+                document.getElementById('chatIdInput').value = urlChatId;
+                applyUser();
+            }
+        })();
+
+        function logout() {
+            fetch('/admin/logout', { method: 'POST' }).finally(() => {
+                window.location.href = '/admin/login';
+            });
+        }
+
+        function applyUser() {
+            const val = document.getElementById('chatIdInput').value.trim();
+            if (!val) return;
+            currentChatId = val;
+            // обновить URL без перезагрузки
+            history.replaceState(null, '', `/admin/tasks?chatId=${encodeURIComponent(val)}`);
+            document.getElementById('userContent').style.display = 'block';
+            clearAutoRefresh();
+            loadPlans();
+            loadCronStatus();
+        }
+
+        // ── Plans/Tasks ───────────────────────────────────────────────────────
+
+        function setFilter(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.filter === filter);
+            });
+            renderPlans();
+        }
+
+        async function loadPlans() {
+            if (!currentChatId) return;
+            try {
+                const res = await fetch(`/api/plans?chat_id=${encodeURIComponent(currentChatId)}`);
+                const data = await res.json();
+                allPlans = Array.isArray(data.plans) ? data.plans : [];
+                renderPlans();
+
+                const hasActive = allPlans.some(p => p.status === 'running' || p.status === 'pending');
+                if (hasActive) scheduleAutoRefresh();
+                else clearAutoRefresh();
+            } catch (e) {
+                document.getElementById('tasksGrid').innerHTML =
+                    `<div class="empty-state">Ошибка загрузки: ${e.message}</div>`;
+            }
+        }
+
+        function renderPlans() {
+            const grid = document.getElementById('tasksGrid');
+            let plans = allPlans;
+            if (currentFilter === 'active')  plans = plans.filter(p => p.status === 'running' || p.status === 'pending');
+            if (currentFilter === 'done')    plans = plans.filter(p => p.status === 'done' || p.status === 'completed');
+            if (currentFilter === 'failed')  plans = plans.filter(p => p.status === 'failed' || p.status === 'error');
+
+            updateFilterCounts();
+            document.getElementById('tasksCountBadge').textContent =
+                `${plans.length} ${pluralize(plans.length, 'задача', 'задачи', 'задач')}`;
+
+            if (!plans.length) {
+                grid.innerHTML = '<div class="empty-state">📭 Задач не найдено</div>';
+                return;
+            }
+
+            grid.innerHTML = plans.map(plan => `
+                <div class="task-card">
+                    <div class="task-title">${esc(plan.title || plan.name || 'Без названия')}</div>
+                    <div class="task-meta">
+                        ID: ${esc(String(plan.id || ''))} &nbsp;·&nbsp;
+                        ${formatDate(plan.created_at || plan.createdAt)}
+                    </div>
+                    <span class="task-status status-${plan.status || 'pending'}">
+                        ${statusLabel(plan.status)}
+                    </span>
+                    ${plan.progress != null ? `
+                    <div class="task-progress">
+                        Прогресс: ${plan.progress}%
+                        <div class="progress-bar"><div class="fill" style="width:${plan.progress}%"></div></div>
+                    </div>` : ''}
+                    ${plan.current_step ? `<div class="task-progress" style="margin-top:8px;">📍 ${esc(plan.current_step)}</div>` : ''}
+                    ${plan.error ? `<div style="margin-top:8px;font-size:12px;color:#dc3545;">❌ ${esc(plan.error)}</div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function updateFilterCounts() {
+            const counts = {
+                all:    allPlans.length,
+                active: allPlans.filter(p => p.status === 'running' || p.status === 'pending').length,
+                done:   allPlans.filter(p => p.status === 'done' || p.status === 'completed').length,
+                failed: allPlans.filter(p => p.status === 'failed' || p.status === 'error').length,
+            };
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                const c = btn.querySelector('.filter-count');
+                if (c) c.textContent = counts[btn.dataset.filter] ?? 0;
+            });
+        }
+
+        function scheduleAutoRefresh() {
+            if (autoRefreshTimer) return;
+            autoRefreshTimer = setInterval(loadPlans, 5000);
+        }
+
+        function clearAutoRefresh() {
+            if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+        }
+
+        // ── Cron ─────────────────────────────────────────────────────────────
+
+        async function loadCronStatus() {
+            if (!currentChatId) return;
+            const el = document.getElementById('cronStatus');
+            const logsEl = document.getElementById('cronLogs');
+            el.textContent = 'Загрузка…';
+            try {
+                const res = await fetch(`${API_MANAGE}/cron/status?chat_id=${encodeURIComponent(currentChatId)}`);
+                const data = await res.json();
+                el.textContent = JSON.stringify(data, null, 2);
+
+                const logsRes = await fetch(`${API_MANAGE}/cron/logs?chat_id=${encodeURIComponent(currentChatId)}`);
+                const logsData = await logsRes.json();
+                if (logsData.logs?.length) {
+                    logsEl.style.display = 'block';
+                    logsEl.textContent = logsData.logs.join('\n');
+                } else {
+                    logsEl.style.display = 'none';
+                }
+            } catch (e) {
+                el.textContent = `Ошибка: ${e.message}`;
+            }
+        }
+
+        async function testPollNow() {
+            if (!currentChatId) return;
+            try {
+                const res = await fetch(`${API_MANAGE}/cron/poll-now`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: currentChatId })
+                });
+                const data = await res.json();
+                alert(data.message || JSON.stringify(data));
+                await loadCronStatus();
+            } catch (e) {
+                alert(`Ошибка: ${e.message}`);
+            }
+        }
+
+        // ── Helpers ───────────────────────────────────────────────────────────
+
+        function esc(str) {
+            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+
+        function formatDate(iso) {
+            if (!iso) return '—';
+            try { return new Date(iso).toLocaleString('ru-RU'); } catch { return iso; }
+        }
+
+        function statusLabel(s) {
+            const map = { pending: 'Ожидает', running: 'Выполняется', done: 'Готово',
+                          completed: 'Готово', failed: 'Ошибка', error: 'Ошибка' };
+            return map[s] || s || '—';
+        }
+
+        function pluralize(n, one, few, many) {
+            const mod10 = n % 10, mod100 = n % 100;
+            if (mod10 === 1 && mod100 !== 11) return `${n} ${one}`;
+            if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${n} ${few}`;
+            return `${n} ${many}`;
+        }
+    </script>
+</body>
+</html>

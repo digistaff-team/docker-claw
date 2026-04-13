@@ -531,4 +531,19 @@ router.get('/chat', requireAdminAuth, (req, res) => {
     res.sendFile(require('path').resolve(__dirname, '../public/admin/chat.html'));
 });
 
+// GET /admin/postgresql - страница управления базами данных PostgreSQL
+router.get('/postgresql', requireAdminAuth, (req, res) => {
+    res.sendFile(require('path').resolve(__dirname, '../public/admin/postgresql.html'));
+});
+
+// GET /admin/tasks - страница задач пользователей
+router.get('/tasks', requireAdminAuth, (req, res) => {
+    res.sendFile(require('path').resolve(__dirname, '../public/admin/tasks.html'));
+});
+
+// GET /admin/apps - страница PM2 приложений пользователей
+router.get('/apps', requireAdminAuth, (req, res) => {
+    res.sendFile(require('path').resolve(__dirname, '../public/admin/apps.html'));
+});
+
 module.exports = router;

@@ -21,6 +21,18 @@ router.use('/apps', appsRoutes);
 router.use('/content', contentRoutes);
 router.use('/auth', authRoutes);
 
+// Output content cleanup manual trigger
+router.post('/cleanup/output-content', async (req, res) => {
+    try {
+        const { chatId } = req.body;
+        const outputContentCleanup = require('../services/outputContentCleanup.service');
+        const result = await outputContentCleanup.triggerCleanup(chatId);
+        res.json({ success: true, result });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Health check
 router.get('/health', (req, res) => {
     const sessionService = require('../services/session.service');

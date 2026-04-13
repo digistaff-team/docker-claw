@@ -3,6 +3,9 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const videoPipeline = require('../services/videoPipeline.service');
+const manageStore = require('../manage/store');
+
+const ALLOWED_VIDEO_MODELS = ['veo3.1', 'seedance-2', 'grok-imagine'];
 
 function normalizeChatId(chatId) {
   return String(chatId || '').trim();
@@ -20,13 +23,19 @@ function normalizeChatId(chatId) {
 router.post('/generate', async (req, res) => {
   const chatId = normalizeChatId(req.body.chat_id);
   const channel = String(req.body.channel || 'youtube').toLowerCase();
+  const model = req.body.model ? String(req.body.model).trim() : null;
 
   if (!chatId) {
     return res.status(400).json({ error: 'chat_id is required' });
   }
 
-  if (!['youtube', 'tiktok', 'instagram'].includes(channel)) {
-    return res.status(400).json({ error: 'channel must be youtube, tiktok, or instagram' });
+  if (!['youtube', 'tiktok', 'instagram', 'vk'].includes(channel)) {
+    return res.status(400).json({ error: 'channel must be youtube, tiktok, instagram, or vk' });
+  }
+
+  // Сохраняем выбор модели если передан
+  if (model && ALLOWED_VIDEO_MODELS.includes(model)) {
+    await manageStore.setVideoPipelineSettings(chatId, { model });
   }
 
   try {
@@ -422,6 +431,74 @@ router.get('/input/:chatId/:filename', async (req, res) => {
     console.error(`[VIDEO-INPUT] Error serving file: ${e.message}`);
     res.status(500).json({ error: e.message });
   }
+});
+
+// ============================================
+// KIE.ai Webhook Callback (Seedance / Grok)
+// ============================================
+
+/**
+ * POST /api/video/callback/:chatId/:videoId
+ * KIE.ai вызывает этот endpoint когда завершает задачу (для моделей с callBackUrl).
+ */
+router.post('/callback/:chatId/:videoId', (req, res) => {
+  const videoId = parseInt(req.params.videoId, 10);
+
+  if (!Number.isFinite(videoId)) {
+    return res.status(400).json({ error: 'Invalid videoId' });
+  }
+
+  console.log(`[VIDEO-CALLBACK] Received callback for videoId=${videoId}, body=${JSON.stringify(req.body).slice(0, 300)}`);
+
+  // Передаём payload в сервис — он разрешит ожидающий Promise
+  videoPipeline.resolveVideoCallback(videoId, req.body);
+
+  // KIE.ai ожидает 200 OK
+  return res.json({ ok: true });
+});
+
+// ============================================
+// Pipeline Settings
+// ============================================
+
+/**
+ * GET /api/video/settings
+ * Настройки видео-пайплайна пользователя (выбранная модель и т.д.)
+ */
+router.get('/settings', (req, res) => {
+  const chatId = normalizeChatId(req.query.chat_id);
+  if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+
+  const settings = manageStore.getVideoPipelineSettings(chatId);
+  return res.json({
+    success: true,
+    settings: {
+      model: settings.model || (process.env.VIDEO_MODEL || 'veo3.1'),
+    },
+    availableModels: [
+      { id: 'veo3.1',       name: 'Veo 3.1',       provider: 'Google / KIE.ai',    available: true },
+      { id: 'seedance-2',   name: 'Seedance 2.0',   provider: 'ByteDance / KIE.ai', available: true },
+      { id: 'grok-imagine', name: 'Grok Imagine',   provider: 'xAI / KIE.ai',       available: true },
+    ]
+  });
+});
+
+/**
+ * POST /api/video/settings
+ * Сохранить настройки видео-пайплайна
+ * Body: { chat_id, model }
+ */
+router.post('/settings', async (req, res) => {
+  const chatId = normalizeChatId(req.body.chat_id);
+  if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+
+  const model = String(req.body.model || '').trim();
+  if (!ALLOWED_VIDEO_MODELS.includes(model)) {
+    return res.status(400).json({ error: `model must be one of: ${ALLOWED_VIDEO_MODELS.join(', ')}` });
+  }
+
+  await manageStore.setVideoPipelineSettings(chatId, { model });
+  return res.json({ success: true, settings: { model } });
 });
 
 module.exports = router;

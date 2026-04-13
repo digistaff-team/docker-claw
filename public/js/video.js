@@ -3,6 +3,7 @@
  */
 
 let currentChatId = null;
+let selectedModel = 'veo3.1';
 
 // ============================================
 // Init
@@ -14,11 +15,77 @@ document.addEventListener('DOMContentLoaded', async () => {
         showError('Не удалось определить chat_id. Авторизуйтесь.');
         return;
     }
+    loadModelSettings();
     loadInteriors();
     loadProductImages();
     loadVideos();
     loadStats();
 });
+
+// ============================================
+// Generation
+// ============================================
+
+// ============================================
+// Model Settings
+// ============================================
+
+async function loadModelSettings() {
+    try {
+        const resp = await fetch(`/api/video/settings?chat_id=${encodeURIComponent(currentChatId)}`);
+        const data = await resp.json();
+        if (!data.success) return;
+
+        selectedModel = data.settings?.model || 'veo3.1';
+        renderModelGrid(data.availableModels || [], selectedModel);
+    } catch (e) {
+        console.error('Model settings load error:', e);
+    }
+}
+
+function renderModelGrid(models, activeModel) {
+    const grid = document.getElementById('modelGrid');
+    if (!grid) return;
+    grid.innerHTML = models.map(m => `
+        <div class="model-card ${m.id === activeModel ? 'model-card--active' : ''} ${!m.available ? 'model-card--disabled' : ''}"
+             onclick="${m.available ? `selectModel('${m.id}')` : ''}">
+            <div class="model-card__name">${m.name}</div>
+            <div class="model-card__provider">${m.provider}</div>
+            <span class="model-card__badge ${m.available ? 'badge-available' : 'badge-soon'}">
+                ${m.available ? 'Доступно' : 'Скоро'}
+            </span>
+        </div>
+    `).join('');
+}
+
+async function selectModel(modelId) {
+    if (modelId === selectedModel) return;
+    try {
+        const resp = await fetch('/api/video/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: currentChatId, model: modelId })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            selectedModel = modelId;
+            // Обновить визуал карточек
+            document.querySelectorAll('.model-card').forEach(el => {
+                el.classList.toggle('model-card--active', el.querySelector('.model-card__name')?.textContent === getModelName(modelId));
+            });
+            await loadModelSettings(); // перерисовать с актуальным состоянием
+            const status = document.getElementById('modelSaveStatus');
+            if (status) { status.style.display = 'inline'; setTimeout(() => status.style.display = 'none', 2000); }
+        }
+    } catch (e) {
+        console.error('Model save error:', e);
+    }
+}
+
+function getModelName(id) {
+    const map = { 'veo3.1': 'Veo 3.1', 'seedance-2': 'Seedance 2.0', 'grok-imagine': 'Grok Imagine' };
+    return map[id] || id;
+}
 
 // ============================================
 // Generation
@@ -39,7 +106,7 @@ async function startGeneration() {
         const resp = await fetch('/api/video/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: currentChatId, channel })
+            body: JSON.stringify({ chat_id: currentChatId, channel, model: selectedModel })
         });
 
         const data = await resp.json();

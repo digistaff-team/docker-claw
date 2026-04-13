@@ -103,11 +103,11 @@ const ALL_CHANNELS = [
     { id: 'ok', name: 'Одноклассники' },
     { id: 'pinterest', name: 'Pinterest' },
     { id: 'instagram', name: 'Instagram' },
-    { id: 'email', name: 'Email' },
     { id: 'youtube', name: 'YouTube' },
     { id: 'facebook', name: 'Facebook' },
     { id: 'dzen', name: 'Яндекс Дзен' },
-    { id: 'tiktok', name: 'TikTok' }
+    { id: 'tiktok', name: 'TikTok' },
+    { id: 'vk_video', name: 'VK Видео' }
 ];
 
 // Текущие включённые каналы (обновляется при загрузке)

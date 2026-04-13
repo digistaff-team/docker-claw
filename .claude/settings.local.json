@@ -9,7 +9,9 @@
       "Bash(python3:*)",
       "Bash(docker network:*)",
       "Bash(git:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(docker-compose logs:*)",
+      "Bash(docker-compose restart:*)"
     ]
   }
 }

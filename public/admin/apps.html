@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Apps - Docker Claw</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+        }
+        .header {
+            background: #1a1a2e;
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 { font-size: 20px; }
+        .logout-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .logout-btn:hover { background: #c0392b; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 30px; }
+        .chat-selector {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+        .chat-selector label { font-size: 13px; color: #555; display: block; margin-bottom: 4px; }
+        .chat-selector input {
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            width: 220px;
+        }
+        .btn {
+            padding: 8px 18px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .btn-primary   { background: #007bff; color: #fff; }
+        .btn-primary:hover   { background: #0056b3; }
+        .btn-secondary { background: #6c757d; color: #fff; }
+        .btn-secondary:hover { background: #545b62; }
+        .btn-warning   { background: #fd7e14; color: #fff; }
+        .btn-warning:hover   { background: #e96b00; }
+        .btn-danger    { background: #dc3545; color: #fff; }
+        .btn-danger:hover    { background: #b02a37; }
+        .btn-success   { background: #28a745; color: #fff; }
+        .btn-success:hover   { background: #1e7e34; }
+        .btn-sm { padding: 5px 12px; font-size: 12px; }
+        .panel {
+            background: #fff;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .panel h2 { font-size: 18px; margin-bottom: 16px; color: #333; }
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .count-badge {
+            background: #f0f0f0;
+            border-radius: 12px;
+            padding: 3px 10px;
+            font-size: 13px;
+            color: #555;
+        }
+        .autoupdate-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #555;
+            cursor: pointer;
+        }
+        .info-box {
+            background: #e8f4fd;
+            border-left: 4px solid #007bff;
+            padding: 10px 14px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #333;
+            margin-bottom: 16px;
+        }
+        .apps-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 16px;
+        }
+        .app-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 16px;
+            background: #fafafa;
+        }
+        .app-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+        .app-name {
+            font-weight: 600;
+            font-size: 15px;
+            color: #222;
+        }
+        .app-status {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-online  { background: #d4edda; color: #155724; }
+        .status-stopped { background: #f8d7da; color: #721c24; }
+        .status-errored { background: #f8d7da; color: #721c24; }
+        .status-unknown { background: #e2e3e5; color: #383d41; }
+        .app-meta {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+        .app-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+        .empty-state {
+            text-align: center;
+            padding: 48px 20px;
+            color: #aaa;
+            font-size: 14px;
+            grid-column: 1/-1;
+        }
+        .logs-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        .logs-modal.open { display: flex; }
+        .logs-box {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border-radius: 8px;
+            padding: 20px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .logs-box h3 { color: #fff; margin-bottom: 12px; font-size: 15px; }
+        .logs-content {
+            font-family: monospace;
+            font-size: 12px;
+            overflow: auto;
+            white-space: pre-wrap;
+            flex: 1;
+            min-height: 0;
+        }
+        .logs-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 12px;
+            gap: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🐳 Docker Claw Admin</h1>
+        <div style="display: flex; gap: 20px; align-items: center;">
+            <a href="/admin/containers" style="color: #aaa; text-decoration: none; font-size: 14px;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#aaa'">📦 Контейнеры</a>
+            <a href="/admin/skills"     style="color: #aaa; text-decoration: none; font-size: 14px;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#aaa'">🎯 Навыки</a>
+            <a href="/admin/chat"       style="color: #aaa; text-decoration: none; font-size: 14px;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#aaa'">💬 Чат</a>
+            <a href="/admin/postgresql" style="color: #aaa; text-decoration: none; font-size: 14px;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#aaa'">🗄️ PostgreSQL</a>
+            <a href="/admin/tasks"      style="color: #aaa; text-decoration: none; font-size: 14px;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#aaa'">📋 Задачи</a>
+            <a href="/admin/apps"       style="color: white; text-decoration: none; font-size: 14px;">🚀 Приложения</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="chat-selector">
+            <div>
+                <label for="chatIdInput">Chat ID пользователя</label>
+                <input type="text" id="chatIdInput" placeholder="123456789" />
+            </div>
+            <button class="btn btn-primary" onclick="applyUser()">Показать приложения</button>
+        </div>
+
+        <div id="userContent" style="display: none;">
+            <div class="panel">
+                <h2>🚀 Приложения (PM2)</h2>
+                <div class="info-box">
+                    Процессы, запущенные через <code>pm2</code> в контейнере пользователя.
+                </div>
+                <div class="toolbar">
+                    <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                        <span class="count-badge" id="appsCountBadge">— процессов</span>
+                        <label class="autoupdate-label">
+                            <input type="checkbox" id="autoUpdateCheckbox" onchange="toggleAutoUpdate(this.checked)">
+                            Авто-обновление каждые 5 сек
+                        </label>
+                    </div>
+                    <button class="btn btn-secondary" onclick="loadApps()">🔄 Обновить</button>
+                </div>
+                <div class="apps-grid" id="appsGrid">
+                    <div class="empty-state">⏳ Загрузка…</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно логов -->
+    <div class="logs-modal" id="logsModal" onclick="closeLogsIfOutside(event)">
+        <div class="logs-box">
+            <h3 id="logsTitle">Логи</h3>
+            <div class="logs-content" id="logsContent"></div>
+            <div class="logs-footer">
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <label style="font-size: 12px; color: #aaa;">Строк:</label>
+                    <select id="linesSelect" onchange="reloadLogs()" style="padding: 4px 8px; font-size: 12px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px;">
+                        <option value="50">50</option>
+                        <option value="100" selected>100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="closeLogsModal()">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+        let currentChatId = null;
+        let autoUpdateTimer = null;
+        let currentLogsApp = null;
+
+        // ── Init ──────────────────────────────────────────────────────────────
+
+        (async () => {
+            try {
+                const res = await fetch('/admin/check-auth');
+                if (!res.ok) { window.location.href = '/admin/login'; return; }
+            } catch (e) {
+                window.location.href = '/admin/login';
+                return;
+            }
+
+            const params = new URLSearchParams(window.location.search);
+            const urlChatId = params.get('chatId') || params.get('chat_id');
+            if (urlChatId) {
+                document.getElementById('chatIdInput').value = urlChatId;
+                applyUser();
+            }
+        })();
+
+        function logout() {
+            fetch('/admin/logout', { method: 'POST' }).finally(() => {
+                window.location.href = '/admin/login';
+            });
+        }
+
+        function applyUser() {
+            const val = document.getElementById('chatIdInput').value.trim();
+            if (!val) return;
+            currentChatId = val;
+            history.replaceState(null, '', `/admin/apps?chatId=${encodeURIComponent(val)}`);
+            document.getElementById('userContent').style.display = 'block';
+            loadApps();
+        }
+
+        // ── Apps ──────────────────────────────────────────────────────────────
+
+        function toggleAutoUpdate(on) {
+            if (on) {
+                if (!autoUpdateTimer) autoUpdateTimer = setInterval(loadApps, 5000);
+            } else {
+                clearInterval(autoUpdateTimer);
+                autoUpdateTimer = null;
+            }
+        }
+
+        async function loadApps() {
+            if (!currentChatId) return;
+            const grid = document.getElementById('appsGrid');
+            try {
+                let res = await fetch(`${API_URL}/apps/${encodeURIComponent(currentChatId)}`);
+                if (res.status === 404) {
+                    await fetch(`${API_URL}/session/create`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chat_id: currentChatId })
+                    });
+                    res = await fetch(`${API_URL}/apps/${encodeURIComponent(currentChatId)}`);
+                }
+                const data = await res.json();
+                const apps = Array.isArray(data.apps) ? data.apps : [];
+                document.getElementById('appsCountBadge').textContent =
+                    `${apps.length} ${pluralize(apps.length, 'процесс', 'процесса', 'процессов')}`;
+                renderApps(apps);
+            } catch (e) {
+                grid.innerHTML = `<div class="empty-state">Ошибка: ${esc(e.message)}</div>`;
+            }
+        }
+
+        function renderApps(apps) {
+            const grid = document.getElementById('appsGrid');
+            if (!apps.length) {
+                grid.innerHTML = '<div class="empty-state">📭 Нет запущенных приложений</div>';
+                return;
+            }
+            grid.innerHTML = apps.map(app => {
+                const status = app.pm2_env?.status || app.status || 'unknown';
+                const uptime = app.pm2_env?.pm_uptime
+                    ? formatUptime(Date.now() - app.pm2_env.pm_uptime) : '—';
+                const restarts = app.pm2_env?.restart_time ?? '—';
+                const cpu = app.monit?.cpu != null ? `${app.monit.cpu}%` : '—';
+                const mem = app.monit?.memory != null ? formatBytes(app.monit.memory) : '—';
+                return `
+                <div class="app-card">
+                    <div class="app-card-header">
+                        <span class="app-name">${esc(app.name)}</span>
+                        <span class="app-status status-${status}">${status}</span>
+                    </div>
+                    <div class="app-meta">
+                        CPU: ${cpu} &nbsp;·&nbsp; RAM: ${mem}<br>
+                        Uptime: ${uptime} &nbsp;·&nbsp; Перезапусков: ${restarts}
+                    </div>
+                    <div class="app-actions">
+                        <button class="btn btn-success btn-sm" onclick="appAction('start','${esc(app.name)}')">▶ Старт</button>
+                        <button class="btn btn-warning btn-sm" onclick="appAction('restart','${esc(app.name)}')">↺ Рестарт</button>
+                        <button class="btn btn-danger btn-sm"  onclick="appAction('stop','${esc(app.name)}')">■ Стоп</button>
+                        <button class="btn btn-secondary btn-sm" onclick="showLogs('${esc(app.name)}')">📋 Логи</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function appAction(action, name) {
+            if (!currentChatId) return;
+            try {
+                const res = await fetch(`${API_URL}/apps/${encodeURIComponent(currentChatId)}/${action}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Ошибка');
+                await loadApps();
+            } catch (e) {
+                alert(`Ошибка: ${e.message}`);
+            }
+        }
+
+        // ── Logs ──────────────────────────────────────────────────────────────
+
+        async function showLogs(name) {
+            currentLogsApp = name;
+            document.getElementById('logsTitle').textContent = `Логи: ${name}`;
+            document.getElementById('logsModal').classList.add('open');
+            await reloadLogs();
+        }
+
+        async function reloadLogs() {
+            if (!currentLogsApp || !currentChatId) return;
+            const lines = document.getElementById('linesSelect').value;
+            const content = document.getElementById('logsContent');
+            content.textContent = 'Загрузка…';
+            try {
+                const res = await fetch(`${API_URL}/apps/${encodeURIComponent(currentChatId)}/${encodeURIComponent(currentLogsApp)}/logs?lines=${lines}`);
+                const data = await res.json();
+                content.textContent = (data.logs || []).join('\n') || '(пусто)';
+                content.scrollTop = content.scrollHeight;
+            } catch (e) {
+                content.textContent = `Ошибка: ${e.message}`;
+            }
+        }
+
+        function closeLogsModal() {
+            document.getElementById('logsModal').classList.remove('open');
+            currentLogsApp = null;
+        }
+
+        function closeLogsIfOutside(e) {
+            if (e.target === document.getElementById('logsModal')) closeLogsModal();
+        }
+
+        // ── Helpers ───────────────────────────────────────────────────────────
+
+        function esc(str) {
+            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+
+        function formatBytes(b) {
+            if (!b) return '0 B';
+            const k = 1024, s = ['B','KB','MB','GB'];
+            const i = Math.floor(Math.log(b) / Math.log(k));
+            return (b / Math.pow(k, i)).toFixed(1) + ' ' + s[i];
+        }
+
+        function formatUptime(ms) {
+            if (!ms || ms < 0) return '—';
+            const s = Math.floor(ms / 1000);
+            if (s < 60) return `${s}с`;
+            const m = Math.floor(s / 60);
+            if (m < 60) return `${m}м`;
+            const h = Math.floor(m / 60);
+            if (h < 24) return `${h}ч ${m % 60}м`;
+            return `${Math.floor(h / 24)}д ${h % 24}ч`;
+        }
+
+        function pluralize(n, one, few, many) {
+            const m10 = n % 10, m100 = n % 100;
+            if (m10 === 1 && m100 !== 11) return `${n} ${one}`;
+            if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return `${n} ${few}`;
+            return `${n} ${many}`;
+        }
+    </script>
+</body>
+</html>

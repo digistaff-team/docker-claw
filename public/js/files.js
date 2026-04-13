@@ -7,7 +7,7 @@ const FOLDER_LABELS = {
 };
 
 async function onLoginSuccess() {
-    await Promise.all([loadFiles(), loadDatabaseInfo(), loadDiskStats()]);
+    await Promise.all([loadFiles(), loadDiskStats()]);
 }
 
 function buildFolderTree(paths) {
@@ -197,33 +197,6 @@ async function loadFiles() {
     }
 }
 
-async function loadDatabaseInfo() {
-    const chatId = getChatId();
-    if (!chatId) return;
-    const el = document.getElementById('dbInfo');
-    if (!el) return;
-    try {
-        const response = await fetch(`${API_URL}/database/${chatId}`);
-        const data = await response.json();
-        el.innerHTML = `
-            <div style="margin-bottom: 10px;"><strong>🗄️ Персональная база данных:</strong></div>
-            <div>Database: ${data.database}</div>
-            <div>Host: ${data.host}:${data.port}</div>
-            <div>User: ${data.user}</div>
-            <div style="margin-top: 10px; word-break: break-all;">
-                <strong>Connection String:</strong><br>
-                ${data.connectionString}
-            </div>
-            <div style="margin-top: 15px; padding: 10px; background: #f0f0f0; border-radius: 6px;">
-                💡 Доступно через переменные:<br>
-                <code>$DATABASE_URL, $PGHOST, $PGPORT, $PGDATABASE</code>
-            </div>
-        `;
-    } catch (e) {
-        console.error('Error loading database info', e);
-    }
-}
-
 const uploadZone = document.getElementById('uploadZone');
 if (uploadZone) {
     uploadZone.addEventListener('dragover', (e) => {
@@ -278,14 +251,26 @@ async function viewFile(filepath) {
     const chatId = getChatId();
     if (!chatId) return;
     try {
-        const response = await fetch(`${API_URL}/files/${chatId}/content?filepath=${encodeURIComponent(filepath)}`);
-        const content = await response.text();
-        const w = window.open('', '_blank');
-        w.document.write(`
-            <html><head><title>${filepath}</title>
-            <style>body { font-family: 'Courier New', monospace; padding: 20px; } pre { white-space: pre-wrap; word-wrap: break-word; }</style></head>
-            <body><h2>${filepath}</h2><pre>${content}</pre></body></html>
-        `);
+        // Определяем тип файла по расширению
+        const ext = filepath.split('.').pop().toLowerCase();
+        const textExtensions = ['md', 'txt', 'json', 'js', 'ts', 'html', 'css', 'xml', 'yaml', 'yml', 'py', 'sh', 'sql', 'csv', 'log', 'ini', 'conf', 'cfg'];
+        
+        // Для текстовых файлов открываем в новой вкладке с форматированием
+        if (textExtensions.includes(ext)) {
+            const response = await fetch(`${API_URL}/files/${chatId}/content?filepath=${encodeURIComponent(filepath)}`);
+            const content = await response.text();
+            const w = window.open('', '_blank');
+            w.document.write(`
+                <html><head><title>${filepath}</title>
+                <style>body { font-family: 'Courier New', monospace; padding: 20px; } pre { white-space: pre-wrap; word-wrap: break-word; }</style></head>
+                <body><h2>${filepath}</h2><pre>${content}</pre></body></html>
+            `);
+            w.document.close();
+        } else {
+            // Для бинарных файлов (изображения, видео и т.д.) открываем через preview endpoint
+            const url = `${API_URL}/files/${chatId}/preview?filepath=${encodeURIComponent(filepath)}`;
+            window.open(url, '_blank');
+        }
     } catch (e) {
         showToast('Ошибка просмотра файла', 'error');
     }

@@ -767,6 +767,25 @@ function clearVkVideoConfig(chatId) {
     }
 }
 
+// === Video Pipeline Settings ===
+
+const ALLOWED_VIDEO_MODELS = ['veo3.1', 'seedance-2', 'grok-imagine'];
+
+function getVideoPipelineSettings(chatId) {
+    return statesCache[chatId]?.videoPipelineSettings || {};
+}
+
+function setVideoPipelineSettings(chatId, patch = {}) {
+    if (!statesCache[chatId]) statesCache[chatId] = {};
+    const current = statesCache[chatId].videoPipelineSettings || {};
+    const next = { ...current };
+    if (patch.model !== undefined) {
+        next.model = ALLOWED_VIDEO_MODELS.includes(patch.model) ? patch.model : 'veo3.1';
+    }
+    statesCache[chatId].videoPipelineSettings = next;
+    return persist(chatId);
+}
+
 // === VK Config ===
 
 function getVkConfig(chatId) {
@@ -1272,6 +1291,8 @@ module.exports = {
     getVkVideoConfig,
     setVkVideoConfig,
     clearVkVideoConfig,
+    getVideoPipelineSettings,
+    setVideoPipelineSettings,
     getVkConfig,
     setVkConfig,
     getVkSettings,

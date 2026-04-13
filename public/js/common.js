@@ -531,9 +531,8 @@ async function renderMenu(currentPage) {
         { href: '/files.html', label: '📁 Файлы' },
         { href: '/channels.html', label: '📡 Каналы' },
         { href: '/content.html', label: '📝 Контент' },
+        { href: '/video.html', label: '🎬 Видео' },
         { href: '/ai.html', label: '🤖 ИИ' },
-        { href: '/tasks.html', label: '📋 Задачи' },
-        { href: '/apps.html', label: '🚀 Приложения' },
         // Консоль доступна только админу
         ...(isAdmin ? [{ href: '/console.html', label: '💻 Консоль' }] : []),
         { href: '/info.html', label: '📊 Инфо' }

@@ -6,22 +6,9 @@
     <title>Видео-пайплайн — Клиент Завод</title>
     <link rel="stylesheet" href="/css/main.css">
     <style>
-        .video-section {
-            background: #fff;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        .video-section h2 {
-            margin-top: 0;
-            color: #333;
-            border-bottom: 2px solid #e0e0e0;
-            padding-bottom: 10px;
-        }
         .video-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
             gap: 16px;
         }
         .video-card {
@@ -35,6 +22,7 @@
             aspect-ratio: 9/16;
             object-fit: cover;
             background: #000;
+            display: block;
         }
         .video-card .info {
             padding: 12px;
@@ -42,8 +30,9 @@
         .video-card .info h4 {
             margin: 0 0 8px;
             font-size: 14px;
+            color: #333;
         }
-        .video-card .status-badge {
+        .status-badge {
             display: inline-block;
             padding: 2px 8px;
             border-radius: 12px;
@@ -51,26 +40,34 @@
             font-weight: 600;
             text-transform: uppercase;
         }
-        .status-pending { background: #fff3cd; color: #856404; }
+        .status-pending          { background: #fff3cd; color: #856404; }
         .status-scene_generating { background: #d1ecf1; color: #0c5460; }
-        .status-scene_ready { background: #d1ecf1; color: #0c5460; }
-        .status-video_generating { background: #d1ecf1; color: #0c5460; }
-        .status-video_ready { background: #d4edda; color: #155724; }
-        .status-published { background: #d4edda; color: #155724; }
-        .status-expired { background: #f8d7da; color: #721c24; }
-        .status-failed { background: #f8d7da; color: #721c24; }
+        .status-scene_ready      { background: #d1ecf1; color: #0c5460; }
+        .status-video_generating { background: #cce5ff; color: #004085; }
+        .status-video_ready      { background: #d4edda; color: #155724; }
+        .status-published        { background: #d4edda; color: #155724; }
+        .status-expired          { background: #f8d7da; color: #721c24; }
+        .status-failed           { background: #f8d7da; color: #721c24; }
         .channel-marks {
             display: flex;
-            gap: 8px;
+            flex-wrap: wrap;
+            gap: 6px;
             margin-top: 8px;
         }
         .channel-mark {
-            font-size: 12px;
+            font-size: 11px;
             padding: 2px 6px;
             border-radius: 4px;
         }
         .channel-used { background: #28a745; color: #fff; }
         .channel-free { background: #6c757d; color: #fff; }
+        .countdown {
+            font-family: monospace;
+            color: #dc3545;
+            font-weight: bold;
+            font-size: 12px;
+            margin-top: 6px;
+        }
         .interior-item {
             display: flex;
             justify-content: space-between;
@@ -79,41 +76,20 @@
             border-bottom: 1px solid #eee;
         }
         .interior-item:last-child { border-bottom: none; }
-        .countdown {
-            font-family: monospace;
-            color: #dc3545;
-            font-weight: bold;
-        }
-        .generate-form {
-            display: flex;
-            gap: 12px;
-            align-items: flex-end;
-            flex-wrap: wrap;
-        }
-        .generate-form select, .generate-form button {
-            padding: 8px 16px;
-            border-radius: 4px;
-            border: 1px solid #ccc;
-        }
-        .generate-form button {
-            background: #007bff;
-            color: #fff;
-            border: none;
-            cursor: pointer;
-        }
-        .generate-form button:hover { background: #0056b3; }
-        .generate-form button:disabled { background: #ccc; cursor: not-allowed; }
         .image-item {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 4px 0;
+            gap: 10px;
+            padding: 6px 0;
+            border-bottom: 1px solid #f0f0f0;
         }
+        .image-item:last-child { border-bottom: none; }
         .image-item img {
-            width: 40px;
-            height: 40px;
+            width: 44px;
+            height: 44px;
             object-fit: cover;
             border-radius: 4px;
+            flex-shrink: 0;
         }
         .progress-bar {
             width: 100%;
@@ -121,7 +97,7 @@
             background: #e0e0e0;
             border-radius: 2px;
             overflow: hidden;
-            margin-top: 8px;
+            margin-top: 10px;
         }
         .progress-bar .fill {
             height: 100%;
@@ -130,86 +106,249 @@
         }
         @keyframes progress-pulse {
             0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+            50%       { opacity: 0.4; }
         }
         .empty-state {
             text-align: center;
-            padding: 40px;
+            padding: 40px 20px;
             color: #6c757d;
+            font-size: 14px;
+        }
+        .model-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+        }
+        .model-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 14px 16px;
+            cursor: pointer;
+            transition: border-color 0.15s, box-shadow 0.15s;
+            position: relative;
+            background: #fff;
+        }
+        .model-card:hover:not(.model-card--disabled) {
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+        }
+        .model-card.model-card--active {
+            border-color: #007bff;
+            background: #f0f7ff;
+        }
+        .model-card--disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+        .model-card__name {
+            font-weight: 600;
+            font-size: 15px;
+            color: #222;
+            margin-bottom: 3px;
+        }
+        .model-card__provider {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+        .model-card__badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge-available { background: #d4edda; color: #155724; }
+        .badge-soon      { background: #e2e3e5; color: #555; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 12px;
+        }
+        .stat-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 14px;
+            text-align: center;
+        }
+        .stat-item .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #333;
+        }
+        .stat-item .stat-label {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 4px;
+        }
+        .inline-form {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+        .inline-form input {
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .inline-form input[type="text"] { flex: 1; min-width: 180px; }
+        .filter-bar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .filter-bar select {
+            padding: 7px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎬 Видео-пайплайн</h1>
-        <p class="subtitle">Генерация и управление общими видео для каналов</p>
-
-        <!-- Генерация -->
-        <div class="video-section">
-            <h2>Генерация видео</h2>
-            <div class="generate-form">
+        <div class="header">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
                 <div>
-                    <label for="initiatingChannel">Канал-инициатор:</label>
-                    <select id="initiatingChannel">
-                        <option value="youtube">YouTube</option>
-                        <option value="tiktok">TikTok</option>
-                        <option value="instagram">Instagram</option>
+                    <h1>🙋🏻‍♂️ Клиент Завод</h1>
+                    <p>Ваш личный ИИ агент по рекламе в соцсетях</p>
+                </div>
+                <div id="logoutButton" style="display: none;">
+                    <button class="btn btn-secondary" onclick="logout()" style="padding: 10px 20px; font-size: 14px;">Выйти</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="auth-section" id="authSection" style="display: none;">
+            <h2 style="margin-bottom: 20px;">Вход в систему</h2>
+            <p style="margin-bottom: 20px; color: #666;">Введите ваш Chat ID</p>
+            <input type="text" id="chatIdInput" placeholder="Введите Chat ID (например: 123456789)" />
+            <br>
+            <button onclick="login()">Войти</button>
+        </div>
+
+        <div class="main-content" id="mainContent">
+            <nav class="nav-tabs" id="mainMenu"></nav>
+
+            <!-- Модель генерации -->
+            <div class="panel full-width">
+                <div class="content-section-head">
+                    <div>
+                        <h2>🤖 Модель генерации</h2>
+                        <p class="content-section-subtitle">Выберите AI-модель для image-to-video</p>
+                    </div>
+                    <span id="modelSaveStatus" style="font-size: 13px; color: #28a745; display: none;">✓ Сохранено</span>
+                </div>
+                <div class="model-grid" id="modelGrid">
+                    <div class="empty-state">Загрузка…</div>
+                </div>
+            </div>
+
+            <!-- Генерация видео -->
+            <div class="panel full-width">
+                <div class="content-section-head">
+                    <div>
+                        <h2>🎬 Генерация видео</h2>
+                        <p class="content-section-subtitle">Запустить генерацию нового видео вручную</p>
+                    </div>
+                </div>
+                <div class="inline-form">
+                    <div>
+                        <label for="initiatingChannel" style="display: block; font-size: 13px; margin-bottom: 4px; color: #555;">Канал-инициатор</label>
+                        <select id="initiatingChannel" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                            <option value="youtube">YouTube</option>
+                            <option value="tiktok">TikTok</option>
+                            <option value="instagram">Instagram</option>
+                            <option value="vk">VK</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" id="btnGenerate" onclick="startGeneration()">Сгенерировать видео</button>
+                </div>
+                <div id="generationStatus" style="margin-top: 14px; display: none;">
+                    <div class="progress-bar"><div class="fill" style="width: 100%"></div></div>
+                    <p id="generationText" style="margin-top: 8px; color: #666; font-size: 14px;"></p>
+                </div>
+            </div>
+
+            <!-- Статистика -->
+            <div class="panel full-width">
+                <div class="content-section-head">
+                    <div>
+                        <h2>📊 Статистика</h2>
+                        <p class="content-section-subtitle">Текущее состояние видео-пула</p>
+                    </div>
+                    <button class="btn btn-secondary" onclick="loadStats()">Обновить</button>
+                </div>
+                <div id="videoStats"><div class="empty-state">Загрузка...</div></div>
+            </div>
+
+            <!-- Библиотека видео -->
+            <div class="panel full-width">
+                <div class="content-section-head">
+                    <div>
+                        <h2>📹 Библиотека видео</h2>
+                        <p class="content-section-subtitle">Все видео в пуле — от генерации до публикации</p>
+                    </div>
+                    <button class="btn btn-secondary" onclick="loadVideos()">Обновить</button>
+                </div>
+                <div class="filter-bar">
+                    <label style="font-size: 13px; color: #555;">Статус:</label>
+                    <select id="statusFilter" onchange="loadVideos()">
+                        <option value="">Все</option>
+                        <option value="pending">Ожидает</option>
+                        <option value="scene_generating">Генерация сцены</option>
+                        <option value="scene_ready">Сцена готова</option>
+                        <option value="video_generating">Генерация видео</option>
+                        <option value="video_ready">Видео готово</option>
+                        <option value="published">Опубликовано</option>
+                        <option value="expired">Удалено</option>
+                        <option value="failed">Ошибка</option>
                     </select>
                 </div>
-                <button id="btnGenerate" onclick="startGeneration()">Сгенерировать видео</button>
+                <div id="videoLibrary"><div class="empty-state">Загрузка...</div></div>
             </div>
-            <div id="generationStatus" style="margin-top: 12px; display: none;">
-                <div class="progress-bar"><div class="fill" style="width: 100%"></div></div>
-                <p id="generationText" style="margin-top: 8px; color: #666;"></p>
+
+            <!-- Интерьеры -->
+            <div class="panel full-width">
+                <div class="content-section-head">
+                    <div>
+                        <h2>🏠 Интерьеры</h2>
+                        <p class="content-section-subtitle">Описания интерьеров для генерации сцены с товаром</p>
+                    </div>
+                </div>
+                <div class="inline-form" style="margin-bottom: 16px;">
+                    <input type="text" id="interiorDesc" placeholder="Описание интерьера..." />
+                    <input type="text" id="interiorStyle" placeholder="Стиль (modern, loft...)" style="min-width: 0; width: 160px; flex: none;" />
+                    <button class="btn btn-success" onclick="addInterior()">Добавить</button>
+                </div>
+                <div id="interiorsList"><div class="empty-state">Загрузка...</div></div>
             </div>
-        </div>
 
-        <!-- Интерьеры -->
-        <div class="video-section">
-            <h2>🏠 Интерьеры</h2>
-            <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
-                <input type="text" id="interiorDesc" placeholder="Описание интерьера..." style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-                <input type="text" id="interiorStyle" placeholder="Стиль (modern, loft...)" style="width: 180px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-                <button onclick="addInterior()" style="padding: 8px 16px; background: #28a745; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Добавить</button>
+            <!-- Изображения товаров -->
+            <div class="panel full-width">
+                <div class="content-section-head">
+                    <div>
+                        <h2>📦 Изображения товаров</h2>
+                        <p class="content-section-subtitle">Файлы из папки <code>/workspace/input</code> — загружайте через <a href="/files.html">Файлы</a></p>
+                    </div>
+                    <button class="btn btn-secondary" onclick="loadProductImages()">Обновить</button>
+                </div>
+                <div id="productImages"><div class="empty-state">Загрузка...</div></div>
             </div>
-            <div id="interiorsList"></div>
-        </div>
-
-        <!-- Изображения товаров -->
-        <div class="video-section">
-            <h2>📦 Изображения товаров</h2>
-            <p style="color: #666; font-size: 13px;">Загрузите изображения в папку <code>/workspace/input</code> через файловый менеджер</p>
-            <div id="productImages"></div>
-        </div>
-
-        <!-- Библиотека видео -->
-        <div class="video-section">
-            <h2>📹 Библиотека видео</h2>
-            <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
-                <select id="statusFilter" onchange="loadVideos()">
-                    <option value="">Все статусы</option>
-                    <option value="pending">Ожидает</option>
-                    <option value="scene_generating">Генерация сцены</option>
-                    <option value="scene_ready">Сцена готова</option>
-                    <option value="video_generating">Генерация видео</option>
-                    <option value="video_ready">Видео готово</option>
-                    <option value="published">Опубликовано</option>
-                    <option value="expired">Удалено</option>
-                    <option value="failed">Ошибка</option>
-                </select>
-                <button onclick="loadVideos()" style="padding: 8px 16px; background: #007bff; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Обновить</button>
-            </div>
-            <div id="videoLibrary"></div>
-        </div>
-
-        <!-- Статистика -->
-        <div class="video-section">
-            <h2>📊 Статистика</h2>
-            <div id="videoStats"></div>
         </div>
     </div>
 
     <script src="/js/common.js"></script>
     <script src="/js/video.js"></script>
+    <script>
+        window.addEventListener('load', () => {
+            renderMenu('/video.html');
+            initAuth();
+        });
+    </script>
 </body>
 </html>

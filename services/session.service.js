@@ -269,8 +269,8 @@ async function cleanupIdleSessions() {
     }
 
     for (const chatId of toStop) {
-        console.log(`[CLEANUP] Stopping idle session: ${chatId}`);
-        await stopSession(chatId);
+        console.log(`[CLEANUP] Evicted idle session from memory: ${chatId} (container still running)`);
+        sessions.delete(chatId);
     }
 
     return toStop.length;
