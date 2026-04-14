@@ -368,6 +368,7 @@ async function sendTiktokToModerator(chatId, bot, draft) {
 
   if (!moderatorId) {
     console.warn('[TIKTOK-MVP] No moderator configured, auto-publishing');
+    await setTiktokDraft(chatId, String(draft.jobId), draft);
     await publishTiktokPost(chatId, bot, draft.jobId);
     return;
   }
@@ -379,7 +380,6 @@ async function sendTiktokToModerator(chatId, bot, draft) {
     `📝 ${draft.caption}`,
     ``,
     `🏷 ${draft.hashtags.join(' ')}`,
-    draft.musicSuggestion ? `\n🎵 Музыка: ${draft.musicSuggestion}` : null,
     ``,
     `Job ID: ${draft.jobId}`
   ].filter(line => line !== null).join('\n');
@@ -387,7 +387,7 @@ async function sendTiktokToModerator(chatId, bot, draft) {
   try {
     // Отправляем видео (если есть)
     if (draft.videoPath) {
-      const videoFullPath = path.join(videoPipeline.VIDEO_TEMP_ROOT, chatId, draft.videoPath);
+      const videoFullPath = draft.videoPath;
       try {
         await cwBot.telegram.sendVideo(moderatorId, { source: videoFullPath }, {
           caption,
@@ -443,6 +443,9 @@ async function handleTiktokModerationAction(chatId, bot, jobId, action) {
       draft.status = 'rejected';
       await setTiktokDraft(chatId, String(jobId), draft);
       await removeTiktokDraft(chatId, String(jobId));
+      if (draft.topicId) {
+        await repository.releaseTopic(chatId, draft.topicId).catch(() => {});
+      }
       return { ok: true, message: '❌ Отклонено' };
 
     case 'regen_text':
