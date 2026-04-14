@@ -248,6 +248,18 @@ function normalizeImportMode(value) {
   return 'topics';
 }
 
+const VALID_CHANNELS = new Set([
+  'telegram', 'vk', 'vk_video', 'ok',
+  'instagram', 'instagram_reels', 'facebook',
+  'pinterest', 'youtube', 'wordpress', 'tiktok'
+]);
+
+function normalizeChannel(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return null;
+  return VALID_CHANNELS.has(normalized) ? normalized : null;
+}
+
 async function loadTopicsFromTable(chatId, options = {}) {
   await repository.ensureSchema(chatId);
   return repository.listTopics(chatId, options);
@@ -2158,6 +2170,9 @@ module.exports = {
   generateCorrelationId,
   validatePostForPublish: validators.validatePostForPublish,
   autoCorrectPost: validators.autoCorrectPost,
+
+  // Вспомогательные функции
+  normalizeChannel,
   
   // Лимиты (TASK-012)
   checkQuota: limits.checkQuota,
