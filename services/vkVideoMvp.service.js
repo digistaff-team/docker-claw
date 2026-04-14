@@ -13,6 +13,7 @@ const aiRouterService = require('./ai_router_service');
 const manageStore = require('../manage/store');
 const storageService = require('./storage.service');
 const videoPipeline = require('./videoPipeline.service');
+const repository = require('./content/repository');
 
 let cwBot = null;
 
@@ -590,10 +591,26 @@ async function publishScheduledPosts() {
 
       if (settings.stats.posts_today >= settings.dailyLimit) continue;
 
-      const bot = botsGetter?.()?.get(chatId);
-      if (!bot?.bot) continue;
+      // Резервируем тему из content_topics
+      const topic = await repository.reserveNextTopic(chatId, 'vk_video');
+      if (!topic) continue;
 
-      await handleVkVideoGenerateJob(chatId, {}, bot.bot, `vkvideo_schedule_${Date.now()}`);
+      const bot = botsGetter?.()?.get(chatId);
+      if (!bot?.bot) {
+        await repository.releaseTopic(chatId, topic.id);
+        continue;
+      }
+
+      let jobResult;
+      try {
+        jobResult = await handleVkVideoGenerateJob(chatId, { topic }, bot.bot, `vkvideo_schedule_${Date.now()}`);
+      } catch (jobErr) {
+        await repository.releaseTopic(chatId, topic.id);
+        continue;
+      }
+      if (!jobResult?.success) {
+        await repository.releaseTopic(chatId, topic.id);
+      }
     } catch (e) {
       console.error(`[VK-VIDEO-MVP] Failed to publish for ${chatId}: ${e.message}`);
     }
