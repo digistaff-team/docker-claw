@@ -15,6 +15,7 @@ const storageService = require('./storage.service');
 const bufferService = require('./buffer.service');
 const igRepo = require('./content/instagram.repository');
 const inputImageContext = require('./inputImageContext.service');
+const videoPipeline = require('./videoPipeline.service');
 
 const contentModules = require('./content/index');
 const {
@@ -566,6 +567,85 @@ async function handleInstagramModerationAction(chatId, bot, jobId, action) {
 }
 
 // ============================================
+// Генерация Instagram Reels (видео-пайплайн)
+// ============================================
+
+async function handleIgVideoGenerateJob(chatId, queueJob, bot, correlationId) {
+  console.log(`[IG-REELS-GENERATE] ${chatId} starting reels generation, corr=${correlationId}`);
+
+  // Получаем видео из общего пайплайна или генерируем новое
+  let videoPath = '';
+  let videoId = null;
+
+  try {
+    // Сначала пробуем забрать готовое видео из общего пула
+    const claimResult = await videoPipeline.claimVideo(chatId, 'instagram');
+
+    if (claimResult.success) {
+      videoPath = claimResult.videoPath;
+      videoId = claimResult.videoId;
+      console.log(`[IG-REELS-GENERATE] ${chatId} using shared video: videoId=${videoId}, path=${videoPath}`);
+    } else {
+      // Нет доступного видео — генерируем новое
+      console.log(`[IG-REELS-GENERATE] ${chatId} no shared video available, generating new one`);
+
+      const genResult = await videoPipeline.generateVideo(chatId, 'instagram', correlationId);
+      if (!genResult.success) {
+        return { success: false, error: `Video generation failed: ${genResult.error}`, retry: true };
+      }
+
+      videoPath = genResult.videoPath;
+      videoId = genResult.videoId;
+      console.log(`[IG-REELS-GENERATE] ${chatId} new video generated: videoId=${videoId}, path=${videoPath}`);
+    }
+  } catch (e) {
+    console.error(`[IG-REELS-GENERATE] ${chatId} video pipeline failed: ${e.message}`);
+    return { success: false, error: `Video pipeline failed: ${e.message}`, retry: true };
+  }
+
+  // Уведомляем пользователя
+  if (bot?.telegram) {
+    const topic = queueJob?.topic;
+    const topicText = topic?.topic ? `\nТема: ${topic.topic}` : '';
+    await bot.telegram.sendMessage(
+      chatId,
+      `🎬 Instagram Reels видео готово к публикации!${topicText}\n🎥 Видео: ${videoPath}`
+    ).catch(() => {});
+  }
+
+  return { success: true, data: { videoId, videoPath } };
+}
+
+// ============================================
+// Планировщик Instagram Reels
+// ============================================
+
+async function tickIgReelsSchedule(chatId) {
+  // Резервируем тему для instagram_reels
+  const topic = await repository.reserveNextTopic(chatId, 'instagram_reels');
+  if (!topic) return;
+
+  // Получаем бота из botsGetter
+  const bot = botsGetter?.()?.get(chatId);
+  if (!bot?.bot) {
+    await repository.releaseTopic(chatId, topic.id);
+    return;
+  }
+
+  // Запускаем генерацию видео
+  let jobResult;
+  try {
+    jobResult = await handleIgVideoGenerateJob(chatId, { topic }, bot.bot, `ig_reels_schedule_${Date.now()}`);
+  } catch (e) {
+    await repository.releaseTopic(chatId, topic.id);
+    return;
+  }
+  if (!jobResult?.success) {
+    await repository.releaseTopic(chatId, topic.id);
+  }
+}
+
+// ============================================
 // Планировщик
 // ============================================
 
@@ -750,6 +830,11 @@ function startScheduler(getBots) {
         } catch (e) {
           console.error(`[IG-MVP-SCHEDULER] Error for ${chatId}:`, e.message);
         }
+        try {
+          await tickIgReelsSchedule(chatId);
+        } catch (e) {
+          console.error(`[IG-MVP-SCHEDULER-REELS] Error for ${chatId}:`, e.message);
+        }
       }
     } catch (e) {
       console.error('[IG-MVP-SCHEDULER]', e.message);
@@ -776,10 +861,12 @@ module.exports = {
   stopScheduler,
   runNow,
   handleIgGenerateJob,
+  handleIgVideoGenerateJob,
   publishIgPost,
   sendIgToModerator,
   handleInstagramModerationAction,
   tickIgSchedule,
+  tickIgReelsSchedule,
   getIgSettings,
   listJobs: (chatId, opts) => igRepo.listJobs(chatId, opts),
   getJobById: (chatId, jobId) => igRepo.getJobById(chatId, jobId),
