@@ -504,11 +504,15 @@ async function publishScheduledPosts() {
         continue;
       }
 
+      let jobResult;
       try {
-        await handleTiktokGenerateJob(chatId, { topic }, bot.bot, `tiktok_schedule_${Date.now()}`);
+        jobResult = await handleTiktokGenerateJob(chatId, { topic }, bot.bot, `tiktok_schedule_${Date.now()}`);
       } catch (jobErr) {
         await repository.releaseTopic(chatId, topic.id);
-        throw jobErr;
+        continue;
+      }
+      if (!jobResult?.success) {
+        await repository.releaseTopic(chatId, topic.id);
       }
     } catch (e) {
       console.error(`[TIKTOK-MVP] Failed to publish for ${chatId}: ${e.message}`);
