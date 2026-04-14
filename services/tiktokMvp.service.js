@@ -11,6 +11,7 @@ const aiRouterService = require('./ai_router_service');
 const manageStore = require('../manage/store');
 const sessionService = require('./session.service');
 const storageService = require('./storage.service');
+const FormData = require('form-data');
 const videoPipeline = require('./videoPipeline.service');
 const repository = require('./content/repository');
 
@@ -212,6 +213,9 @@ async function handleTiktokGenerateJob(chatId, queueJob, bot, correlationId) {
 
     if (claimResult.success) {
       videoPath = claimResult.videoPath;
+      if (videoPath && !path.isAbsolute(videoPath)) {
+        videoPath = path.join(videoPipeline.VIDEO_TEMP_ROOT, String(chatId), videoPath);
+      }
       videoId = claimResult.videoId;
       console.log(`[TIKTOK-MVP] Using shared video: videoId=${videoId}, path=${videoPath}`);
     } else {
@@ -224,6 +228,9 @@ async function handleTiktokGenerateJob(chatId, queueJob, bot, correlationId) {
       }
 
       videoPath = genResult.videoPath;
+      if (videoPath && !path.isAbsolute(videoPath)) {
+        videoPath = path.join(videoPipeline.VIDEO_TEMP_ROOT, String(chatId), videoPath);
+      }
       videoId = genResult.videoId;
       console.log(`[TIKTOK-MVP] New video generated: videoId=${videoId}, path=${videoPath}`);
     }
@@ -255,6 +262,7 @@ async function handleTiktokGenerateJob(chatId, queueJob, bot, correlationId) {
     caption: tiktokContent.caption,
     hashtags: tiktokContent.hashtags,
     title: topic.topic || tiktokContent.caption,  // для upload-post.com
+    topic: topic,                                  // для regen_text в модерации
     topicId: topic.id || null,                     // для updateTopicStatus после публикации
     correlationId: queueJob?.correlationId || `tiktok_${jobId}`,
     rejectedCount: 0,
@@ -316,7 +324,6 @@ async function publishViaUploadPost(videoPath, title) {
     throw new Error('UPLOAD_POST_JWT или UPLOAD_POST_USER не заданы в .env.local');
   }
 
-  const FormData = require('form-data');
   const videoBuffer = await fs.readFile(videoPath);
   const videoFilename = path.basename(videoPath);
 
@@ -430,7 +437,6 @@ async function handleTiktokModerationAction(chatId, bot, jobId, action) {
       draft.status = 'approved';
       await setTiktokDraft(chatId, String(jobId), draft);
       await publishTiktokPost(chatId, bot, jobId);
-      await removeTiktokDraft(chatId, String(jobId));
       return { ok: true, message: '✅ Одобрено и опубликовано' };
 
     case 'reject':
@@ -441,6 +447,12 @@ async function handleTiktokModerationAction(chatId, bot, jobId, action) {
 
     case 'regen_text':
       try {
+        // Проверяем лимит ДО генерации
+        if ((draft.rejectedCount || 0) >= 2) {
+          await removeTiktokDraft(chatId, String(jobId));
+          return { ok: false, message: 'Превышен лимит перегенераций' };
+        }
+
         const [dna, tov] = await Promise.all([
           loadBrandDna(chatId),
           loadBrandTov(chatId)
@@ -450,11 +462,6 @@ async function handleTiktokModerationAction(chatId, bot, jobId, action) {
         draft.caption = newContent.caption;
         draft.hashtags = newContent.hashtags;
         draft.rejectedCount = (draft.rejectedCount || 0) + 1;
-
-        if (draft.rejectedCount >= 3) {
-          await removeTiktokDraft(chatId, String(jobId));
-          return { ok: false, message: 'Превышен лимит перегенераций' };
-        }
 
         await setTiktokDraft(chatId, String(jobId), draft);
         return { ok: true, message: '🔄 Текст перегенерирован' };
