@@ -248,7 +248,7 @@ async function handleIgGenerateJob(chatId, queueJob, bot, correlationId) {
 
   // Выбор темы
   console.log(`[IG-GENERATE] ${chatId} selecting topic...`);
-  const topicRow = await repository.reserveNextTopic(chatId);
+  const topicRow = await repository.reserveNextTopic(chatId, 'instagram');
   if (!topicRow) {
     console.log(`[IG-GENERATE] ${chatId} no pending topics available`);
     return { success: false, error: 'Нет доступных тем', retry: false };

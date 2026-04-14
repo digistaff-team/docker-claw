@@ -270,7 +270,7 @@ async function handleVkGenerateJob(chatId, queueJob, bot, correlationId) {
 
   // Выбор темы
   console.log(`[VK-GENERATE] ${chatId} selecting topic...`);
-  const topicRow = await repository.reserveNextTopic(chatId);
+  const topicRow = await repository.reserveNextTopic(chatId, 'vk');
   if (!topicRow) {
     console.log(`[VK-GENERATE] ${chatId} no pending topics available`);
     return { success: false, error: 'Нет доступных тем', retry: false };

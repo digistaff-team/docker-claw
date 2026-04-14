@@ -414,7 +414,7 @@ async function scheduleBlogPostsForChat(chatId) {
 
   // Выбираем следующую тему (резервируем её)
   const contentRepo = require('./repository');
-  const topic = await contentRepo.reserveNextTopic(chatId);
+  const topic = await contentRepo.reserveNextTopic(chatId, 'wordpress');
 
   if (!topic) {
     return; // Нет доступных тем

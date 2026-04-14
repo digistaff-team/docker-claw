@@ -306,7 +306,7 @@ async function handleOkGenerateJob(chatId, queueJob, bot, correlationId) {
 
   // Выбор темы
   console.log(`[OK-GENERATE] ${chatId} selecting topic...`);
-  const topicRow = await repository.reserveNextTopic(chatId);
+  const topicRow = await repository.reserveNextTopic(chatId, 'ok');
   if (!topicRow) {
     console.log(`[OK-GENERATE] ${chatId} no pending topics available`);
     return { success: false, error: 'Нет доступных тем', retry: false };

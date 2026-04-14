@@ -290,7 +290,7 @@ async function handleYoutubeGenerateJob(chatId, queueJob, bot, correlationId) {
   }
 
   // Выбор темы
-  const topicRow = await repository.reserveNextTopic(chatId);
+  const topicRow = await repository.reserveNextTopic(chatId, 'youtube');
   if (!topicRow) {
     return { success: false, error: 'Нет доступных тем', retry: false };
   }

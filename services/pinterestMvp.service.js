@@ -291,7 +291,7 @@ async function handlePinterestGenerateJob(chatId, queueJob, bot, correlationId) 
   }
 
   // Выбор темы
-  const topicRow = await repository.reserveNextTopic(chatId);
+  const topicRow = await repository.reserveNextTopic(chatId, 'pinterest');
   if (!topicRow) {
     return { success: false, error: 'Нет доступных тем', retry: false };
   }

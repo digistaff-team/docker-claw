@@ -693,7 +693,7 @@ async function saveImageToUserWorkspace(chatId, buffer, jobId) {
 
 async function pickNextTopic(chatId) {
   await repository.ensureSchema(chatId);
-  const topic = await repository.reserveNextTopic(chatId);
+  const topic = await repository.reserveNextTopic(chatId, 'telegram');
   if (!topic) return null;
   return {
     sheetRow: topic.id,
