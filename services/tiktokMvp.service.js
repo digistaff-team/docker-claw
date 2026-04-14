@@ -12,6 +12,7 @@ const manageStore = require('../manage/store');
 const sessionService = require('./session.service');
 const storageService = require('./storage.service');
 const videoPipeline = require('./videoPipeline.service');
+const repository = require('./content/repository');
 
 let cwBot = null; // Центральный бот премодерации
 
@@ -492,11 +493,23 @@ async function publishScheduledPosts() {
         // TODO: реализовать случайную публикацию
       }
 
+      // Резервируем тему из content_topics
+      const topic = await repository.reserveNextTopic(chatId, 'tiktok');
+      if (!topic) continue;
+
       // Запускаем генерацию
       const bot = botsGetter?.()?.get(chatId);
-      if (!bot?.bot) continue;
+      if (!bot?.bot) {
+        await repository.releaseTopic(chatId, topic.id);
+        continue;
+      }
 
-      await handleTiktokGenerateJob(chatId, {}, bot.bot, `tiktok_schedule_${Date.now()}`);
+      try {
+        await handleTiktokGenerateJob(chatId, { topic }, bot.bot, `tiktok_schedule_${Date.now()}`);
+      } catch (jobErr) {
+        await repository.releaseTopic(chatId, topic.id);
+        throw jobErr;
+      }
     } catch (e) {
       console.error(`[TIKTOK-MVP] Failed to publish for ${chatId}: ${e.message}`);
     }
