@@ -232,9 +232,6 @@ async function handleFacebookGenerateJob(chatId, queueJob, bot, correlationId) {
 
   console.log(`[FB] Created job ${jobId} for topic: ${topic.topic}`);
 
-  // Обновляем тему как использованную
-  await repository.markTopicUsed(chatId, topic.id);
-
   // Генерация текста
   try {
     const personaText = await loadUserPersona(chatId);
