@@ -892,7 +892,7 @@ async function countVideoGeneratedToday(chatId, dateStr, tz = 'Europe/Moscow') {
   });
 }
 
-async function reserveNextTopic(chatId) {
+async function reserveNextTopic(chatId, channel = null) {
   return withClient(chatId, async (client) => {
     await client.query('BEGIN');
     try {
@@ -900,9 +900,11 @@ async function reserveNextTopic(chatId) {
         `SELECT id, topic, focus, secondary, lsi, status, created_at, used_at
          FROM content_topics
          WHERE status = 'pending'
+           AND ($1::text IS NULL OR channel = $1 OR channel IS NULL)
          ORDER BY created_at ASC, id ASC
          FOR UPDATE SKIP LOCKED
-         LIMIT 1`
+         LIMIT 1`,
+        [channel]
       );
       const row = result.rows[0];
       if (!row) {
