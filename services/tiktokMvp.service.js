@@ -99,69 +99,63 @@ async function loadUserPersona(chatId) {
   return persona.trim().slice(0, 5000);
 }
 
+async function loadBrandDna(chatId) {
+  const storageDir = storageService.getDataDir(String(chatId));
+  try {
+    return await fs.readFile(path.join(storageDir, 'input', 'brand', 'dna.md'), 'utf-8');
+  } catch {}
+  try {
+    return await fs.readFile(path.join(storageDir, 'IDENTITY.md'), 'utf-8');
+  } catch {}
+  return '';
+}
+
+async function loadBrandTov(chatId) {
+  const storageDir = storageService.getDataDir(String(chatId));
+  try {
+    return await fs.readFile(path.join(storageDir, 'input', 'brand', 'tov.md'), 'utf-8');
+  } catch {}
+  try {
+    return await fs.readFile(path.join(storageDir, 'SOUL.md'), 'utf-8');
+  } catch {}
+  return '';
+}
+
 // ============================================
 // Генерация TikTok контента (текст + хештеги)
 // ============================================
 
-async function generateTiktokContent(chatId, topic, materialsText, personaText) {
-  const systemPrompt = `Ты — профессиональный TikTok копирайтер. Твоя задача — создать привлекательное описание для TikTok видео.
+async function generateTiktokContent(chatId, topic, dna, tov) {
+  const { TIKTOK_CAPTION_SYSTEM } = require('../manage/prompts');
 
-Формат ответа (JSON):
-{
-  "caption": "Текст описания для TikTok (до 150 символов)",
-  "hashtags": ["#хештег1", "#хештег2", ...],
-  "music_suggestion": "Рекомендация по музыке (опционально)"
-}
+  const contextParts = [];
+  if (dna) contextParts.push(`Бренд-ДНК:\n${dna.slice(0, 2000)}`);
+  if (tov) contextParts.push(`Tone of Voice:\n${tov.slice(0, 1000)}`);
 
-Правила:
-- Описание должно быть кратким и привлекательным
-- 3-5 релевантных хештегов
-- Без текста на видео
-- На языке целевой аудитории`;
-
-  const userPrompt = `Тема: ${topic.topic}
-Фокус: ${topic.focus || ''}
-Вторичные ключи: ${topic.secondary || ''}
-
-Материалы:
-${materialsText.slice(0, 3000)}
-
-Персона:
-${personaText.slice(0, 2000)}
-
-Создай описание для TikTok видео.`;
+  const userMessage = [
+    ...contextParts,
+    `Тема: ${topic.topic || topic}`,
+    topic.focus ? `Фокус: ${topic.focus}` : null
+  ].filter(Boolean).join('\n\n');
 
   const response = await aiRouterService.chatCompletion(chatId, [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt }
-  ], { temperature: 0.8, max_tokens: 300 });
+    { role: 'system', content: TIKTOK_CAPTION_SYSTEM },
+    { role: 'user', content: userMessage }
+  ], { temperature: 1, max_tokens: 512 });
 
-  if (!response?.content) {
-    throw new Error('AI response is empty');
-  }
+  if (!response?.content) throw new Error('AI response is empty');
 
-  // Парсим JSON
   let parsed;
   try {
     const jsonMatch = response.content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      parsed = JSON.parse(jsonMatch[0]);
-    } else {
-      throw new Error('No JSON found');
-    }
-  } catch (e) {
-    // Fallback: используем текст как есть
-    parsed = {
-      caption: response.content.slice(0, 150),
-      hashtags: ['#clientzavod', '#tiktok'],
-      music_suggestion: 'trending'
-    };
+    parsed = JSON.parse(jsonMatch[0]);
+  } catch {
+    parsed = { caption: response.content.slice(0, 150), hashtags: [] };
   }
 
   return {
     caption: String(parsed.caption || '').slice(0, 150),
-    hashtags: Array.isArray(parsed.hashtags) ? parsed.hashtags.slice(0, 10) : [],
-    musicSuggestion: parsed.music_suggestion || 'trending'
+    hashtags: Array.isArray(parsed.hashtags) ? parsed.hashtags.slice(0, 5) : []
   };
 }
 
@@ -238,24 +232,18 @@ async function handleTiktokGenerateJob(chatId, queueJob, bot, correlationId) {
     return { success: false, error: `Video pipeline failed: ${e.message}`, retry: true };
   }
 
-  // Генерация контента (caption + hashtags)
+  // Генерация контента (caption + hashtags) с ДНК/TOV
+  const topic = queueJob?.topic || { topic: 'Product showcase', focus: '' };
   let tiktokContent;
   try {
-    const [materialsText, personaText] = await Promise.all([
-      loadMaterialsText(chatId, 10),
-      loadUserPersona(chatId)
+    const [dna, tov] = await Promise.all([
+      loadBrandDna(chatId),
+      loadBrandTov(chatId)
     ]);
-
-    // Используем тему из queueJob или дефолтную
-    const topic = queueJob?.topic || { topic: 'Product showcase', focus: '', secondary: '' };
-    tiktokContent = await generateTiktokContent(chatId, topic, materialsText, personaText);
+    tiktokContent = await generateTiktokContent(chatId, topic, dna, tov);
   } catch (e) {
     console.error(`[TIKTOK-MVP] Content generation failed: ${e.message}`);
-    tiktokContent = {
-      caption: 'Check this out!',
-      hashtags: ['#clientzavod', '#viral'],
-      musicSuggestion: 'trending'
-    };
+    tiktokContent = { caption: topic.topic || 'Check this out!', hashtags: [] };
   }
 
   // Создаём черновик
@@ -266,7 +254,8 @@ async function handleTiktokGenerateJob(chatId, queueJob, bot, correlationId) {
     videoPath,
     caption: tiktokContent.caption,
     hashtags: tiktokContent.hashtags,
-    musicSuggestion: tiktokContent.musicSuggestion,
+    title: topic.topic || tiktokContent.caption,  // для upload-post.com
+    topicId: topic.id || null,                     // для updateTopicStatus после публикации
     correlationId: queueJob?.correlationId || `tiktok_${jobId}`,
     rejectedCount: 0,
     status: 'ready'
@@ -294,17 +283,19 @@ async function publishTiktokPost(chatId, bot, jobId) {
     throw new Error(`TikTok draft ${jobId} not found`);
   }
 
-  // TODO: Реальная публикация через TikTok API
-  // Пока просто логируем
-  console.log(`[TIKTOK-MVP] Publishing post ${jobId}`);
-  console.log(`  Video: ${draft.videoPath}`);
-  console.log(`  Caption: ${draft.caption}`);
-  console.log(`  Hashtags: ${draft.hashtags.join(' ')}`);
+  // Публикация через upload-post.com
+  await publishViaUploadPost(draft.videoPath, draft.title || draft.caption);
+
+  // Завершаем жизненный цикл топика
+  if (draft.topicId) {
+    await repository.updateTopicStatus(chatId, draft.topicId, 'completed').catch(() => {});
+  }
 
   // Обновляем статус
   draft.status = 'published';
   draft.publishedAt = new Date().toISOString();
   await setTiktokDraft(chatId, String(jobId), draft);
+  await removeTiktokDraft(chatId, String(jobId));
 
   // Уведомляем пользователя
   if (bot?.telegram) {
@@ -312,10 +303,47 @@ async function publishTiktokPost(chatId, bot, jobId) {
       chatId,
       `✅ TikTok видео опубликовано!\n\n` +
       `📝 ${draft.caption}\n` +
-      `${draft.hashtags.join(' ')}\n\n` +
-      `🎬 Видео: ${draft.videoPath}`
+      `${draft.hashtags.join(' ')}`
     ).catch(() => {});
   }
+}
+
+async function publishViaUploadPost(videoPath, title) {
+  const jwt = process.env.UPLOAD_POST_JWT;
+  const user = process.env.UPLOAD_POST_USER;
+
+  if (!jwt || !user) {
+    throw new Error('UPLOAD_POST_JWT или UPLOAD_POST_USER не заданы в .env.local');
+  }
+
+  const FormData = require('form-data');
+  const videoBuffer = await fs.readFile(videoPath);
+  const videoFilename = path.basename(videoPath);
+
+  const form = new FormData();
+  form.append('title', title);
+  form.append('user', user);
+  form.append('platform[]', 'tiktok');
+  form.append('video', videoBuffer, { filename: videoFilename, contentType: 'video/mp4' });
+
+  const resp = await fetch('https://api.upload-post.com/api/upload', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${jwt}`,
+      ...form.getHeaders()
+    },
+    body: form,
+    timeout: 120000
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`upload-post.com error: ${resp.status} ${errText.slice(0, 300)}`);
+  }
+
+  const data = await resp.json().catch(() => ({}));
+  console.log(`[TIKTOK-MVP][UPLOAD-POST] Published:`, JSON.stringify(data));
+  return data;
 }
 
 // ============================================
@@ -344,11 +372,10 @@ async function sendTiktokToModerator(chatId, bot, draft) {
     `📝 ${draft.caption}`,
     ``,
     `🏷 ${draft.hashtags.join(' ')}`,
-    ``,
-    `🎵 Музыка: ${draft.musicSuggestion}`,
+    draft.musicSuggestion ? `\n🎵 Музыка: ${draft.musicSuggestion}` : null,
     ``,
     `Job ID: ${draft.jobId}`
-  ].join('\n');
+  ].filter(line => line !== null).join('\n');
 
   try {
     // Отправляем видео (если есть)
@@ -414,12 +441,12 @@ async function handleTiktokModerationAction(chatId, bot, jobId, action) {
 
     case 'regen_text':
       try {
-        const [materialsText, personaText] = await Promise.all([
-          loadMaterialsText(chatId, 10),
-          loadUserPersona(chatId)
+        const [dna, tov] = await Promise.all([
+          loadBrandDna(chatId),
+          loadBrandTov(chatId)
         ]);
         const topic = draft.topic || { topic: 'Product showcase', focus: '' };
-        const newContent = await generateTiktokContent(chatId, topic, materialsText, personaText);
+        const newContent = await generateTiktokContent(chatId, topic, dna, tov);
         draft.caption = newContent.caption;
         draft.hashtags = newContent.hashtags;
         draft.rejectedCount = (draft.rejectedCount || 0) + 1;
