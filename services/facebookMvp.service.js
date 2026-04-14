@@ -210,7 +210,7 @@ async function handleFacebookGenerateJob(chatId, queueJob, bot, correlationId) {
   await repository.ensureSchema(chatId);
   await fbRepo.ensureSchema(chatId);
 
-  const topic = await repository.pickTopic(chatId);
+  const topic = await repository.reserveNextTopic(chatId, 'facebook');
   if (!topic) {
     console.log(`[FB] No topic available for ${chatId}`);
     await fbRepo.addPublishLog(chatId, {
