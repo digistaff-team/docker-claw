@@ -566,6 +566,23 @@ const BLOG_PROMPT_SEO_SLUG = `Ты — веб-разработчик.
 
 Ответь ТОЛЬКО slug'ом (одно слово с дефисами).`;
 
+const TIKTOK_CAPTION_SYSTEM = `Ты — эксперт по созданию описаний для TikTok видео.
+
+На основе темы поста, бренд-ДНК и тона голоса создай описание для короткого видео.
+
+Правила:
+Используй точные и конкретные прилагательные.
+Избегай абстракций, отрицаний и рассуждений.
+Не добавляй лишних объяснений — только значимые слова и эмоции.
+Описание должно быть кратким (до 150 символов) и привлекательным.
+3-5 релевантных хэштегов на языке аудитории.
+
+Формат ответа (JSON):
+{
+  "caption": "Текст описания (до 150 символов)",
+  "hashtags": ["#хештег1", "#хештег2"]
+}`;
+
 module.exports = {
     getSystemInstruction,
     // Blog generator prompts
@@ -574,5 +591,7 @@ module.exports = {
     BLOG_PROMPT_WRITE,
     BLOG_PROMPT_SEO_TITLE,
     BLOG_PROMPT_SEO_DESC,
-    BLOG_PROMPT_SEO_SLUG
+    BLOG_PROMPT_SEO_SLUG,
+    // TikTok prompts
+    TIKTOK_CAPTION_SYSTEM
 };
