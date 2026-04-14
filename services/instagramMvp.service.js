@@ -510,7 +510,11 @@ async function handleInstagramModerationAction(chatId, bot, jobId, action) {
         caption: igText.caption,
         imagePrompt: igText.imagePrompt
       });
-      await sendIgToModerator(chatId, bot, draft);
+      if (draft.isVideo) {
+        await sendIgVideoToModerator(chatId, bot, draft);
+      } else {
+        await sendIgToModerator(chatId, bot, draft);
+      }
       return { ok: true, message: 'Текст Instagram-поста перегенерирован.' };
     } catch (e) {
       return { ok: false, message: `Ошибка перегенерации текста: ${e.message}` };
@@ -547,21 +551,37 @@ async function handleInstagramModerationAction(chatId, bot, jobId, action) {
         loadUserPersona(chatId)
       ]);
       const igText = await generateIgPostText(chatId, draft.topic, materialsText, personaText);
-      const imageBuffer = await generateIgImage(chatId, draft.topic, igText.imagePrompt);
-      const imagePath = await saveImageToContainer(chatId, imageBuffer, `${jobId}_reject_${Date.now()}`);
 
-      draft.caption = igText.caption;
-      draft.imagePrompt = igText.imagePrompt;
-      draft.imagePath = imagePath;
+      if (draft.isVideo) {
+        // For Reels drafts: only regen text, send video-style moderation message
+        draft.caption = igText.caption;
+        draft.imagePrompt = igText.imagePrompt;
 
-      await igRepo.updateJob(chatId, jobId, {
-        caption: igText.caption,
-        imagePrompt: igText.imagePrompt,
-        imagePath,
-        rejectedCount: draft.rejectedCount
-      });
+        await igRepo.updateJob(chatId, jobId, {
+          caption: igText.caption,
+          imagePrompt: igText.imagePrompt,
+          rejectedCount: draft.rejectedCount
+        });
 
-      await sendIgToModerator(chatId, bot, draft);
+        await sendIgVideoToModerator(chatId, bot, draft);
+      } else {
+        // For photo posts: regen both image and text
+        const imageBuffer = await generateIgImage(chatId, draft.topic, igText.imagePrompt);
+        const imagePath = await saveImageToContainer(chatId, imageBuffer, `${jobId}_reject_${Date.now()}`);
+
+        draft.caption = igText.caption;
+        draft.imagePrompt = igText.imagePrompt;
+        draft.imagePath = imagePath;
+
+        await igRepo.updateJob(chatId, jobId, {
+          caption: igText.caption,
+          imagePrompt: igText.imagePrompt,
+          imagePath,
+          rejectedCount: draft.rejectedCount
+        });
+
+        await sendIgToModerator(chatId, bot, draft);
+      }
       return { ok: true, message: `Instagram-пост перегенерирован (${draft.rejectedCount}/${MAX_REJECT_ATTEMPTS}).` };
     } catch (e) {
       return { ok: false, message: `Ошибка перегенерации: ${e.message}` };
