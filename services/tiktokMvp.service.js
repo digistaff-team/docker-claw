@@ -197,8 +197,7 @@ async function handleTiktokGenerateJob(chatId, queueJob, bot, correlationId) {
   const settings = getTiktokSettings(chatId);
 
   // Дневной лимит
-  // TODO: реализовать подсчёт опубликованных сегодня
-  const publishedToday = 0;
+  const publishedToday = settings.stats?.posts_today || 0;
   if (publishedToday >= DAILY_TIKTOK_LIMIT) {
     return { success: false, error: `Дневной лимит TikTok исчерпан (${publishedToday}/${DAILY_TIKTOK_LIMIT})`, retry: false };
   }
@@ -274,6 +273,7 @@ async function handleTiktokGenerateJob(chatId, queueJob, bot, correlationId) {
     await setTiktokDraft(chatId, String(jobId), draft);
     await publishTiktokPost(chatId, bot, jobId);
   } else {
+    await setTiktokDraft(chatId, String(jobId), draft);
     await sendTiktokToModerator(chatId, bot, draft);
   }
 
