@@ -928,6 +928,11 @@ async function reserveNextTopic(chatId, channel = null) {
   });
 }
 
+async function releaseTopic(chatId, topicId) {
+  // Release a reserved topic back to 'pending' status when an error occurs
+  return updateTopicStatus(chatId, topicId, 'pending');
+}
+
 async function listTopics(chatId, options = {}) {
   const status = options.status ? String(options.status).trim().toLowerCase() : null;
   const limit = Math.min(Math.max(parseInt(options.limit, 10) || 100, 1), 500);
@@ -1416,6 +1421,7 @@ module.exports = {
   updateJobVideoPath,
   countVideoGeneratedToday,
   reserveNextTopic,
+  releaseTopic,
   listTopics,
   createTopic,
   getTopicById,
