@@ -480,8 +480,13 @@ async function handleInstagramModerationAction(chatId, bot, jobId, action) {
 
   if (action === 'approve') {
     try {
-      await publishIgPost(chatId, bot, jobId, correlationId);
-      return { ok: true, message: `📷 Instagram пост #${jobId} опубликован.` };
+      if (draft.isVideo) {
+        await publishIgVideoPost(chatId, bot, jobId, correlationId);
+        return { ok: true, message: `🎬 Instagram Reels #${jobId} опубликован.` };
+      } else {
+        await publishIgPost(chatId, bot, jobId, correlationId);
+        return { ok: true, message: `📷 Instagram пост #${jobId} опубликован.` };
+      }
     } catch (e) {
       await igRepo.addPublishLog(chatId, {
         jobId, status: 'failed',
@@ -573,6 +578,11 @@ async function handleInstagramModerationAction(chatId, bot, jobId, action) {
 async function handleIgVideoGenerateJob(chatId, queueJob, bot, correlationId) {
   console.log(`[IG-REELS-GENERATE] ${chatId} starting reels generation, corr=${correlationId}`);
 
+  await repository.ensureSchema(chatId);
+  await igRepo.ensureSchema(chatId);
+
+  const settings = getIgSettings(chatId);
+
   // Получаем видео из общего пайплайна или генерируем новое
   let videoPath = '';
   let videoId = null;
@@ -603,17 +613,196 @@ async function handleIgVideoGenerateJob(chatId, queueJob, bot, correlationId) {
     return { success: false, error: `Video pipeline failed: ${e.message}`, retry: true };
   }
 
-  // Уведомляем пользователя
-  if (bot?.telegram) {
-    const topic = queueJob?.topic;
-    const topicText = topic?.topic ? `\nТема: ${topic.topic}` : '';
-    await bot.telegram.sendMessage(
-      chatId,
-      `🎬 Instagram Reels видео готово к публикации!${topicText}\n🎥 Видео: ${videoPath}`
-    ).catch(() => {});
+  // Используем тему из queueJob
+  const topic = queueJob?.topic || { topic: 'Product showcase', focus: '', secondary: '', lsi: '' };
+
+  // Генерация caption + imagePrompt через существующую IG логику
+  console.log(`[IG-REELS-GENERATE] ${chatId} generating caption...`);
+  let igText;
+  try {
+    const [materialsText, personaText] = await Promise.all([
+      loadMaterialsText(chatId, 12),
+      loadUserPersona(chatId)
+    ]);
+    igText = await generateIgPostText(chatId, topic, materialsText, personaText);
+    console.log(`[IG-REELS-GENERATE] ${chatId} caption generated (${(igText.caption || '').length} chars)`);
+  } catch (e) {
+    console.error(`[IG-REELS-GENERATE] ${chatId} caption generation failed: ${e.message}`);
+    igText = {
+      caption: `${topic.topic} #reels #video`,
+      imagePrompt: ''
+    };
   }
 
-  return { success: true, data: { videoId, videoPath } };
+  // Запись в БД — храним videoPath в image_path для совместимости с igRepo
+  const jobId = await igRepo.createJob(chatId, {
+    topic: topic.topic,
+    caption: igText.caption,
+    imagePrompt: igText.imagePrompt || '',
+    imagePath: videoPath,
+    status: 'ready',
+    imageAttempts: 0,
+    correlationId
+  });
+
+  const draft = {
+    jobId,
+    videoId,
+    videoPath,
+    topic,
+    caption: igText.caption,
+    imagePrompt: igText.imagePrompt || '',
+    correlationId,
+    rejectedCount: 0,
+    isVideo: true
+  };
+
+  // Маршрутизация: модерация или автопубликация
+  if (!settings.premoderationEnabled) {
+    await setDraft(chatId, String(jobId), draft);
+    await publishIgVideoPost(chatId, bot, jobId, correlationId);
+  } else {
+    await sendIgVideoToModerator(chatId, bot, draft);
+  }
+
+  return { success: true, data: { jobId, videoId, videoPath } };
+}
+
+// ============================================
+// Публикация Instagram Reels (видео)
+// ============================================
+
+async function publishIgVideoPost(chatId, bot, jobId, correlationId) {
+  const corrId = correlationId || generateCorrelationId();
+  const job = await igRepo.getJobById(chatId, jobId);
+  if (!job) throw new Error(`Instagram Reels job ${jobId} not found`);
+
+  const cfg = manageStore.getInstagramConfig(chatId);
+  if (!cfg) throw new Error('Instagram не настроен');
+
+  if (!cfg.buffer_api_key || !cfg.buffer_channel_id) {
+    throw new Error('Buffer API key или channel_id не настроены для Instagram');
+  }
+
+  // videoPath хранится в image_path — это путь к временному файлу видео-пайплайна
+  const videoPath = job.image_path;
+  const videoUrl = videoPath
+    ? `${config.APP_URL}/api/video/temp/${chatId}/${path.basename(videoPath)}`
+    : null;
+
+  const text = String(job.caption || '').slice(0, 2200);
+
+  const bufferResult = await bufferService.createPost(
+    cfg.buffer_api_key,
+    cfg.buffer_channel_id,
+    { text, videoUrl }
+  );
+  console.log(`[IG-REELS-MVP] Published via Buffer, postId=${bufferResult.postId}`);
+
+  // Запись в лог
+  await igRepo.addPublishLog(chatId, {
+    jobId,
+    bufferPostId: bufferResult.postId,
+    method: 'buffer',
+    status: 'published',
+    correlationId: corrId
+  });
+
+  // Обновить статус job
+  await igRepo.updateJob(chatId, jobId, {
+    status: 'published',
+    bufferPostId: bufferResult.postId
+  });
+
+  // Обновить статистику
+  const stats = cfg.stats || {};
+  const today = getNowInTz(SCHEDULE_TZ).date;
+  const postsToday = stats.last_post_date === today ? (stats.posts_today || 0) + 1 : 1;
+  await manageStore.setInstagramConfig(chatId, {
+    stats: {
+      total_posts: (stats.total_posts || 0) + 1,
+      posts_today: postsToday,
+      last_post_date: today
+    }
+  });
+
+  // Удалить черновик
+  await removeDraft(chatId, String(jobId));
+
+  // Уведомление
+  if (bot?.telegram) {
+    const msg = `🎬 Instagram Reels опубликован через Buffer!\n${text.slice(0, 100)}...`;
+    await bot.telegram.sendMessage(chatId, msg).catch(() => {});
+  }
+
+  return { postId: bufferResult.postId };
+}
+
+// ============================================
+// Модерация Instagram Reels
+// ============================================
+
+async function sendIgVideoToModerator(chatId, bot, draft) {
+  const igSettings = getIgSettings(chatId);
+  const globalSettings = manageStore.getContentSettings?.(chatId);
+
+  // Иерархия: модератор канала → глобальный модератор → chatId
+  const moderatorId = igSettings?.moderator_user_id ||
+                      globalSettings?.moderatorUserId ||
+                      chatId;
+
+  const caption = [
+    `🎬 Черновик Instagram Reels #${draft.jobId}`,
+    '',
+    (draft.caption || '').slice(0, 800),
+    '',
+    draft.correlationId ? `📋 ${draft.correlationId}` : ''
+  ].filter(Boolean).join('\n').slice(0, 1024);
+
+  const callbackBase = `ig_mod:${draft.jobId}`;
+  const kb = {
+    inline_keyboard: [
+      [
+        { text: '✅ Одобрить', callback_data: `${callbackBase}:approve` },
+        { text: '❌ Отклонить', callback_data: `${callbackBase}:reject` }
+      ],
+      [
+        { text: '🔁 Текст', callback_data: `${callbackBase}:regen_text` }
+      ]
+    ]
+  };
+
+  // Используем cwBot если он есть и у пользователя нет своего бота
+  const moderatorBot = cwBot && cwBot.token !== bot?.token ? cwBot : bot;
+
+  try {
+    // Пробуем отправить видео из video-temp
+    if (draft.videoPath) {
+      const videoFullPath = path.join(
+        require('./videoPipeline.service').VIDEO_TEMP_ROOT || '',
+        String(chatId),
+        path.basename(draft.videoPath)
+      );
+      try {
+        const sent = await moderatorBot.telegram.sendVideo(
+          moderatorId,
+          { source: videoFullPath },
+          { caption, reply_markup: kb }
+        );
+        await setDraft(chatId, String(draft.jobId), { ...draft, moderationMessageId: sent.message_id });
+        return;
+      } catch (e) {
+        // Видео недоступно — шлём текстовое сообщение
+        console.warn(`[IG-REELS-MOD] Cannot send video file, falling back to text: ${e.message}`);
+      }
+    }
+
+    // Fallback: текстовое сообщение
+    const sent = await moderatorBot.telegram.sendMessage(moderatorId, caption, { reply_markup: kb });
+    await setDraft(chatId, String(draft.jobId), { ...draft, moderationMessageId: sent.message_id });
+  } catch (e) {
+    console.error(`[IG-REELS-MOD] Failed to send to moderator: ${e.message}`);
+  }
 }
 
 // ============================================
@@ -863,7 +1052,9 @@ module.exports = {
   handleIgGenerateJob,
   handleIgVideoGenerateJob,
   publishIgPost,
+  publishIgVideoPost,
   sendIgToModerator,
+  sendIgVideoToModerator,
   handleInstagramModerationAction,
   tickIgSchedule,
   tickIgReelsSchedule,
