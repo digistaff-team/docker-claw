@@ -514,7 +514,8 @@ async function previewContentImport(chatId, data = {}) {
     focus: findHeaderIndex(header, ['фокусный ключ', 'focus', 'focus keyword', 'keyword']),
     secondary: findHeaderIndex(header, ['вторичные ключи', 'secondary', 'secondary keywords']),
     lsi: findHeaderIndex(header, ['lsi-ключи', 'lsi', 'lsi keywords']),
-    status: findHeaderIndex(header, ['статус', 'status'])
+    status: findHeaderIndex(header, ['статус', 'status']),
+    channel: findHeaderIndex(header, ['канал', 'channel'])
   };
   if (idx.topic < 0) idx.topic = 0;
 
@@ -542,6 +543,7 @@ async function previewContentImport(chatId, data = {}) {
       secondary: idx.secondary >= 0 ? String(row[idx.secondary] || '').trim() : '',
       lsi: idx.lsi >= 0 ? String(row[idx.lsi] || '').trim() : '',
       status: idx.status >= 0 ? normalizeStatusValue(row[idx.status], 'pending') : 'pending',
+      channel: idx.channel >= 0 ? normalizeChannel(row[idx.channel]) : null,
       duplicate
     });
   }
@@ -570,7 +572,8 @@ async function importContentFromGoogleSheet(chatId, data = {}) {
         focus: item.focus || null,
         secondary: item.secondary || null,
         lsi: item.lsi || null,
-        status: item.status || 'pending'
+        status: item.status || 'pending',
+        channel: item.channel || null
       });
     }
     imported++;
