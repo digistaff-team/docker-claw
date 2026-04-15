@@ -77,7 +77,8 @@ function getContentSettings(chatId) {
     publishIntervalHours: Number.isFinite(cfg?.publishIntervalHours) ? cfg.publishIntervalHours : 24,
     allowedWeekdays: Array.isArray(cfg?.allowedWeekdays) ? cfg.allowedWeekdays : [1, 2, 3, 4, 5],
     randomPublish: !!cfg?.randomPublish,
-    premoderationEnabled: cfg?.premoderationEnabled !== false
+    premoderationEnabled: cfg?.premoderationEnabled !== false,
+    scheduleEndTime: cfg?.scheduleEndTime || null
   };
 }
 
@@ -1729,7 +1730,7 @@ async function tickScheduleForChat(chatId, bot) {
 
   if (settings.randomPublish) {
     // Рандомный режим: при наступлении каждого слота генерируем случайное
-    // время следующей публикации в диапазоне 85%-100% от интервала.
+    // время публикации в диапазоне 0-15% от интервала (небольшой разброс от начала слота).
     // Слот используется как «окно», внутри которого срабатывает одна публикация.
 
     // Определяем текущий слот (ближайший прошедший)
@@ -1747,19 +1748,20 @@ async function tickScheduleForChat(chatId, bot) {
 
     // Генерируем случайную минуту для этого слота, если ещё не сгенерирована
     // Также пересчитываем если интервал изменился (targetMinute выходит за пределы допустимого диапазона)
+    // Смещение 0-15% от интервала: пост выходит близко к началу слота с небольшим разбросом
+    const maxJitter = Math.round(intervalMinutes * 0.15);
     let needRegenerate = !data[slotKey] || data[slotKey].split('|')[0] !== now.date;
     if (!needRegenerate && data[slotKey]) {
       const existingTarget = parseInt(data[slotKey].split('|')[1], 10);
-      const minAllowed = currentSlot + Math.round(intervalMinutes * 0.85);
-      const maxAllowed = currentSlot + intervalMinutes;
+      const minAllowed = currentSlot;
+      const maxAllowed = currentSlot + maxJitter;
       if (existingTarget < minAllowed || existingTarget > maxAllowed) {
         needRegenerate = true;
       }
     }
     if (needRegenerate) {
-      const minOffset = Math.round(intervalMinutes * 0.85);
-      const randomOffset = minOffset + Math.floor(Math.random() * (intervalMinutes - minOffset + 1));
-      const targetMinute = (currentSlot + randomOffset) % 1440;
+      const randomOffset = Math.floor(Math.random() * (maxJitter + 1));
+      const targetMinute = currentSlot + randomOffset;
       data[slotKey] = `${now.date}|${targetMinute}`;
       const states = manageStore.getAllStates();
       if (!states[chatId]) states[chatId] = data;

@@ -9,8 +9,6 @@ const validators = require('./validators');
 const limits = require('./limits');
 const alerts = require('./alerts');
 const videoService = require('./video.service'); // TASK-015
-const videoPipelineRepo = require('./videoPipeline.repository'); // Video Pipeline
-const facebookRepo = require('./facebook.repository'); // Facebook integration
 const {
   JOB_STATUS,
   POST_STATUS,
@@ -39,9 +37,7 @@ module.exports = {
 
   // Репозиторий данных
   repository,
-  facebookRepo,
-  videoPipelineRepo,
-  
+
   // Очередь
   queueRepo,
   

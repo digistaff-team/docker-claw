@@ -351,43 +351,25 @@
                                     <h3>⚙️ Настройки канала</h3>
 
                                     <div class="scheduler-field-row">
-                                        <label for="instagramAppId">Facebook App ID</label>
-                                        <input type="text" id="instagramAppId" placeholder="Facebook App ID" />
-                                    </div>
-
-                                    <div class="scheduler-field-row">
-                                        <label for="instagramAppSecret">Facebook App Secret</label>
-                                        <input type="password" id="instagramAppSecret" placeholder="Facebook App Secret" autocomplete="off" />
-                                    </div>
-
-                                    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px;">
-                                        <button class="btn btn-primary" onclick="connectInstagram()">🔗 Подключить</button>
-                                        <button class="btn btn-secondary" id="disconnectInstagramBtn" style="display: none;" onclick="disconnectInstagram()">Отключить</button>
-                                    </div>
-
-                                    <div class="scheduler-field-row">
-                                        <label for="instagramPageSelect">Facebook Page</label>
-                                        <div style="display: flex; gap: 8px; align-items: flex-start;">
-                                            <select id="instagramPageSelect" style="flex: 1;" onchange="onInstagramPageSelect()">
-                                                <option value="">— выберите страницу —</option>
-                                            </select>
-                                            <button class="btn btn-secondary" onclick="loadInstagramAccounts()" style="white-space: nowrap; padding: 12px 14px;">🔄</button>
+                                        <label for="instagramBufferApiKey">Buffer API Token</label>
+                                        <div style="display: flex; gap: 6px; align-items: flex-start;">
+                                            <input type="password" id="instagramBufferApiKey" placeholder="Buffer API Token" autocomplete="off" style="flex: 1;" />
+                                            <button class="btn btn-secondary" onclick="fetchInstagramBufferChannels()" style="white-space: nowrap; padding: 12px 14px; margin-top: 0;" title="Загрузить каналы из Buffer">📥</button>
                                         </div>
                                     </div>
 
                                     <div class="scheduler-field-row">
-                                        <label for="instagramAccountId">Instagram Account ID</label>
-                                        <input type="text" id="instagramAccountId" placeholder="Заполнится автоматически" readonly style="background: #f1f3f5;" />
+                                        <label for="instagramBufferChannelSelect">Buffer Channel ID</label>
+                                        <select id="instagramBufferChannelSelect" onchange="onInstagramChannelSelectChange()">
+                                            <option value="">— выберите канал —</option>
+                                        </select>
+                                        <input type="hidden" id="instagramBufferChannelId" />
                                     </div>
 
-                                    <div class="scheduler-field-row">
-                                        <label for="instagramFbPageId">Facebook Page ID</label>
-                                        <input type="text" id="instagramFbPageId" placeholder="Заполнится автоматически" readonly style="background: #f1f3f5;" />
-                                    </div>
-
-                                    <div class="scheduler-field-row">
-                                        <label for="instagramUsername">Instagram Username</label>
-                                        <input type="text" id="instagramUsername" placeholder="" readonly style="background: #f1f3f5;" />
+                                    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px;">
+                                        <button class="btn btn-primary" onclick="connectInstagram()">🔗 Подключить</button>
+                                        <button class="btn btn-secondary" onclick="testInstagramBufferConnection()">🧪 Проверить соединение</button>
+                                        <button class="btn btn-secondary" id="disconnectInstagramBtn" style="display: none;" onclick="disconnectInstagram()">Отключить</button>
                                     </div>
 
                                     <div class="scheduler-field-row">

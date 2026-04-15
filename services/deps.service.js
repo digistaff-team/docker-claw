@@ -515,8 +515,6 @@ function formatDepsForAgent(graph, maxFiles = 50) {
 
 module.exports = {
     isAnalyzable,
-    extractJsImports,
-    extractPythonImports,
     analyzeFile,
     buildDepsGraph,
     getAdjacentFiles,

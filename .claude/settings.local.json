@@ -11,7 +11,9 @@
       "Bash(git:*)",
       "Bash(node:*)",
       "Bash(docker-compose logs:*)",
-      "Bash(docker-compose restart:*)"
+      "Bash(docker-compose restart:*)",
+      "Bash(cat)",
+      "Read(//tmp/**)"
     ]
   }
 }

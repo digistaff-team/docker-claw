@@ -111,6 +111,5 @@ async function checkAICanUse(email) {
 }
 
 module.exports = {
-    checkUserBalance,
     checkAICanUse
 };

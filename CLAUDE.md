@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Docker-Claw (Клиент Завод) v3.0.0** — AI-платформа для управления изолированными Docker-контейнерами. Каждый пользователь получает персональный контейнер (Node.js-среда), персональную PostgreSQL БД и Telegram-бота. Система автоматически генерирует и публикует контент в Telegram, ВКонтакте, Одноклассники, Pinterest, Instagram (фото + Reels), TikTok, YouTube, Facebook, WordPress (+ Яндекс.Дзен через RSS), а также VK Video.
 
-**Стек:** Node.js 18 + Express.js, PostgreSQL 15, MySQL 8 (навыки), Docker, Telegraf (Telegram Bot API), nodemailer/imap-simple/imapflow (Email), Sharp (обработка изображений), Buffer API (кросс-постинг в Pinterest/Instagram/YouTube), YouTube Data API, WordPress REST API, KIE.ai API (генерация видео). Фронтенд — статические HTML/CSS/JS файлы (без фреймворка). Playwright для E2E-тестов.
+**Стек:** Node.js 18 + Express.js, PostgreSQL 15, MySQL 8 (навыки), Docker, Telegraf (Telegram Bot API), nodemailer/imap-simple (Email), Buffer API (кросс-постинг в Pinterest/Instagram/YouTube), YouTube Data API, WordPress REST API, KIE.ai API (генерация видео). Фронтенд — статические HTML/CSS/JS файлы (без фреймворка). Playwright для E2E-тестов.
 
 ---
 
@@ -20,7 +20,7 @@ npm run dev          # Development: nodemon + auto-reload
 npm start            # Production: node server.js
 
 # Тесты (используют встроенный assert Node.js, без тестового раннера)
-npm test                                    # Запускает все unit-тесты из package.json (8 файлов)
+npm test                                    # Запускает все unit-тесты из package.json (9 файлов)
 node tests/content.status.test.js           # Машина состояний контента
 node tests/validators.extended.test.js      # Валидация контента
 node tests/wordpress.publisher.test.js      # WordPress публикация
@@ -79,7 +79,7 @@ AI агент (agentLoop) обрабатывает сообщения через
 ### Трёхуровневая БД
 
 1. **Центральная PostgreSQL** (`clientzavod`) — `content_queue`, `content_channels`, `content_analytics`, `content_templates`, `content_assets`, `content_workflow`, `content_import_sources`
-2. **Per-user PostgreSQL** (`db_{chatId}`) — создаётся автоматически через `repository.ensureSchema()`. Таблицы: `content_jobs`, `content_posts`, `content_job_queue`, `publish_logs`, `content_topics`, `content_config`, `content_knowledge_base`, `vk_jobs`, `ok_jobs`, `pinterest_jobs`, `facebook_jobs`, `video_assets`, `video_interiors`, `video_usage_marks`
+2. **Per-user PostgreSQL** (`db_{chatId}`) — создаётся автоматически через `repository.ensureSchema()`. Таблицы: `content_jobs`, `content_posts`, `content_job_queue`, `publish_logs`, `content_topics`, `content_config`, `content_knowledge_base`, `vk_jobs`, `ok_jobs`, `pinterest_jobs`, `facebook_jobs`, `video_assets`, `interiors`, `video_channel_usage`
 3. **MySQL** (`ai_skills_db`) — каталог AI навыков (`ai_skills`), выбранные навыки (`user_selected_skills`). Инициализация: `services/mysql/init.sql`
 
 ### Ключевые подсистемы
@@ -108,7 +108,7 @@ AI агент (agentLoop) обрабатывает сообщения через
 | Контент TikTok | `services/tiktokMvp.service.js` | Генерация, модерация (CW Bot `tt_mod:`), публикация TikTok видео. Использует общий видео-пайплайн |
 | VK Video | `services/vkVideoMvp.service.js` | VK Video: `video.save` → multipart upload → `wall.post`. Модерация через CW Bot `vk_vid_mod:`. Планировщик + daily limit |
 | Видео-пайплайн | `services/videoPipeline.service.js` | Общий пайплайн для TikTok/VK Video/YouTube/Instagram Reels: фото товара → KIE.ai сцена → KIE.ai видео. Три адаптера: Veo 3.1 (polling), Seedance 2.0 (webhook), Grok Imagine (webhook). `pendingCallbacks` Map для async webhook-резолюции |
-| Видео репозиторий | `services/content/videoPipeline.repository.js` | Таблицы `video_assets`, `video_interiors`, `video_usage_marks`. Константа `CHANNELS = ['youtube','tiktok','instagram','vk']` |
+| Видео репозиторий | `services/content/videoPipeline.repository.js` | Таблицы `video_assets`, `interiors`, `video_channel_usage`. Константа `CHANNELS = ['youtube','tiktok','instagram','vk']` |
 | Контент WordPress | `services/wordpressMvp.service.js`, `services/blogGenerator.service.js` | Per-user блог. FSM `draft → ready → approved → published`, модерация через CW Bot `wp_mod:`. Кэш картинок: `${DATA_ROOT}/{chatId}/blog-cache/` |
 | Buffer кросс-постинг | `services/buffer.service.js` | Публикация Pinterest/Instagram/YouTube через Buffer API |
 | Очистка output/content | `services/outputContentCleanup.service.js` | Ежедневная очистка `/workspace/output/content` в 05:00 МСК для всех активных контейнеров |
@@ -124,7 +124,7 @@ AI агент (agentLoop) обрабатывает сообщения через
 | MySQL | `services/mysql.service.js` | Пул соединений MySQL для ai_skills_db |
 | Планы | `services/plan.service.js` | Управление пользовательскими планами для AI-агента |
 | Зависимости | `services/deps.service.js` | Установка npm/pip зависимостей в контейнере |
-| Изображения | `services/image.service.js`, `services/imageGen.service.js` | Утилиты для обработки и генерации изображений |
+| Изображения | `services/imageGen.service.js` | Утилиты для генерации изображений |
 | Input контекст | `services/inputImageContext.service.js` | Сканирует `/workspace/input` контейнера: выбирает случайное изображение и первый .txt/.md файл (до 500 символов) для подстановки в промпт генерации. Чистая функция `_parseFiles` экспортируется для тестов |
 
 ### Маршрутизация
@@ -138,8 +138,6 @@ AI агент (agentLoop) обрабатывает сообщения через
 - `/` → `routes/webhook.routes.js` (регистрируется **последним**, т.к. перехватывает все пути)
 
 Маршруты `/api/manage/*` определены в `manage/routes.js` (каналы, AI, email, навыки, настройки). Включают эндпоинты VK Video: `GET/POST /api/manage/channels/vk-video`, `POST /api/manage/channels/vk-video/run-now`. Контент-эндпоинты `/api/content/*` — в `routes/content.routes.js`.
-
-Файл `routes/billing.routes.js` существует, но в текущей версии **не подключён** в `server.js`.
 
 ### Фильтрация тем по каналу
 
@@ -224,7 +222,13 @@ Auth Bot → `POST /api/auth/telegram-login` → one-time hex token (TTL 10 ми
 
 ### Миграции
 
-SQL-миграции хранятся в `migrations/`: `001_add_billing_tables.sql`, `20260325_add_vk_integration.sql`. Применяются вручную.
+SQL-миграции хранятся в `migrations/`. Применяются вручную:
+- `001_add_billing_tables.sql`
+- `20260325_add_vk_integration.sql`
+- `20260406_add_facebook_integration.sql` — Facebook-колонки в `content_channels`
+- `20260409_add_channel_to_content_topics.sql` — поле `channel` в `content_topics` с индексами
+- `20260410_add_video_pipeline.sql` — таблицы `interiors`, `video_assets`, `video_channel_usage`
+- `20260411_add_vk_video_channel.sql` — добавляет `'vk'` в ограничения video pipeline
 
 ### Документация проекта
 

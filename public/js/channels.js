@@ -1059,20 +1059,57 @@ async function disconnectPinterest() {
 
 // === Instagram ===
 
+function fetchInstagramBufferChannels() {
+    const apiKey = document.getElementById('instagramBufferApiKey')?.value?.trim();
+    loadBufferChannels(apiKey, 'instagram', 'instagramBufferChannelSelect');
+}
+
+function onInstagramChannelSelectChange() {
+    const selectEl = document.getElementById('instagramBufferChannelSelect');
+    const hiddenEl = document.getElementById('instagramBufferChannelId');
+    if (hiddenEl && selectEl) hiddenEl.value = selectEl.value;
+}
+
+async function testInstagramBufferConnection() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    const apiKey = (document.getElementById('instagramBufferApiKey')?.value || '').trim();
+    const channelId = (document.getElementById('instagramBufferChannelId')?.value || '').trim();
+    if (!apiKey || !channelId) {
+        showToast('Введите Buffer API Token и выберите канал', 'error');
+        return;
+    }
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/instagram/test-buffer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, buffer_api_key: apiKey, buffer_channel_id: channelId })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            showToast(`✅ Соединение успешно: ${data.name || 'Instagram'}`, 'success');
+        } else {
+            showToast(data.error || 'Ошибка проверки', 'error');
+        }
+    } catch (e) {
+        showToast('Ошибка сети', 'error');
+    }
+}
+
 async function connectInstagram() {
     const chatId = getChatId();
     if (!chatId) return;
-    const appId = (document.getElementById('instagramAppId')?.value || '').trim();
-    const appSecret = (document.getElementById('instagramAppSecret')?.value || '').trim();
-    if (!appId || !appSecret) {
-        showToast('Введите Facebook App ID и App Secret', 'error');
+    const apiKey = (document.getElementById('instagramBufferApiKey')?.value || '').trim();
+    const channelId = (document.getElementById('instagramBufferChannelId')?.value || '').trim();
+    if (!apiKey || !channelId) {
+        showToast('Введите Buffer API Token и выберите канал', 'error');
         return;
     }
     try {
         const res = await fetch(`${API_MANAGE}/channels/instagram`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: chatId, app_id: appId, app_secret: appSecret })
+            body: JSON.stringify({ chat_id: chatId, buffer_api_key: apiKey, buffer_channel_id: channelId })
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
@@ -1094,84 +1131,58 @@ async function loadInstagramConfig() {
         const data = await res.json();
         const statusEl = document.getElementById('instagramStatus');
         const disconnectBtn = document.getElementById('disconnectInstagramBtn');
-        const settingsBlock = document.getElementById('instagramSettingsBlock');
         if (!statusEl) return;
 
         if (data.connected) {
-            statusEl.innerHTML = '<span style="color: #0a0;">✅ Instagram подключён</span>';
+            statusEl.innerHTML = '<span style="color: #0a0;">✅ Instagram подключён через Buffer</span>';
             if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
 
             const cfg = data.config || {};
-            if (cfg.app_id) document.getElementById('instagramAppId').value = cfg.app_id;
-            if (cfg.app_secret) document.getElementById('instagramAppSecret').value = cfg.app_secret;
-            if (cfg.ig_user_id) document.getElementById('instagramAccountId').value = cfg.ig_user_id;
-            if (cfg.fb_page_id) document.getElementById('instagramFbPageId').value = cfg.fb_page_id;
-            if (cfg.ig_username) document.getElementById('instagramUsername').value = cfg.ig_username;
+            if (cfg.buffer_api_key) document.getElementById('instagramBufferApiKey').value = cfg.buffer_api_key;
+            if (cfg.buffer_channel_id) {
+                document.getElementById('instagramBufferChannelId').value = cfg.buffer_channel_id;
+                if (cfg.buffer_api_key) {
+                    loadBufferChannels(cfg.buffer_api_key, 'instagram', 'instagramBufferChannelSelect').then(() => {
+                        const selectEl = document.getElementById('instagramBufferChannelSelect');
+                        if (selectEl) selectEl.value = cfg.buffer_channel_id;
+                    });
+                }
+            }
             if (cfg.default_alt_text) document.getElementById('instagramDefaultAltText').value = cfg.default_alt_text;
             if (cfg.location_id) document.getElementById('instagramLocationId').value = cfg.location_id;
 
-            // Загружаем moderator_user_id
             const moderatorEl = document.getElementById('instagramModeratorUserId');
-            if (moderatorEl) {
-                moderatorEl.value = cfg.moderator_user_id || chatId;
-            }
+            if (moderatorEl) moderatorEl.value = cfg.moderator_user_id || chatId;
 
             const isReelEl = document.getElementById('instagramIsReel');
             if (isReelEl) isReelEl.checked = !!cfg.is_reel;
             const dailyLimitEl = document.getElementById('instagramDailyLimit');
             if (dailyLimitEl) dailyLimitEl.value = cfg.daily_limit || 5;
-            
-            // Load scheduler settings
+
             if (cfg.schedule_time) {
                 setInstagramScheduleTimeInputs(cfg.schedule_time);
             } else {
-                // Default to 09:00
                 const hourEl = document.getElementById('instagramScheduleHour');
                 const minuteEl = document.getElementById('instagramScheduleMinute');
                 if (hourEl) hourEl.value = '09';
                 if (minuteEl) minuteEl.value = '00';
                 updateInstagramScheduleTime();
             }
-            if (cfg.schedule_end_time) {
-                setInstagramScheduleEndTimeInputs(cfg.schedule_end_time);
-            }
-            
-            if (cfg.schedule_tz) {
-                setInstagramScheduleTzInput(cfg.schedule_tz);
-            }
-            
+            if (cfg.schedule_end_time) setInstagramScheduleEndTimeInputs(cfg.schedule_end_time);
+            if (cfg.schedule_tz) setInstagramScheduleTzInput(cfg.schedule_tz);
             if (cfg.publish_interval_hours) {
                 const intervalEl = document.getElementById('instagramPublishInterval');
                 if (intervalEl) intervalEl.value = cfg.publish_interval_hours.toString();
             }
-            
-            if (cfg.allowed_weekdays) {
-                setWeekdays('instagram-weekday', cfg.allowed_weekdays);
-            }
-            
-            // Load toggles
+            if (cfg.allowed_weekdays) setWeekdays('instagram-weekday', cfg.allowed_weekdays);
+
             const randomPublishEl = document.getElementById('instagramRandomPublish');
             if (randomPublishEl) randomPublishEl.checked = !!cfg.random_publish;
-            
+
             const premoderationEl = document.getElementById('instagramPremoderation');
             if (premoderationEl) {
                 premoderationEl.checked = !!cfg.premoderation;
                 toggleInstagramModeratorField();
-            }
-
-            // Заполняем select страниц если есть сохранённая
-            const pageSelect = document.getElementById('instagramPageSelect');
-            if (pageSelect && cfg.fb_page_id) {
-                const exists = Array.from(pageSelect.options).some(o => o.value === cfg.fb_page_id);
-                if (!exists && cfg.fb_page_name) {
-                    const opt = document.createElement('option');
-                    opt.value = cfg.fb_page_id;
-                    opt.textContent = cfg.fb_page_name;
-                    opt.dataset.igUserId = cfg.ig_user_id || '';
-                    opt.dataset.igUsername = cfg.ig_username || '';
-                    pageSelect.appendChild(opt);
-                }
-                pageSelect.value = cfg.fb_page_id;
             }
         } else {
             statusEl.textContent = '';
@@ -1258,63 +1269,17 @@ function toggleInstagramModeratorField() {
     }
 }
 
-async function loadInstagramAccounts() {
-    const chatId = getChatId();
-    if (!chatId) return;
-    const pageSelect = document.getElementById('instagramPageSelect');
-    if (!pageSelect) return;
-    try {
-        const res = await fetch(`${API_MANAGE}/channels/instagram/accounts?chat_id=${encodeURIComponent(chatId)}`);
-        const data = await res.json();
-        if (!res.ok) {
-            showToast(data.error || 'Ошибка загрузки аккаунтов', 'error');
-            return;
-        }
-        const accounts = data.accounts || [];
-        const currentVal = pageSelect.value;
-        pageSelect.innerHTML = '<option value="">— выберите страницу —</option>';
-        accounts.forEach(a => {
-            const opt = document.createElement('option');
-            opt.value = a.fb_page_id;
-            opt.textContent = a.page_name + (a.ig_username ? ` (@${a.ig_username})` : '');
-            opt.dataset.igUserId = a.ig_user_id || '';
-            opt.dataset.igUsername = a.ig_username || '';
-            pageSelect.appendChild(opt);
-        });
-        if (currentVal) pageSelect.value = currentVal;
-        showToast(`Загружено аккаунтов: ${accounts.length}`, 'success');
-    } catch (e) {
-        showToast('Ошибка сети', 'error');
-    }
-}
-
-function onInstagramPageSelect() {
-    const pageSelect = document.getElementById('instagramPageSelect');
-    const accountIdInput = document.getElementById('instagramAccountId');
-    const fbPageIdInput = document.getElementById('instagramFbPageId');
-    const usernameInput = document.getElementById('instagramUsername');
-    if (!pageSelect) return;
-    const selected = pageSelect.options[pageSelect.selectedIndex];
-    if (fbPageIdInput) fbPageIdInput.value = pageSelect.value;
-    if (accountIdInput) accountIdInput.value = selected?.dataset?.igUserId || '';
-    if (usernameInput) usernameInput.value = selected?.dataset?.igUsername || '';
-}
-
 async function saveInstagramConfig() {
     const chatId = getChatId();
     if (!chatId) return;
 
-    const fbPageId = (document.getElementById('instagramFbPageId')?.value || '').trim();
-    const igUserId = (document.getElementById('instagramAccountId')?.value || '').trim();
-    const igUsername = (document.getElementById('instagramUsername')?.value || '').trim();
-    const pageSelect = document.getElementById('instagramPageSelect');
-    const fbPageName = pageSelect ? (pageSelect.options[pageSelect.selectedIndex]?.textContent || '').trim() : '';
+    const bufferApiKey = (document.getElementById('instagramBufferApiKey')?.value || '').trim();
+    const bufferChannelId = (document.getElementById('instagramBufferChannelId')?.value || '').trim();
     const defaultAltText = (document.getElementById('instagramDefaultAltText')?.value || '').trim();
     const locationId = (document.getElementById('instagramLocationId')?.value || '').trim();
     const isReel = !!document.getElementById('instagramIsReel')?.checked;
     const dailyLimit = parseInt(document.getElementById('instagramDailyLimit')?.value || '5', 10);
-    
-    // New scheduler fields
+
     updateInstagramScheduleEndTime();
     const scheduleTime = document.getElementById('instagramScheduleTime')?.value || '09:00';
     const scheduleEndTime = (document.getElementById('instagramScheduleEndTime')?.value || '').trim();
@@ -1325,29 +1290,29 @@ async function saveInstagramConfig() {
     const premoderation = !!document.getElementById('instagramPremoderation')?.checked;
     const moderatorUserId = (document.getElementById('instagramModeratorUserId')?.value || '').trim() || chatId;
 
+    const body = {
+        chat_id: chatId,
+        default_alt_text: defaultAltText,
+        location_id: locationId,
+        is_reel: isReel,
+        daily_limit: dailyLimit,
+        schedule_time: scheduleTime,
+        schedule_end_time: scheduleEndTime,
+        schedule_tz: scheduleTz,
+        publish_interval_hours: publishInterval,
+        allowed_weekdays: allowedWeekdays,
+        random_publish: randomPublish,
+        premoderation: premoderation,
+        moderator_user_id: moderatorUserId
+    };
+    if (bufferApiKey && !bufferApiKey.includes('***')) body.buffer_api_key = bufferApiKey;
+    if (bufferChannelId) body.buffer_channel_id = bufferChannelId;
+
     try {
         const res = await fetch(`${API_MANAGE}/channels/instagram`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                chat_id: chatId,
-                fb_page_id: fbPageId,
-                fb_page_name: fbPageName,
-                ig_user_id: igUserId,
-                ig_username: igUsername,
-                default_alt_text: defaultAltText,
-                location_id: locationId,
-                is_reel: isReel,
-                daily_limit: dailyLimit,
-                schedule_time: scheduleTime,
-                schedule_end_time: scheduleEndTime,
-                schedule_tz: scheduleTz,
-                publish_interval_hours: publishInterval,
-                allowed_weekdays: allowedWeekdays,
-                random_publish: randomPublish,
-                premoderation: premoderation,
-                moderator_user_id: moderatorUserId
-            })
+            body: JSON.stringify(body)
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
@@ -1368,15 +1333,12 @@ async function disconnectInstagram() {
         const res = await fetch(`${API_MANAGE}/channels/instagram?chat_id=${encodeURIComponent(chatId)}`, { method: 'DELETE' });
         if (res.ok) {
             showToast('Instagram отключён', 'success');
-            document.getElementById('instagramAppId').value = '';
-            document.getElementById('instagramAppSecret').value = '';
-            document.getElementById('instagramAccountId').value = '';
-            document.getElementById('instagramFbPageId').value = '';
-            document.getElementById('instagramUsername').value = '';
+            document.getElementById('instagramBufferApiKey').value = '';
+            document.getElementById('instagramBufferChannelId').value = '';
+            const selectEl = document.getElementById('instagramBufferChannelSelect');
+            if (selectEl) selectEl.innerHTML = '<option value="">— выберите канал —</option>';
             document.getElementById('instagramDefaultAltText').value = '';
             document.getElementById('instagramLocationId').value = '';
-            const pageSelect = document.getElementById('instagramPageSelect');
-            if (pageSelect) pageSelect.innerHTML = '<option value="">— выберите страницу —</option>';
             await loadInstagramConfig();
         } else {
             showToast('Ошибка отключения', 'error');

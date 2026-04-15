@@ -663,18 +663,19 @@ async function tickYoutubeSchedule(chatId, bot) {
 
     if (data[runKey] === now.date) return;
 
+    // Смещение 0-15% от интервала: пост выходит близко к началу слота с небольшим разбросом
+    const maxJitter = Math.round(intervalMinutes * 0.15);
     let needRegenerate = !data[slotKey] || data[slotKey].split('|')[0] !== now.date;
     if (!needRegenerate && data[slotKey]) {
       const existingTarget = parseInt(data[slotKey].split('|')[1], 10);
-      const minAllowed = currentSlot + Math.round(intervalMinutes * 0.85);
-      const maxAllowed = currentSlot + intervalMinutes;
+      const minAllowed = currentSlot;
+      const maxAllowed = currentSlot + maxJitter;
       if (existingTarget < minAllowed || existingTarget > maxAllowed) {
         needRegenerate = true;
       }
     }
     if (needRegenerate) {
-      const minOffset = Math.round(intervalMinutes * 0.85);
-      const randomOffset = minOffset + Math.floor(Math.random() * (intervalMinutes - minOffset + 1));
+      const randomOffset = Math.floor(Math.random() * (maxJitter + 1));
       const targetMinute = currentSlot + randomOffset;
       data[slotKey] = `${now.date}|${targetMinute}`;
       await manageStore.persist(chatId);
