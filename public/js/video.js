@@ -2,25 +2,23 @@
  * Video Pipeline UI
  */
 
-let currentChatId = null;
 let selectedModel = 'veo3.1';
 
 // ============================================
-// Init
+// Init — вызывается common.js после авторизации
 // ============================================
 
-document.addEventListener('DOMContentLoaded', async () => {
-    currentChatId = await resolveChatId();
-    if (!currentChatId) {
-        showError('Не удалось определить chat_id. Авторизуйтесь.');
-        return;
-    }
-    loadModelSettings();
-    loadInteriors();
-    loadProductImages();
-    loadVideos();
-    loadStats();
-});
+async function onLoginSuccess() {
+    currentChatId = getChatId();
+    if (!currentChatId) return;
+    await Promise.all([
+        loadModelSettings(),
+        loadInteriors(),
+        loadProductImages(),
+        loadVideos(),
+        loadStats(),
+    ]);
+}
 
 // ============================================
 // Generation
@@ -441,20 +439,3 @@ function showError(message) {
     `;
 }
 
-async function resolveChatId() {
-    // Try from session or URL params
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('chat_id')) return params.get('chat_id');
-
-    // Try from common.js
-    if (window.currentChatId) return window.currentChatId;
-
-    // Try from auth
-    try {
-        const resp = await fetch('/api/session/current');
-        const data = await resp.json();
-        return data.chatId || null;
-    } catch (e) {
-        return null;
-    }
-}

@@ -40,7 +40,6 @@
         body: JSON.stringify({ chatId, baseUrl, username, appPassword })
       });
       setConnStatus(`✅ Подключено: ${r.siteName || baseUrl}`, '#0a0');
-      $('wordpressSettingsBlock').style.display = 'block';
       $('disconnectWordpressBtn').style.display = 'inline-block';
       await loadWordpressConfig();
       await loadWordpressCategories();
@@ -63,7 +62,6 @@
         body: JSON.stringify({ chatId })
       });
       setConnStatus('Отключено', '#666');
-      $('wordpressSettingsBlock').style.display = 'none';
       $('disconnectWordpressBtn').style.display = 'none';
       $('wordpressBaseUrl').value = '';
       $('wordpressUsername').value = '';
@@ -396,7 +394,6 @@
       const r = await jfetch(`${API}/wordpress/status?chatId=${encodeURIComponent(chatId)}`);
       if (r.connected) {
         setConnStatus(`✅ Подключено: ${r.config?.baseUrl || ''}`, '#0a0');
-        $('wordpressSettingsBlock').style.display = 'block';
         $('disconnectWordpressBtn').style.display = 'inline-block';
         if (r.config?.baseUrl) $('wordpressBaseUrl').value = r.config.baseUrl;
         if (r.config?.username) $('wordpressUsername').value = r.config.username;

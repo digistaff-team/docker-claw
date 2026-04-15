@@ -902,6 +902,77 @@ router.post('/channels/vk/settings', async (req, res) => {
     }
 });
 
+// === VK Video Channel ===
+
+router.get('/channels/vk-video', async (req, res) => {
+    try {
+        const chatId = req.query.chat_id;
+        if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+
+        const vkConfig = manageStore.getVkConfig(chatId);
+        const vkVideoConfig = manageStore.getVkVideoConfig(chatId) || {};
+
+        res.json({
+            connected: !!vkConfig?.group_id,
+            vk_group_id: vkConfig?.group_id || null,
+            config: vkVideoConfig
+        });
+    } catch (e) {
+        console.error('GET /api/manage/channels/vk-video', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.post('/channels/vk-video/settings', async (req, res) => {
+    try {
+        const {
+            chat_id,
+            schedule_time,
+            schedule_end_time,
+            schedule_tz,
+            daily_limit,
+            publish_interval_hours,
+            random_publish,
+            premoderation_enabled,
+            allowed_weekdays,
+            moderator_user_id
+        } = req.body;
+
+        if (!chat_id) return res.status(400).json({ error: 'chat_id is required' });
+
+        manageStore.setVkVideoConfig(chat_id, {
+            schedule_time,
+            schedule_end_time,
+            schedule_tz,
+            daily_limit: parseInt(daily_limit, 10) || 3,
+            publish_interval_hours: parseFloat(publish_interval_hours) || 6,
+            random_publish: !!random_publish,
+            auto_publish: !premoderation_enabled,
+            allowed_weekdays: Array.isArray(allowed_weekdays) ? allowed_weekdays : [0, 1, 2, 3, 4, 5, 6],
+            moderator_user_id: moderator_user_id || null
+        });
+
+        res.json({ success: true });
+    } catch (e) {
+        console.error('POST /api/manage/channels/vk-video/settings', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.post('/channels/vk-video/run-now', async (req, res) => {
+    try {
+        const { chat_id: chatId } = req.body;
+        if (!chatId) return res.status(400).json({ error: 'chat_id required' });
+        const vkVideoMvp = require('../services/vkVideoMvp.service');
+        const bots = require('./telegram/runner').bots;
+        const botEntry = bots?.get(chatId);
+        await vkVideoMvp.handleVkVideoGenerateJob(chatId, {}, botEntry?.bot || null, `vkvideo_manual_${Date.now()}`);
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ ok: false, error: e.message });
+    }
+});
+
 // === Odnoklassniki Channel ===
 
 router.get('/channels/ok', async (req, res) => {
@@ -1381,6 +1452,21 @@ router.post('/channels/facebook/test-buffer', async (req, res) => {
 // ============================================
 // TikTok Channel
 // ============================================
+
+/**
+ * POST /api/manage/channels/tiktok/test-buffer — тест соединения с Buffer
+ */
+router.post('/channels/tiktok/test-buffer', async (req, res) => {
+    const { chat_id: chatId, buffer_api_key, buffer_channel_id } = req.body;
+    if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+    try {
+        const bufferService = require('../services/buffer.service');
+        const result = await bufferService.testConnection(buffer_api_key, buffer_channel_id);
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        res.status(400).json({ ok: false, error: e.message });
+    }
+});
 
 /**
  * GET /api/manage/channels/tiktok — получить конфигурацию TikTok

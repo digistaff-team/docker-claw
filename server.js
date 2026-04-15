@@ -714,17 +714,17 @@ async function startServer() {
     const outputContentCleanup = require('./services/outputContentCleanup.service');
     outputContentCleanup.initCleanupScheduler();
 
-    // Подключение Webhook API
-    const webhookRoutes = require('./routes/webhook.routes');
-    app.use('/', webhookRoutes);
+    // Подключение видео-пайплайна (до webhook '/' чтобы избежать перехвата)
+    const videoRoutes = require('./routes/video.routes');
+    app.use('/api/video', videoRoutes);
 
     // Подключение пользовательских вебхуков
     const userHooksRoutes = require('./routes/user_hooks.routes');
     app.use('/hook', userHooksRoutes);
 
-    // Подключение видео-пайплайна
-    const videoRoutes = require('./routes/video.routes');
-    app.use('/api/video', videoRoutes);
+    // Подключение Webhook API (монтируется последним, т.к. перехватывает '/')
+    const webhookRoutes = require('./routes/webhook.routes');
+    app.use('/', webhookRoutes);
     
     // Запуск сервера
     app.listen(config.PORT, () => {

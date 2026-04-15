@@ -227,7 +227,8 @@ async function handleFacebookGenerateJob(chatId, queueJob, bot, correlationId) {
     topic: topic.topic,
     focus: topic.focus,
     status: 'draft',
-    correlationId
+    correlationId,
+    topicId: topic.id
   });
 
   console.log(`[FB] Created job ${jobId} for topic: ${topic.topic}`);
@@ -291,6 +292,7 @@ async function handleFacebookGenerateJob(chatId, queueJob, bot, correlationId) {
 
   } catch (e) {
     console.error(`[FB] Error in job ${jobId}:`, e);
+    try { await repository.releaseTopic(chatId, topic.id); } catch {}
     await fbRepo.updateJob(chatId, jobId, {
       status: 'failed',
       errorText: e.message
@@ -357,6 +359,11 @@ async function publishFbPost(chatId, bot, jobId, correlationId) {
 
     // Обновляем задачу
     await fbRepo.markPublished(chatId, jobId, result.postId, settings.bufferChannelId);
+
+    // Помечаем топик как завершённый
+    if (job.topic_id) {
+      await repository.updateTopicStatus(chatId, job.topic_id, 'completed').catch(() => {});
+    }
 
     // Обновляем статистику
     const stats = { ...settings.stats };

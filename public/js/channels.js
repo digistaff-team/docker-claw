@@ -30,6 +30,8 @@ function initSchedulerChannels() {
         generateTimezoneSelect('facebookScheduleTz', 'Europe/Moscow');
         generateTimezoneSelect('pinterestScheduleTz', 'Europe/Moscow');
         generateTimezoneSelect('wordpressScheduleTz', 'Europe/Moscow');
+        generateTimezoneSelect('vkVideoScheduleTz', 'Europe/Moscow');
+        generateTimezoneSelect('tiktokScheduleTz', 'Europe/Moscow');
     }
 
     // Initialize weekday checkboxes for ALL channels
@@ -43,7 +45,8 @@ function initSchedulerChannels() {
             'instagramWeekdays': { prefix: 'instagram-weekday', days: defaultWeekdays },
             'facebookWeekdays': { prefix: 'facebook-weekday', days: defaultWeekdays },
             'pinterestWeekdays': { prefix: 'pinterest-weekday', days: defaultWeekdays },
-            'wordpressWeekdays': { prefix: 'wordpress-weekday', days: defaultWeekdays }
+            'wordpressWeekdays': { prefix: 'wordpress-weekday', days: defaultWeekdays },
+            'vkVideoWeekdays': { prefix: 'vkvideo-weekday', days: [0, 1, 2, 3, 4, 5, 6] }
         };
 
         Object.entries(weekdayConfigs).forEach(([elId, cfg]) => {
@@ -62,12 +65,15 @@ function initSchedulerChannels() {
     updateInstagramScheduleTime();
     updateFacebookScheduleTime();
     updatePinterestScheduleTime();
+    updateVkVideoScheduleTime();
     updateVkScheduleEndTime();
     updateOkScheduleEndTime();
     updateYoutubeScheduleEndTime();
     updateInstagramScheduleEndTime();
     updateFacebookScheduleEndTime();
     updatePinterestScheduleEndTime();
+    updateVkVideoScheduleEndTime();
+    updateTiktokScheduleTime();
 
     // Initialize moderator field visibility
     toggleTelegramModeratorField();
@@ -78,6 +84,7 @@ function initSchedulerChannels() {
     if (typeof toggleFacebookModeratorField === 'function') toggleFacebookModeratorField();
     if (typeof togglePinterestModeratorField === 'function') togglePinterestModeratorField();
     if (typeof toggleWordpressModeratorField === 'function') toggleWordpressModeratorField();
+    toggleVkVideoModeratorField();
 }
 
 // === Переключение табов каналов ===
@@ -98,6 +105,9 @@ function initChannelTabs() {
             if (channel === 'facebook' && typeof loadFacebookConfig === 'function') {
                 loadFacebookConfig();
             }
+            if (channel === 'vkvideo') {
+                loadVkVideoConfig();
+            }
         });
     });
 }
@@ -113,7 +123,7 @@ const ALL_CHANNELS = [
     { id: 'facebook', name: 'Facebook' },
     { id: 'dzen', name: 'Яндекс Дзен' },
     { id: 'tiktok', name: 'TikTok' },
-    { id: 'vk_video', name: 'VK Видео' }
+    { id: 'vkvideo', name: 'VK Видео' }
 ];
 
 // Текущие включённые каналы (обновляется при загрузке)
@@ -229,6 +239,8 @@ async function onLoginSuccess() {
     await loadOkStatus();
     await loadYoutubeConfig();
     await loadFacebookConfig();
+    await loadVkVideoConfig();
+    await loadTiktokConfig();
 }
 
 // Специальная инициализация для страницы каналов
@@ -691,7 +703,6 @@ async function loadPinterestConfig() {
         if (data.connected) {
             statusEl.innerHTML = '<span style="color: #0a0;">✅ Pinterest подключён</span>';
             if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
-            if (settingsBlock) settingsBlock.style.display = 'block';
             // Заполняем поля
             const cfg = data.config || {};
             if (cfg.buffer_api_key) document.getElementById('bufferApiKey').value = cfg.buffer_api_key;
@@ -755,7 +766,6 @@ async function loadPinterestConfig() {
         } else {
             statusEl.textContent = '';
             if (disconnectBtn) disconnectBtn.style.display = 'none';
-            if (settingsBlock) settingsBlock.style.display = 'none';
         }
     } catch (e) {
         console.error('loadPinterestConfig', e);
@@ -1090,7 +1100,6 @@ async function loadInstagramConfig() {
         if (data.connected) {
             statusEl.innerHTML = '<span style="color: #0a0;">✅ Instagram подключён</span>';
             if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
-            if (settingsBlock) settingsBlock.style.display = 'block';
 
             const cfg = data.config || {};
             if (cfg.app_id) document.getElementById('instagramAppId').value = cfg.app_id;
@@ -1167,7 +1176,6 @@ async function loadInstagramConfig() {
         } else {
             statusEl.textContent = '';
             if (disconnectBtn) disconnectBtn.style.display = 'none';
-            if (settingsBlock) settingsBlock.style.display = 'none';
         }
     } catch (e) {
         console.error('loadInstagramConfig', e);
@@ -1456,7 +1464,6 @@ async function loadVkStatus() {
         if (data.connected) {
             statusEl.innerHTML = '<span style="color: #0a0;">✅ VK подключён</span>';
             if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
-            if (settingsBlock) settingsBlock.style.display = 'block';
 
             const cfg = data.config || {};
             if (cfg.group_id) document.getElementById('vkGroupId').value = cfg.group_id;
@@ -1503,7 +1510,6 @@ async function loadVkStatus() {
         } else {
             statusEl.textContent = '';
             if (disconnectBtn) disconnectBtn.style.display = 'none';
-            if (settingsBlock) settingsBlock.style.display = 'none';
         }
     } catch (e) {
         console.error('loadVkStatus', e);
@@ -1709,7 +1715,6 @@ async function loadOkStatus() {
         if (data.connected) {
             statusEl.innerHTML = '<span style="color: #0a0;">✅ ОК подключён</span>';
             if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
-            if (settingsBlock) settingsBlock.style.display = 'block';
 
             const cfg = data.config || {};
             if (cfg.group_id) document.getElementById('okGroupId').value = cfg.group_id;
@@ -1758,7 +1763,6 @@ async function loadOkStatus() {
         } else {
             statusEl.textContent = '';
             if (disconnectBtn) disconnectBtn.style.display = 'none';
-            if (settingsBlock) settingsBlock.style.display = 'none';
         }
     } catch (e) {
         console.error('loadOkStatus', e);
@@ -1927,16 +1931,15 @@ async function loadYoutubeConfig() {
     try {
         const res = await fetch(`${API_MANAGE}/channels/youtube?chat_id=${encodeURIComponent(chatId)}`);
         const data = await res.json();
+        const disconnectBtn = document.getElementById('disconnectYoutubeBtn');
         if (!data.connected) {
-            document.getElementById('youtubeStatus').innerHTML = '<span style="color:#888;">⚪ Не подключён</span>';
-            document.getElementById('youtubeSettingsBlock').style.display = 'none';
-            document.getElementById('disconnectYoutubeBtn').style.display = 'none';
+            document.getElementById('youtubeStatus').textContent = '';
+            if (disconnectBtn) disconnectBtn.style.display = 'none';
             return;
         }
         const cfg = data.config;
         document.getElementById('youtubeStatus').innerHTML = '<span style="color:#0a0;">🟢 Подключён</span>';
-        document.getElementById('youtubeSettingsBlock').style.display = 'block';
-        document.getElementById('disconnectYoutubeBtn').style.display = 'inline-block';
+        if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
 
         if (cfg.buffer_api_key) document.getElementById('youtubeBufferApiKey').value = cfg.buffer_api_key;
         if (cfg.buffer_channel_id) {
@@ -2336,4 +2339,368 @@ function onPinterestChannelSelectChange() {
 function fetchPinterestBufferChannels() {
     const apiKey = document.getElementById('bufferApiKey')?.value?.trim();
     loadBufferChannels(apiKey, 'pinterest', 'pinterestBufferChannelSelect');
+}
+
+// ============================================
+// VK Video Channel
+// ============================================
+
+function updateVkVideoScheduleTime() {
+    const hour = document.getElementById('vkVideoScheduleHour')?.value || '13';
+    const minute = document.getElementById('vkVideoScheduleMinute')?.value || '00';
+    const el = document.getElementById('vkVideoScheduleTime');
+    if (el) el.value = `${hour}:${minute.padStart(2, '0')}`;
+}
+
+function updateVkVideoScheduleEndTime() {
+    const hour = document.getElementById('vkVideoScheduleEndHour')?.value || '00';
+    const minute = document.getElementById('vkVideoScheduleEndMinute')?.value || '00';
+    const el = document.getElementById('vkVideoScheduleEndTime');
+    if (el) el.value = `${hour}:${minute.padStart(2, '0')}`;
+}
+
+function validateVkVideoMinutes() {
+    const el = document.getElementById('vkVideoScheduleMinute');
+    if (!el) return;
+    let v = parseInt(el.value, 10);
+    if (isNaN(v) || v < 0) v = 0;
+    if (v > 59) v = 59;
+    el.value = String(v).padStart(2, '0');
+}
+
+function validateVkVideoEndMinutes() {
+    const el = document.getElementById('vkVideoScheduleEndMinute');
+    if (!el) return;
+    let v = parseInt(el.value, 10);
+    if (isNaN(v) || v < 0) v = 0;
+    if (v > 59) v = 59;
+    el.value = String(v).padStart(2, '0');
+}
+
+function setVkVideoScheduleTimeInputs(timeValue) {
+    const [hour, minute] = (timeValue || '13:00').split(':');
+    const hourEl = document.getElementById('vkVideoScheduleHour');
+    const minuteEl = document.getElementById('vkVideoScheduleMinute');
+    if (hourEl) hourEl.value = hour || '13';
+    if (minuteEl) minuteEl.value = (minute || '00').padStart(2, '0');
+    updateVkVideoScheduleTime();
+}
+
+function setVkVideoScheduleEndTimeInputs(timeValue) {
+    const [hour, minute] = (timeValue || '00:00').split(':');
+    const hourEl = document.getElementById('vkVideoScheduleEndHour');
+    const minuteEl = document.getElementById('vkVideoScheduleEndMinute');
+    if (hourEl) hourEl.value = hour || '00';
+    if (minuteEl) minuteEl.value = (minute || '00').padStart(2, '0');
+    updateVkVideoScheduleEndTime();
+}
+
+function toggleVkVideoModeratorField() {
+    const checkbox = document.getElementById('vkVideoPremoderation');
+    const field = document.getElementById('vkVideoModeratorField');
+    if (field) field.style.display = (checkbox && checkbox.checked) ? 'flex' : 'none';
+}
+
+async function loadVkVideoConfig() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/vk-video?chat_id=${encodeURIComponent(chatId)}`);
+        const data = await res.json();
+        const statusEl = document.getElementById('vkVideoStatus');
+        if (!statusEl) return;
+
+        if (data.connected) {
+            statusEl.innerHTML = `<span style="color: #0a0;">✅ VK подключён (группа ${data.vk_group_id})</span>`;
+        } else {
+            statusEl.innerHTML = '<span style="color: #e67e22;">⚠️ VK не подключён — сначала настройте канал VK</span>';
+        }
+
+        const cfg = data.config || {};
+
+        if (cfg.schedule_time) setVkVideoScheduleTimeInputs(cfg.schedule_time);
+        if (cfg.schedule_end_time) setVkVideoScheduleEndTimeInputs(cfg.schedule_end_time);
+
+        if (cfg.schedule_tz) {
+            const tzEl = document.getElementById('vkVideoScheduleTz');
+            if (tzEl) tzEl.value = cfg.schedule_tz;
+        }
+
+        const dlEl = document.getElementById('vkVideoDailyLimit');
+        if (dlEl && cfg.daily_limit != null) dlEl.value = cfg.daily_limit;
+
+        const piEl = document.getElementById('vkVideoPublishInterval');
+        if (piEl && cfg.publish_interval_hours != null) piEl.value = String(cfg.publish_interval_hours);
+
+        if (cfg.allowed_weekdays) setWeekdays('vkvideo-weekday', cfg.allowed_weekdays);
+
+        const randomEl = document.getElementById('vkVideoRandomPublish');
+        if (randomEl) randomEl.checked = !!cfg.random_publish;
+
+        const premoderEl = document.getElementById('vkVideoPremoderation');
+        if (premoderEl) {
+            // auto_publish=false означает premoderation включена
+            premoderEl.checked = cfg.auto_publish === false || cfg.auto_publish === undefined;
+            toggleVkVideoModeratorField();
+        }
+
+        const moderatorEl = document.getElementById('vkVideoModeratorUserId');
+        if (moderatorEl) moderatorEl.value = cfg.moderator_user_id || '';
+
+    } catch (e) {
+        console.error('loadVkVideoConfig', e);
+    }
+}
+
+async function saveVkVideoSettings() {
+    const chatId = getChatId();
+    if (!chatId) return;
+
+    updateVkVideoScheduleTime();
+    updateVkVideoScheduleEndTime();
+
+    const scheduleTime = document.getElementById('vkVideoScheduleTime')?.value || '13:00';
+    const scheduleEndTime = (document.getElementById('vkVideoScheduleEndTime')?.value || '').trim();
+    const scheduleTz = document.getElementById('vkVideoScheduleTz')?.value || 'Europe/Moscow';
+    const dailyLimit = parseInt(document.getElementById('vkVideoDailyLimit')?.value, 10) || 3;
+    const publishInterval = parseFloat(document.getElementById('vkVideoPublishInterval')?.value || '6');
+    const allowedWeekdays = getWeekdays('vkvideo-weekday');
+    const randomPublish = !!document.getElementById('vkVideoRandomPublish')?.checked;
+    const premoderation = !!document.getElementById('vkVideoPremoderation')?.checked;
+    const moderatorUserId = document.getElementById('vkVideoModeratorUserId')?.value?.trim() || '';
+
+    const statusEl = document.getElementById('vkVideoSettingsStatus');
+
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/vk-video/settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: chatId,
+                schedule_time: scheduleTime,
+                schedule_end_time: scheduleEndTime || null,
+                schedule_tz: scheduleTz,
+                daily_limit: dailyLimit,
+                publish_interval_hours: publishInterval,
+                random_publish: randomPublish,
+                premoderation_enabled: premoderation,
+                allowed_weekdays: allowedWeekdays,
+                moderator_user_id: moderatorUserId
+            })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast('Настройки VK Видео сохранены', 'success');
+            if (statusEl) statusEl.innerHTML = '<span style="color:#0a0;">✅ Сохранено</span>';
+        } else {
+            if (statusEl) statusEl.innerHTML = `<span style="color:#c00;">❌ ${data.error || 'Ошибка'}</span>`;
+        }
+    } catch (e) {
+        console.error('saveVkVideoSettings', e);
+        if (statusEl) statusEl.innerHTML = '<span style="color:#c00;">❌ Ошибка сети</span>';
+    }
+}
+
+async function runVkVideoNow() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    const btn = document.getElementById('vkVideoRunNowBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Запуск...'; }
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/vk-video/run-now`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast('VK Видео: генерация запущена', 'success');
+        } else {
+            showToast(data.error || 'Ошибка запуска', 'error');
+        }
+    } catch (e) {
+        showToast('Ошибка сети', 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '▶️ Сгенерировать сейчас'; }
+    }
+}
+
+// ============================================
+// === TikTok ===
+// ============================================
+
+function updateTiktokScheduleTime() {
+    const hour = document.getElementById('tiktokScheduleHour')?.value || '12';
+    const minute = document.getElementById('tiktokScheduleMinute')?.value || '00';
+    const hidden = document.getElementById('tiktokScheduleTime');
+    if (hidden) hidden.value = `${hour}:${minute.padStart(2, '0')}`;
+}
+
+function validateTiktokMinutes() {
+    const el = document.getElementById('tiktokScheduleMinute');
+    if (!el) return;
+    let v = parseInt(el.value, 10);
+    if (isNaN(v) || v < 0) v = 0;
+    if (v > 59) v = 59;
+    el.value = v;
+}
+
+function onTiktokChannelSelectChange() {
+    const selectEl = document.getElementById('tiktokBufferChannelSelect');
+    const hiddenInput = document.getElementById('tiktokBufferChannelId');
+    if (selectEl && hiddenInput) {
+        hiddenInput.value = selectEl.value;
+    }
+}
+
+function fetchTiktokBufferChannels() {
+    const apiKey = document.getElementById('tiktokBufferApiKey')?.value?.trim();
+    loadBufferChannels(apiKey, 'tiktok', 'tiktokBufferChannelSelect');
+}
+
+async function connectTiktokBuffer() {
+    const chatId = getChatId();
+    const apiKey = document.getElementById('tiktokBufferApiKey')?.value?.trim();
+    const channelId = document.getElementById('tiktokBufferChannelId')?.value?.trim();
+    if (!apiKey || !channelId) {
+        showToast('Введите Buffer API Token и выберите канал', 'error');
+        return;
+    }
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/tiktok`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, buffer_api_key: apiKey, buffer_channel_id: channelId })
+        });
+        if (res.ok) {
+            showToast('TikTok подключён через Buffer', 'success');
+            await loadTiktokConfig();
+        } else {
+            const data = await res.json();
+            showToast(data.error || 'Ошибка подключения', 'error');
+        }
+    } catch (e) {
+        showToast('Ошибка сети', 'error');
+    }
+}
+
+async function testTiktokBufferConnection() {
+    const chatId = getChatId();
+    const apiKey = document.getElementById('tiktokBufferApiKey')?.value?.trim();
+    const channelId = document.getElementById('tiktokBufferChannelId')?.value?.trim();
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/tiktok/test-buffer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, buffer_api_key: apiKey, buffer_channel_id: channelId })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast(`Соединение OK: ${data.channelName || 'канал'} (${data.service || 'tiktok'})`, 'success');
+        } else {
+            showToast(data.error || 'Ошибка соединения', 'error');
+        }
+    } catch (e) {
+        showToast('Ошибка сети', 'error');
+    }
+}
+
+async function disconnectTiktok() {
+    const chatId = getChatId();
+    try {
+        await fetch(`${API_MANAGE}/channels/tiktok`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId })
+        });
+        showToast('TikTok отключён', 'success');
+        await loadTiktokConfig();
+    } catch (e) {
+        showToast('Ошибка сети', 'error');
+    }
+}
+
+async function saveTiktokSchedule() {
+    const chatId = getChatId();
+    const scheduleTime = document.getElementById('tiktokScheduleTime')?.value || '12:00';
+    const scheduleTz = document.getElementById('tiktokScheduleTz')?.value || 'Europe/Moscow';
+    const dailyLimit = parseInt(document.getElementById('tiktokDailyLimit')?.value || '3', 10);
+    const autoPublish = document.getElementById('tiktokAutoPublish')?.checked || false;
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/tiktok`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, schedule_time: scheduleTime, schedule_tz: scheduleTz, daily_limit: dailyLimit, auto_publish: autoPublish, is_active: true })
+        });
+        if (res.ok) {
+            showToast('Расписание TikTok сохранено', 'success');
+        } else {
+            const data = await res.json();
+            showToast(data.error || 'Ошибка сохранения', 'error');
+        }
+    } catch (e) {
+        showToast('Ошибка сети', 'error');
+    }
+}
+
+async function loadTiktokConfig() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/tiktok?chat_id=${encodeURIComponent(chatId)}`);
+        const data = await res.json();
+        const statusEl = document.getElementById('tiktokStatus');
+        const disconnectBtn = document.getElementById('disconnectTiktokBtn');
+        if (!statusEl) return;
+
+        const cfg = data.config || {};
+        const connected = !!(cfg.buffer_api_key && cfg.buffer_channel_id);
+
+        if (connected) {
+            statusEl.innerHTML = '<span style="color: #0a0;">✅ TikTok подключён через Buffer</span>';
+            if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
+            if (cfg.buffer_api_key) {
+                const apiKeyEl = document.getElementById('tiktokBufferApiKey');
+                if (apiKeyEl) apiKeyEl.value = cfg.buffer_api_key;
+            }
+            if (cfg.buffer_channel_id) {
+                const hiddenEl = document.getElementById('tiktokBufferChannelId');
+                if (hiddenEl) hiddenEl.value = cfg.buffer_channel_id;
+                // Автозагрузка каналов Buffer для восстановления select
+                if (cfg.buffer_api_key) {
+                    loadBufferChannels(cfg.buffer_api_key, 'tiktok', 'tiktokBufferChannelSelect').then(() => {
+                        const selectEl = document.getElementById('tiktokBufferChannelSelect');
+                        if (selectEl) selectEl.value = cfg.buffer_channel_id;
+                    });
+                }
+            }
+        } else {
+            statusEl.innerHTML = '<span style="color: #888;">⬜ TikTok не подключён</span>';
+            if (disconnectBtn) disconnectBtn.style.display = 'none';
+        }
+
+        // Расписание
+        if (cfg.schedule_time) {
+            const [h, m] = cfg.schedule_time.split(':');
+            const hourEl = document.getElementById('tiktokScheduleHour');
+            const minEl = document.getElementById('tiktokScheduleMinute');
+            if (hourEl) hourEl.value = h;
+            if (minEl) minEl.value = m || '00';
+            updateTiktokScheduleTime();
+        }
+        if (cfg.schedule_tz) {
+            const tzEl = document.getElementById('tiktokScheduleTz');
+            if (tzEl) tzEl.value = cfg.schedule_tz;
+        }
+        if (cfg.daily_limit !== undefined) {
+            const dlEl = document.getElementById('tiktokDailyLimit');
+            if (dlEl) dlEl.value = cfg.daily_limit;
+        }
+        if (cfg.auto_publish !== undefined) {
+            const apEl = document.getElementById('tiktokAutoPublish');
+            if (apEl) apEl.checked = !!cfg.auto_publish;
+        }
+    } catch (e) {
+        console.error('loadTiktokConfig error:', e);
+    }
 }

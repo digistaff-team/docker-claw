@@ -31,16 +31,44 @@
         <div class="main-content" id="mainContent">
             <nav class="nav-tabs" id="mainMenu"></nav>
 
+            <!-- ===== ТЕМЫ И МАТЕРИАЛЫ ===== -->
             <div class="panel full-width">
-                <div class="content-section-head">
-                    <div>
-                        <h2>Темы для публикаций</h2>
-                        <p class="content-section-subtitle">Список тем, которые AI будет использовать как очередь идей.</p>
-                    </div>
-                    <button class="btn btn-secondary" onclick="loadTopics()">Обновить темы</button>
-                </div>
+                <h2 style="margin-bottom: 24px;">Темы и материалы</h2>
 
+                <!-- Ряд 1: Загрузить темы + Добавить тему -->
                 <div class="content-source-grid">
+                    <div class="content-card-block">
+                        <h3>Загрузить темы</h3>
+                        <div class="content-form-grid content-form-grid-single">
+                            <div>
+                                <label for="topicsSheetUrl">Ссылка на таблицу</label>
+                                <input type="text" id="topicsSheetUrl" placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=0" />
+                            </div>
+                            <div>
+                                <label for="topicsSheetGid">GID листа</label>
+                                <input type="text" id="topicsSheetGid" placeholder="Необязательно, можно оставить пустым" />
+                            </div>
+                        </div>
+                        <p class="content-inline-help">Столбцы: Тема, Фокусный ключ, Вторичные ключи, LSI-ключи, Статус, Канал.</p>
+                        <div class="content-actions">
+                            <button class="btn btn-secondary" onclick="previewSheetImport('topics')">Предпросмотр</button>
+                            <button class="btn btn-success" onclick="applySheetImport('topics')">Импортировать</button>
+                        </div>
+                        <div class="content-status-line" id="topicsImportStatus"></div>
+                        <div id="topicsImportPreviewWrap" class="content-preview-wrap" style="display:none;">
+                            <div class="content-preview-head">
+                                <strong>Предпросмотр импорта</strong>
+                                <span id="topicsImportPreviewMeta" class="content-inline-help" style="margin:0;"></span>
+                            </div>
+                            <div class="content-jobs-table-wrap">
+                                <table class="content-jobs-table">
+                                    <thead id="topicsImportPreviewHead"></thead>
+                                    <tbody id="topicsImportPreviewBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="content-card-block">
                         <h3>Добавить тему</h3>
                         <div class="content-form-grid">
@@ -65,47 +93,9 @@
                             <button class="btn btn-primary" onclick="createTopic()">Сохранить тему</button>
                         </div>
                     </div>
-
-                    <div class="content-card-block">
-                        <h3>Импорт из Google Sheets</h3>
-                        <div class="content-form-grid content-form-grid-single">
-                            <div>
-                                <label for="importMode">Что импортировать</label>
-                                <select id="importMode">
-                                    <option value="topics">Темы</option>
-                                    <option value="materials">Материалы</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label for="importSheetUrl">Ссылка на таблицу</label>
-                                <input type="text" id="importSheetUrl" placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=0" />
-                            </div>
-                            <div>
-                                <label for="importSheetGid">GID листа</label>
-                                <input type="text" id="importSheetGid" placeholder="Необязательно, можно оставить пустым" />
-                            </div>
-                        </div>
-                        <p class="content-inline-help">Для тем: Тема, Фокусный ключ, Вторичные ключи, LSI-ключи, Статус. Для материалов: Title, Content, Source Type, Source URL.</p>
-                        <div class="content-actions">
-                            <button class="btn btn-secondary" onclick="previewSheetImport()">Предпросмотр</button>
-                            <button class="btn btn-success" onclick="applySheetImport()">Импортировать</button>
-                        </div>
-                        <div class="content-status-line" id="topicsImportStatus"></div>
-                        <div id="importPreviewWrap" class="content-preview-wrap" style="display:none;">
-                            <div class="content-preview-head">
-                                <strong>Предпросмотр импорта</strong>
-                                <span id="importPreviewMeta" class="content-inline-help" style="margin:0;"></span>
-                            </div>
-                            <div class="content-jobs-table-wrap">
-                                <table class="content-jobs-table">
-                                    <thead id="importPreviewHead"></thead>
-                                    <tbody id="importPreviewBody"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
+                <!-- Таблица тем -->
                 <div class="content-jobs-head" style="margin-top: 18px;">
                     <div class="content-jobs-filters">
                         <select id="topicsStatusFilter" onchange="loadTopics()">
@@ -114,9 +104,9 @@
                             <option value="used">Публикуется</option>
                             <option value="completed">Опубликована</option>
                         </select>
+                        <button class="btn btn-secondary" onclick="loadTopics()">Обновить</button>
                     </div>
                 </div>
-
                 <div class="content-jobs-table-wrap">
                     <table class="content-jobs-table">
                         <thead>
@@ -135,42 +125,76 @@
                         </tbody>
                     </table>
                 </div>
-            </div>
 
-            <div class="panel full-width">
-                <div class="content-section-head">
-                    <div>
-                        <h2>Материалы</h2>
-                        <p class="content-section-subtitle">Фактическая база знаний, на которую AI опирается при написании постов.</p>
+                <hr style="margin: 32px 0; border: none; border-top: 1px solid #e5e7eb;">
+
+                <!-- Ряд 2: Загрузить материалы + Добавить материал -->
+                <div class="content-source-grid">
+                    <div class="content-card-block">
+                        <h3>Загрузить материалы</h3>
+                        <div class="content-form-grid content-form-grid-single">
+                            <div>
+                                <label for="materialsSheetUrl">Ссылка на таблицу</label>
+                                <input type="text" id="materialsSheetUrl" placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=0" />
+                            </div>
+                            <div>
+                                <label for="materialsSheetGid">GID листа</label>
+                                <input type="text" id="materialsSheetGid" placeholder="Необязательно, можно оставить пустым" />
+                            </div>
+                        </div>
+                        <p class="content-inline-help">Столбцы: Title, Content, Source Type, Source URL.</p>
+                        <div class="content-actions">
+                            <button class="btn btn-secondary" onclick="previewSheetImport('materials')">Предпросмотр</button>
+                            <button class="btn btn-success" onclick="applySheetImport('materials')">Импортировать</button>
+                        </div>
+                        <div class="content-status-line" id="materialsImportStatus"></div>
+                        <div id="materialsImportPreviewWrap" class="content-preview-wrap" style="display:none;">
+                            <div class="content-preview-head">
+                                <strong>Предпросмотр импорта</strong>
+                                <span id="materialsImportPreviewMeta" class="content-inline-help" style="margin:0;"></span>
+                            </div>
+                            <div class="content-jobs-table-wrap">
+                                <table class="content-jobs-table">
+                                    <thead id="materialsImportPreviewHead"></thead>
+                                    <tbody id="materialsImportPreviewBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
-                    <button class="btn btn-secondary" onclick="loadMaterials()">Обновить материалы</button>
+
+                    <div class="content-card-block">
+                        <h3>Добавить материал</h3>
+                        <div class="content-form-grid">
+                            <div>
+                                <label for="materialTitle">Заголовок</label>
+                                <input type="text" id="materialTitle" placeholder="Название материала" />
+                            </div>
+                            <div>
+                                <label for="materialSourceType">Тип источника</label>
+                                <input type="text" id="materialSourceType" placeholder="text, url, google_doc" />
+                            </div>
+                            <div>
+                                <label for="materialSourceUrl">Ссылка на источник</label>
+                                <input type="text" id="materialSourceUrl" placeholder="https://..." />
+                            </div>
+                        </div>
+                        <div>
+                            <label for="materialContent">Текст материала</label>
+                            <textarea id="materialContent" class="editor content-compact-editor" placeholder="Вставьте факты, выдержки, конспект, тезисы..."></textarea>
+                        </div>
+                        <div class="content-actions">
+                            <button class="btn btn-primary" onclick="createMaterial()">Сохранить материал</button>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="content-card-block">
-                    <div class="content-form-grid">
-                        <div>
-                            <label for="materialTitle">Заголовок</label>
-                            <input type="text" id="materialTitle" placeholder="Название материала" />
-                        </div>
-                        <div>
-                            <label for="materialSourceType">Тип источника</label>
-                            <input type="text" id="materialSourceType" placeholder="text, url, google_doc" />
-                        </div>
-                        <div>
-                            <label for="materialSourceUrl">Ссылка на источник</label>
-                            <input type="text" id="materialSourceUrl" placeholder="https://..." />
-                        </div>
-                    </div>
-                    <div>
-                        <label for="materialContent">Текст материала</label>
-                        <textarea id="materialContent" class="editor content-compact-editor" placeholder="Вставьте факты, выдержки, конспект, тезисы..."></textarea>
-                    </div>
-                    <div class="content-actions">
-                        <button class="btn btn-primary" onclick="createMaterial()">Сохранить материал</button>
+                <!-- Таблица материалов -->
+                <div class="content-jobs-head" style="margin-top: 18px;">
+                    <div class="content-jobs-filters">
+                        <button class="btn btn-secondary" onclick="loadMaterials()">Обновить</button>
                     </div>
                 </div>
-
-                <div class="content-jobs-table-wrap" style="margin-top: 18px;">
+                <div class="content-jobs-table-wrap">
                     <table class="content-jobs-table">
                         <thead>
                             <tr>
@@ -189,9 +213,10 @@
                 </div>
             </div>
 
+            <!-- ===== В РАБОТЕ ===== -->
             <div class="panel full-width">
                 <div class="content-jobs-head">
-                    <h2>Jobs</h2>
+                    <h2>В работе</h2>
                     <div class="content-jobs-filters">
                         <select id="jobsStatusFilter" onchange="loadJobs()">
                             <option value="">Все статусы</option>
@@ -223,9 +248,10 @@
                 </div>
             </div>
 
+            <!-- ===== ПОДРОБНЕЕ ===== -->
             <div class="panel full-width">
-                <h2>Детали Job</h2>
-                <div id="jobDetailsEmpty" class="content-empty-state">Выберите job из списка выше.</div>
+                <h2>Подробнее</h2>
+                <div id="jobDetailsEmpty" class="content-empty-state">Выберите запись из списка выше.</div>
                 <div id="jobDetailsCard" style="display:none;">
                     <div class="content-job-meta" id="jobMeta"></div>
                     <div class="content-job-text-wrap">

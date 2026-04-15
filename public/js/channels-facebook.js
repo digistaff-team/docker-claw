@@ -184,9 +184,6 @@ window.loadFacebookConfig = async function() {
         const pageName = cfg.page_name ? `Страница: ${cfg.page_name}` : '';
         setFbStatus(`✅ Facebook ${pageName}`, '#0a0');
 
-        // Показываем блок настроек
-        $('facebookSettingsBlock').style.display = 'block';
-
     } catch (e) {
         console.warn('loadFacebookConfig:', e.message);
         setFbStatus('Не удалось загрузить настройки', '#f90');

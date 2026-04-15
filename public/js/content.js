@@ -264,26 +264,28 @@ async function deleteTopic(topicId) {
     }
 }
 
-function getImportPayload() {
+function getImportPayload(mode) {
+    const prefix = mode === 'materials' ? 'materials' : 'topics';
     return {
         chat_id: getChatId(),
-        mode: document.getElementById('importMode')?.value || 'topics',
-        sheet_url: document.getElementById('importSheetUrl')?.value.trim(),
-        gid: document.getElementById('importSheetGid')?.value.trim()
+        mode,
+        sheet_url: document.getElementById(`${prefix}SheetUrl`)?.value.trim(),
+        gid: document.getElementById(`${prefix}SheetGid`)?.value.trim()
     };
 }
 
-function renderImportPreview(data) {
-    const wrap = document.getElementById('importPreviewWrap');
-    const head = document.getElementById('importPreviewHead');
-    const body = document.getElementById('importPreviewBody');
-    const meta = document.getElementById('importPreviewMeta');
+function renderImportPreview(data, mode) {
+    const prefix = mode === 'materials' ? 'materials' : 'topics';
+    const wrap = document.getElementById(`${prefix}ImportPreviewWrap`);
+    const head = document.getElementById(`${prefix}ImportPreviewHead`);
+    const body = document.getElementById(`${prefix}ImportPreviewBody`);
+    const meta = document.getElementById(`${prefix}ImportPreviewMeta`);
     if (!wrap || !head || !body || !meta) return;
 
     wrap.style.display = 'block';
     meta.textContent = `rows: ${data.totalRows}, duplicates: ${data.skippedDuplicates}, empty: ${data.skippedEmpty}`;
 
-    if (data.mode === 'materials') {
+    if (mode === 'materials') {
         head.innerHTML = '<tr><th>Row</th><th>Title</th><th>Source</th><th>Content</th><th>Duplicate</th></tr>';
         body.innerHTML = (data.preview || []).map((item) => `
             <tr>
@@ -308,10 +310,11 @@ function renderImportPreview(data) {
     }
 }
 
-async function previewSheetImport() {
+async function previewSheetImport(mode) {
     const chatId = getChatId();
     if (!chatId) return;
-    const statusEl = document.getElementById('topicsImportStatus');
+    const prefix = mode === 'materials' ? 'materials' : 'topics';
+    const statusEl = document.getElementById(`${prefix}ImportStatus`);
     if (statusEl) {
         statusEl.textContent = 'Собираем предпросмотр...';
         statusEl.className = 'content-status-line';
@@ -320,9 +323,9 @@ async function previewSheetImport() {
         const data = await fetchJson(`${API_CONTENT}/import-google-sheet/preview`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(getImportPayload())
+            body: JSON.stringify(getImportPayload(mode))
         });
-        renderImportPreview(data);
+        renderImportPreview(data, mode);
         if (statusEl) {
             statusEl.textContent = `Предпросмотр готов: ${data.preview?.length || 0} строк`;
             statusEl.className = 'content-status-line ok';
@@ -337,21 +340,20 @@ async function previewSheetImport() {
     }
 }
 
-async function applySheetImport() {
+async function applySheetImport(mode) {
     const chatId = getChatId();
     if (!chatId) return;
-    const statusEl = document.getElementById('topicsImportStatus');
+    const prefix = mode === 'materials' ? 'materials' : 'topics';
+    const statusEl = document.getElementById(`${prefix}ImportStatus`);
     if (statusEl) {
         statusEl.textContent = 'Импортируем данные...';
         statusEl.className = 'content-status-line';
     }
     try {
-        const payload = getImportPayload();
-        const mode = payload.mode;
         const data = await fetchJson(`${API_CONTENT}/import-google-sheet`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(getImportPayload(mode))
         });
         if (statusEl) {
             statusEl.textContent = `Импортировано: ${data.imported}, дубликаты: ${data.skippedDuplicates}, пустые строки: ${data.skippedEmpty}`;
@@ -363,7 +365,7 @@ async function applySheetImport() {
         } else {
             await loadTopics();
         }
-        await previewSheetImport();
+        await previewSheetImport(mode);
     } catch (e) {
         if (statusEl) {
             statusEl.textContent = e.message;

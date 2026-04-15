@@ -51,12 +51,17 @@ async function ensureSchema(chatId) {
         buffer_post_id TEXT,
         buffer_channel_id TEXT,
         correlation_id TEXT,
+        topic_id BIGINT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         CONSTRAINT facebook_jobs_status_check CHECK (
           status IN ('draft', 'media_generating', 'ready', 'approved', 'published', 'failed')
         )
       )
+    `);
+
+    await client.query(`
+      ALTER TABLE facebook_jobs ADD COLUMN IF NOT EXISTS topic_id BIGINT
     `);
 
     await client.query(`
@@ -96,8 +101,8 @@ async function createJob(chatId, data) {
   return withClient(chatId, async (client) => {
     const result = await client.query(
       `INSERT INTO facebook_jobs
-        (chat_id, topic, focus, post_text, image_prompt, image_path, status, image_attempts, rejected_count, correlation_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        (chat_id, topic, focus, post_text, image_prompt, image_path, status, image_attempts, rejected_count, correlation_id, topic_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id`,
       [
         chatId,
@@ -109,7 +114,8 @@ async function createJob(chatId, data) {
         data.status || 'draft',
         data.imageAttempts || 0,
         data.rejectedCount || 0,
-        data.correlationId || null
+        data.correlationId || null,
+        data.topicId || null
       ]
     );
     return result.rows[0].id;

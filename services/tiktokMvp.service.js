@@ -5,13 +5,12 @@
  */
 const path = require('path');
 const fs = require('fs').promises;
-const fetch = require('node-fetch');
 const config = require('../config');
 const aiRouterService = require('./ai_router_service');
 const manageStore = require('../manage/store');
 const sessionService = require('./session.service');
 const storageService = require('./storage.service');
-const FormData = require('form-data');
+const bufferService = require('./buffer.service');
 const videoPipeline = require('./videoPipeline.service');
 const repository = require('./content/repository');
 
@@ -291,8 +290,16 @@ async function publishTiktokPost(chatId, bot, jobId) {
     throw new Error(`TikTok draft ${jobId} not found`);
   }
 
-  // Публикация через upload-post.com
-  await publishViaUploadPost(draft.videoPath, draft.title || draft.caption);
+  // Публикация через Buffer API (per-user credentials)
+  const cfg = manageStore.getTiktokConfig(chatId) || {};
+  if (!cfg.buffer_api_key || !cfg.buffer_channel_id) {
+    throw new Error('Buffer API key или channel_id не настроены в настройках TikTok');
+  }
+
+  const videoFilename = path.basename(draft.videoPath);
+  const videoUrl = `${config.APP_URL}/api/video/temp/${chatId}/${videoFilename}`;
+  const postText = [draft.caption, ...draft.hashtags].join(' ');
+  await bufferService.createPost(cfg.buffer_api_key, cfg.buffer_channel_id, { text: postText, videoUrl });
 
   // Завершаем жизненный цикл топика
   if (draft.topicId) {
@@ -314,43 +321,6 @@ async function publishTiktokPost(chatId, bot, jobId) {
       `${draft.hashtags.join(' ')}`
     ).catch(() => {});
   }
-}
-
-async function publishViaUploadPost(videoPath, title) {
-  const jwt = process.env.UPLOAD_POST_JWT;
-  const user = process.env.UPLOAD_POST_USER;
-
-  if (!jwt || !user) {
-    throw new Error('UPLOAD_POST_JWT или UPLOAD_POST_USER не заданы в .env.local');
-  }
-
-  const videoBuffer = await fs.readFile(videoPath);
-  const videoFilename = path.basename(videoPath);
-
-  const form = new FormData();
-  form.append('title', title);
-  form.append('user', user);
-  form.append('platform[]', 'tiktok');
-  form.append('video', videoBuffer, { filename: videoFilename, contentType: 'video/mp4' });
-
-  const resp = await fetch('https://api.upload-post.com/api/upload', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${jwt}`,
-      ...form.getHeaders()
-    },
-    body: form,
-    timeout: 120000
-  });
-
-  if (!resp.ok) {
-    const errText = await resp.text();
-    throw new Error(`upload-post.com error: ${resp.status} ${errText.slice(0, 300)}`);
-  }
-
-  const data = await resp.json().catch(() => ({}));
-  console.log(`[TIKTOK-MVP][UPLOAD-POST] Published:`, JSON.stringify(data));
-  return data;
 }
 
 // ============================================
