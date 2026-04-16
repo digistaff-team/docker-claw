@@ -14,11 +14,7 @@ window.fetchFacebookBufferChannels = async function() {
         return;
     }
 
-    const apiKey = $('fbBufferApiKey').value.trim();
-    if (!apiKey) {
-        setFbStatus('Введите Buffer API Token', '#c00');
-        return;
-    }
+    const apiKey = (document.getElementById('globalBufferApiKey')?.value || '').trim();
 
     try {
         setFbStatus('Загрузка каналов...', '#666');
@@ -26,7 +22,7 @@ window.fetchFacebookBufferChannels = async function() {
         const result = await jfetch(`${API_MANAGE}/channels/buffer/channels`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ buffer_api_key: apiKey })
+            body: JSON.stringify({ buffer_api_key: apiKey, chat_id: chatId })
         });
 
         if (!result.success || !result.channels) {
@@ -71,13 +67,8 @@ window.testFacebookBufferConnection = async function() {
         return;
     }
 
-    const apiKey = $('fbBufferApiKey').value.trim();
+    const apiKey = (document.getElementById('globalBufferApiKey')?.value || '').trim();
     const channelId = $('fbBufferChannelId').value;
-
-    if (!apiKey) {
-        setFbStatus('Введите Buffer API Token', '#c00');
-        return;
-    }
 
     if (!channelId) {
         setFbStatus('Выберите Facebook канал', '#c00');
@@ -126,13 +117,6 @@ window.loadFacebookConfig = async function() {
         const cfg = result.config;
         window.facebookConfig = cfg;
 
-        // Buffer credentials (замаскированы, не перезаписываем)
-        if (!cfg.buffer_api_key || cfg.buffer_api_key.endsWith('***')) {
-            $('fbBufferApiKey').value = '';
-        } else {
-            $('fbBufferApiKey').value = cfg.buffer_api_key;
-        }
-
         if (cfg.buffer_channel_id) {
             $('fbBufferChannelId').value = cfg.buffer_channel_id;
         }
@@ -165,11 +149,6 @@ window.loadFacebookConfig = async function() {
             setWeekdays('facebook-weekday', cfg.allowed_weekdays);
         }
         
-        if (cfg.moderator_user_id) {
-            const modEl = document.getElementById('facebookModeratorUserId');
-            if (modEl) modEl.value = cfg.moderator_user_id;
-        }
-
         // Load toggles
         const randomPublishEl = document.getElementById('facebookRandomPublish');
         if (randomPublishEl) randomPublishEl.checked = !!cfg.random_publish;
@@ -177,7 +156,6 @@ window.loadFacebookConfig = async function() {
         const premoderationEl = document.getElementById('facebookPremoderation');
         if (premoderationEl) {
             premoderationEl.checked = !!cfg.premoderation;
-            toggleFacebookModeratorField();
         }
 
         // Статус
@@ -290,11 +268,8 @@ window.saveFacebookConfig = async function() {
         const allowedWeekdays = getWeekdays('facebook-weekday');
         const randomPublish = !!document.getElementById('facebookRandomPublish')?.checked;
         const premoderation = !!document.getElementById('facebookPremoderation')?.checked;
-        const moderatorUserId = (document.getElementById('facebookModeratorUserId')?.value || '').trim() || null;
-
         const payload = {
             chat_id: chatId,
-            buffer_api_key: $('fbBufferApiKey').value.trim() || null,
             buffer_channel_id: $('fbBufferChannelId').value || null,
             page_name: window.facebookConfig?.page_name || null,
             schedule_time: scheduleTime,
@@ -304,8 +279,7 @@ window.saveFacebookConfig = async function() {
             publish_interval_hours: publishInterval,
             allowed_weekdays: allowedWeekdays,
             random_publish: randomPublish,
-            premoderation: premoderation,
-            moderator_user_id: moderatorUserId
+            premoderation: premoderation
         };
 
         await jfetch(`${API_MANAGE}/channels/facebook`, {
@@ -399,15 +373,3 @@ async function jfetch(url, opts) {
     return data || {};
 }
 
-// Автозагрузка каналов при изменении API ключа
-document.addEventListener('DOMContentLoaded', () => {
-    const apiKeyInput = $('fbBufferApiKey');
-    if (apiKeyInput) {
-        apiKeyInput.addEventListener('change', () => {
-            const apiKey = apiKeyInput.value.trim();
-            if (apiKey && !apiKey.endsWith('***')) {
-                fetchFacebookBufferChannels();
-            }
-        });
-    }
-});

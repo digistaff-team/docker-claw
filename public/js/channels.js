@@ -191,6 +191,7 @@ async function saveChannelPicker() {
 }
 
 async function onLoginSuccess() {
+    await loadIntegrationSettings();
     // Загружаем список включённых каналов и фильтруем меню
     let enabledChannels = ['telegram']; // fallback — всегда показываем Telegram
     try {
@@ -631,22 +632,85 @@ async function saveContentSettings() {
     }
 }
 
+// === Глобальные настройки интеграций ===
+
+async function loadIntegrationSettings() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    const block = document.getElementById('integrationsBlock');
+    if (block) block.style.display = 'block';
+    try {
+        const res = await fetch(`${API_MANAGE}/integrations?chat_id=${encodeURIComponent(chatId)}`);
+        const data = await res.json();
+        const s = data.settings || {};
+        const keyEl = document.getElementById('globalBufferApiKey');
+        const modEl = document.getElementById('globalModeratorUserId');
+        if (keyEl && s.buffer_api_key) keyEl.value = s.buffer_api_key;
+        if (modEl && s.moderator_user_id) modEl.value = s.moderator_user_id;
+    } catch (e) { console.error('loadIntegrationSettings error:', e); }
+}
+
+async function saveIntegrationSettings() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    const apiKey = (document.getElementById('globalBufferApiKey')?.value || '').trim();
+    const modId = (document.getElementById('globalModeratorUserId')?.value || '').trim();
+    const statusEl = document.getElementById('integrationsStatus');
+    const body = { chat_id: chatId };
+    if (apiKey && !apiKey.endsWith('***')) body.buffer_api_key = apiKey;
+    if (modId) body.moderator_user_id = modId;
+    try {
+        const res = await fetch(`${API_MANAGE}/integrations`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast('Настройки интеграций сохранены', 'success');
+            if (statusEl) statusEl.innerHTML = '<span style="color:#0a0;">✅ Сохранено</span>';
+            await loadIntegrationSettings();
+        } else {
+            showToast(data.error || 'Ошибка', 'error');
+        }
+    } catch (e) { showToast('Ошибка сети', 'error'); }
+}
+
+async function testGlobalBufferConnection() {
+    const chatId = getChatId();
+    const apiKey = (document.getElementById('globalBufferApiKey')?.value || '').trim();
+    const body = { chat_id: chatId, buffer_api_key: apiKey };
+    const statusEl = document.getElementById('integrationsStatus');
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/buffer/channels`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            const msg = `Buffer API OK: ${(data.channels || []).length} каналов`;
+            showToast(msg, 'success');
+            if (statusEl) statusEl.innerHTML = `<span style="color:#0a0;">✅ ${msg}</span>`;
+        } else {
+            showToast(data.error || 'Ошибка проверки', 'error');
+        }
+    } catch (e) { showToast('Ошибка сети', 'error'); }
+}
+
 // === Pinterest ===
 
 async function connectPinterestBuffer() {
     const chatId = getChatId();
     if (!chatId) return;
-    const bufferApiKey = (document.getElementById('bufferApiKey')?.value || '').trim();
     const bufferChannelId = (document.getElementById('bufferChannelId')?.value || '').trim();
-    if (!bufferApiKey || !bufferChannelId) {
-        showToast('Введите Buffer API Token и Channel ID', 'error');
+    if (!bufferChannelId) {
+        showToast('Выберите Buffer Channel', 'error');
         return;
     }
     try {
         const res = await fetch(`${API_MANAGE}/channels/pinterest`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: chatId, buffer_api_key: bufferApiKey, buffer_channel_id: bufferChannelId })
+            body: JSON.stringify({ chat_id: chatId, buffer_channel_id: bufferChannelId })
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
@@ -663,10 +727,10 @@ async function connectPinterestBuffer() {
 async function testPinterestBufferConnection() {
     const chatId = getChatId();
     if (!chatId) return;
-    const bufferApiKey = (document.getElementById('bufferApiKey')?.value || '').trim();
+    const bufferApiKey = (document.getElementById('globalBufferApiKey')?.value || '').trim();
     const bufferChannelId = (document.getElementById('bufferChannelId')?.value || '').trim();
-    if (!bufferApiKey || !bufferChannelId) {
-        showToast('Введите Buffer API Token и Channel ID', 'error');
+    if (!bufferChannelId) {
+        showToast('Выберите Buffer Channel', 'error');
         return;
     }
     try {
@@ -706,7 +770,6 @@ async function loadPinterestConfig() {
             if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
             // Заполняем поля
             const cfg = data.config || {};
-            if (cfg.buffer_api_key) document.getElementById('bufferApiKey').value = cfg.buffer_api_key;
             if (cfg.buffer_channel_id) {
                 document.getElementById('bufferChannelId').value = cfg.buffer_channel_id;
                 // Также пробуем выбрать нужный option в select (если он уже загружен)
@@ -747,11 +810,7 @@ async function loadPinterestConfig() {
             const premoderEl = document.getElementById('pinterestPremoderation');
             if (premoderEl) {
                 premoderEl.checked = !!cfg.premoderation_enabled;
-                togglePinterestModeratorField();
             }
-            // Load moderator
-            const moderatorEl = document.getElementById('pinterestModeratorUserId');
-            if (moderatorEl) moderatorEl.value = cfg.moderator_user_id || '';
             // Устанавливаем выбранную доску в select
             const boardSelect = document.getElementById('pinterestBoardSelect');
             if (boardSelect && cfg.board_id) {
@@ -975,7 +1034,6 @@ async function savePinterestConfig() {
     const focus = (document.getElementById('pinterestBoardFocus')?.value || '').trim();
     const purpose = (document.getElementById('pinterestBoardPurpose')?.value || '').trim();
     const keywords = (document.getElementById('pinterestBoardKeywords')?.value || '').trim();
-    const bufferApiKey = (document.getElementById('bufferApiKey')?.value || '').trim();
     const bufferChannelId = (document.getElementById('bufferChannelId')?.value || '').trim();
 
     // Планировщик
@@ -988,7 +1046,6 @@ async function savePinterestConfig() {
     const allowedWeekdays = getWeekdays('pinterest-weekday');
     const randomPublish = !!document.getElementById('pinterestRandomPublish')?.checked;
     const premoderationEnabled = !!document.getElementById('pinterestPremoderation')?.checked;
-    const moderatorUserId = (document.getElementById('pinterestModeratorUserId')?.value || '').trim();
 
     if (!websiteUrl) {
         showToast('Укажите Website URL', 'error');
@@ -1012,11 +1069,8 @@ async function savePinterestConfig() {
                 publish_interval_hours: publishInterval,
                 allowed_weekdays: allowedWeekdays,
                 random_publish: randomPublish,
-                premoderation_enabled: premoderationEnabled,
-                moderator_user_id: moderatorUserId
+                premoderation_enabled: premoderationEnabled
         };
-        // Отправляем Buffer credentials только если они не замаскированы
-        if (bufferApiKey && !bufferApiKey.includes('***')) body.buffer_api_key = bufferApiKey;
         if (bufferChannelId) body.buffer_channel_id = bufferChannelId;
 
         const res = await fetch(`${API_MANAGE}/channels/pinterest`, {
@@ -1043,7 +1097,6 @@ async function disconnectPinterest() {
         const res = await fetch(`${API_MANAGE}/channels/pinterest?chat_id=${encodeURIComponent(chatId)}`, { method: 'DELETE' });
         if (res.ok) {
             showToast('Pinterest отключён', 'success');
-            document.getElementById('bufferApiKey').value = '';
             document.getElementById('bufferChannelId').value = '';
             document.getElementById('pinterestBoardId').value = '';
             document.getElementById('pinterestWebsiteUrl').value = '';
@@ -1061,8 +1114,8 @@ async function disconnectPinterest() {
 // === Instagram ===
 
 function fetchInstagramBufferChannels() {
-    const apiKey = document.getElementById('instagramBufferApiKey')?.value?.trim();
-    loadBufferChannels(apiKey, 'instagram', 'instagramBufferChannelSelect');
+    const apiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
+    loadBufferChannels(apiKey, 'instagram', 'instagramBufferChannelSelect', getChatId());
 }
 
 function onInstagramChannelSelectChange() {
@@ -1074,10 +1127,10 @@ function onInstagramChannelSelectChange() {
 async function testInstagramBufferConnection() {
     const chatId = getChatId();
     if (!chatId) return;
-    const apiKey = (document.getElementById('instagramBufferApiKey')?.value || '').trim();
+    const apiKey = (document.getElementById('globalBufferApiKey')?.value || '').trim();
     const channelId = (document.getElementById('instagramBufferChannelId')?.value || '').trim();
-    if (!apiKey || !channelId) {
-        showToast('Введите Buffer API Token и выберите канал', 'error');
+    if (!channelId) {
+        showToast('Выберите Buffer Channel', 'error');
         return;
     }
     try {
@@ -1100,10 +1153,10 @@ async function testInstagramBufferConnection() {
 async function connectInstagram() {
     const chatId = getChatId();
     if (!chatId) return;
-    const apiKey = (document.getElementById('instagramBufferApiKey')?.value || '').trim();
+    const apiKey = (document.getElementById('globalBufferApiKey')?.value || '').trim();
     const channelId = (document.getElementById('instagramBufferChannelId')?.value || '').trim();
-    if (!apiKey || !channelId) {
-        showToast('Введите Buffer API Token и выберите канал', 'error');
+    if (!channelId) {
+        showToast('Выберите Buffer Channel', 'error');
         return;
     }
     try {
@@ -1139,11 +1192,11 @@ async function loadInstagramConfig() {
             if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
 
             const cfg = data.config || {};
-            if (cfg.buffer_api_key) document.getElementById('instagramBufferApiKey').value = cfg.buffer_api_key;
             if (cfg.buffer_channel_id) {
                 document.getElementById('instagramBufferChannelId').value = cfg.buffer_channel_id;
-                if (cfg.buffer_api_key) {
-                    loadBufferChannels(cfg.buffer_api_key, 'instagram', 'instagramBufferChannelSelect').then(() => {
+                const globalApiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
+                if (globalApiKey) {
+                    loadBufferChannels(globalApiKey, 'instagram', 'instagramBufferChannelSelect', getChatId()).then(() => {
                         const selectEl = document.getElementById('instagramBufferChannelSelect');
                         if (selectEl) selectEl.value = cfg.buffer_channel_id;
                     });
@@ -1151,9 +1204,6 @@ async function loadInstagramConfig() {
             }
             if (cfg.default_alt_text) document.getElementById('instagramDefaultAltText').value = cfg.default_alt_text;
             if (cfg.location_id) document.getElementById('instagramLocationId').value = cfg.location_id;
-
-            const moderatorEl = document.getElementById('instagramModeratorUserId');
-            if (moderatorEl) moderatorEl.value = cfg.moderator_user_id || chatId;
 
             const isReelEl = document.getElementById('instagramIsReel');
             if (isReelEl) isReelEl.checked = !!cfg.is_reel;
@@ -1183,7 +1233,6 @@ async function loadInstagramConfig() {
             const premoderationEl = document.getElementById('instagramPremoderation');
             if (premoderationEl) {
                 premoderationEl.checked = !!cfg.premoderation;
-                toggleInstagramModeratorField();
             }
         } else {
             statusEl.textContent = '';
@@ -1274,7 +1323,6 @@ async function saveInstagramConfig() {
     const chatId = getChatId();
     if (!chatId) return;
 
-    const bufferApiKey = (document.getElementById('instagramBufferApiKey')?.value || '').trim();
     const bufferChannelId = (document.getElementById('instagramBufferChannelId')?.value || '').trim();
     const defaultAltText = (document.getElementById('instagramDefaultAltText')?.value || '').trim();
     const locationId = (document.getElementById('instagramLocationId')?.value || '').trim();
@@ -1289,7 +1337,6 @@ async function saveInstagramConfig() {
     const allowedWeekdays = getWeekdays('instagram-weekday');
     const randomPublish = !!document.getElementById('instagramRandomPublish')?.checked;
     const premoderation = !!document.getElementById('instagramPremoderation')?.checked;
-    const moderatorUserId = (document.getElementById('instagramModeratorUserId')?.value || '').trim() || chatId;
 
     const body = {
         chat_id: chatId,
@@ -1303,10 +1350,8 @@ async function saveInstagramConfig() {
         publish_interval_hours: publishInterval,
         allowed_weekdays: allowedWeekdays,
         random_publish: randomPublish,
-        premoderation: premoderation,
-        moderator_user_id: moderatorUserId
+        premoderation: premoderation
     };
-    if (bufferApiKey && !bufferApiKey.includes('***')) body.buffer_api_key = bufferApiKey;
     if (bufferChannelId) body.buffer_channel_id = bufferChannelId;
 
     try {
@@ -1334,7 +1379,6 @@ async function disconnectInstagram() {
         const res = await fetch(`${API_MANAGE}/channels/instagram?chat_id=${encodeURIComponent(chatId)}`, { method: 'DELETE' });
         if (res.ok) {
             showToast('Instagram отключён', 'success');
-            document.getElementById('instagramBufferApiKey').value = '';
             document.getElementById('instagramBufferChannelId').value = '';
             const selectEl = document.getElementById('instagramBufferChannelSelect');
             if (selectEl) selectEl.innerHTML = '<option value="">— выберите канал —</option>';
@@ -1904,7 +1948,6 @@ async function loadYoutubeConfig() {
         document.getElementById('youtubeStatus').innerHTML = '<span style="color:#0a0;">🟢 Подключён</span>';
         if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
 
-        if (cfg.buffer_api_key) document.getElementById('youtubeBufferApiKey').value = cfg.buffer_api_key;
         if (cfg.buffer_channel_id) {
             document.getElementById('youtubeBufferChannelId').value = cfg.buffer_channel_id;
             // Также пробуем выбрать нужный option в select (если он уже загружен)
@@ -1929,7 +1972,6 @@ async function loadYoutubeConfig() {
         if (cfg.schedule_tz) document.getElementById('youtubeScheduleTz').value = cfg.schedule_tz;
         if (cfg.daily_limit) document.getElementById('youtubeDailyLimit').value = cfg.daily_limit;
         if (cfg.publish_interval_hours) document.getElementById('youtubePublishInterval').value = cfg.publish_interval_hours;
-        if (cfg.moderator_user_id) document.getElementById('youtubeModeratorUserId').value = cfg.moderator_user_id;
         if (Array.isArray(cfg.allowed_weekdays)) {
             setWeekdays('youtube-weekday', cfg.allowed_weekdays);
         }
@@ -1940,18 +1982,20 @@ async function loadYoutubeConfig() {
         const premoderEl = document.getElementById('youtubePremoderation');
         if (premoderEl) {
             premoderEl.checked = !!cfg.premoderation_enabled;
-            toggleYoutubeModeratorField();
         }
 
         // Автозагрузка каналов Buffer для восстановления select
-        if (cfg.buffer_api_key && cfg.buffer_channel_id) {
-            loadBufferChannels(cfg.buffer_api_key, 'youtube', 'youtubeBufferChannelSelect').then(() => {
-                const selectEl = document.getElementById('youtubeBufferChannelSelect');
-                if (selectEl) {
-                    selectEl.value = cfg.buffer_channel_id;
-                }
-                document.getElementById('youtubeBufferChannelId').value = cfg.buffer_channel_id;
-            }).catch(() => {});
+        if (cfg.buffer_channel_id) {
+            const globalApiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
+            if (globalApiKey) {
+                loadBufferChannels(globalApiKey, 'youtube', 'youtubeBufferChannelSelect', getChatId()).then(() => {
+                    const selectEl = document.getElementById('youtubeBufferChannelSelect');
+                    if (selectEl) {
+                        selectEl.value = cfg.buffer_channel_id;
+                    }
+                    document.getElementById('youtubeBufferChannelId').value = cfg.buffer_channel_id;
+                }).catch(() => {});
+            }
         }
     } catch (e) {
         console.error('Failed to load YouTube config:', e);
@@ -1979,7 +2023,6 @@ async function saveYoutubeConfig() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 chat_id: chatId,
-                buffer_api_key: document.getElementById('youtubeBufferApiKey').value,
                 buffer_channel_id: bufferChannelId,
                 schedule_time: document.getElementById('youtubeScheduleTime')?.value || '09:00',
                 schedule_end_time: (document.getElementById('youtubeScheduleEndTime')?.value || '').trim(),
@@ -1988,8 +2031,7 @@ async function saveYoutubeConfig() {
                 publish_interval_hours: parseInt(document.getElementById('youtubePublishInterval').value, 10),
                 allowed_weekdays: getWeekdays('youtube-weekday'),
                 random_publish: !!document.getElementById('youtubeRandomPublish')?.checked,
-                premoderation_enabled: !!document.getElementById('youtubePremoderation')?.checked,
-                moderator_user_id: (document.getElementById('youtubeModeratorUserId')?.value || '').trim() || chatId
+                premoderation_enabled: !!document.getElementById('youtubePremoderation')?.checked
             })
         });
         const data = await res.json();
@@ -2030,7 +2072,7 @@ async function disconnectYoutube() {
 }
 
 async function testYoutubeBufferConnection() {
-    const apiKey = document.getElementById('youtubeBufferApiKey').value;
+    const apiKey = (document.getElementById('globalBufferApiKey')?.value || '').trim();
     const channelId = document.getElementById('youtubeBufferChannelId').value;
     const statusEl = document.getElementById('youtubeStatus');
 
@@ -2203,7 +2245,7 @@ async function runYoutubeNow() {
  * @param {string} service - Фильтр по сервису ('youtube', 'pinterest')
  * @param {string} selectElementId - ID элемента <select>
  */
-async function loadBufferChannels(apiKey, service, selectElementId) {
+async function loadBufferChannels(apiKey, service, selectElementId, chatId = null) {
     if (!apiKey) {
         showToast('Введите Buffer API Token', 'error');
         return;
@@ -2281,8 +2323,8 @@ function onYoutubeChannelSelectChange() {
  * Обработчик кнопки загрузки YouTube каналов.
  */
 function fetchYoutubeBufferChannels() {
-    const apiKey = document.getElementById('youtubeBufferApiKey')?.value?.trim();
-    loadBufferChannels(apiKey, 'youtube', 'youtubeBufferChannelSelect');
+    const apiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
+    loadBufferChannels(apiKey, 'youtube', 'youtubeBufferChannelSelect', getChatId());
 }
 
 /**
@@ -2300,8 +2342,8 @@ function onPinterestChannelSelectChange() {
  * Обработчик кнопки загрузки Pinterest каналов.
  */
 function fetchPinterestBufferChannels() {
-    const apiKey = document.getElementById('bufferApiKey')?.value?.trim();
-    loadBufferChannels(apiKey, 'pinterest', 'pinterestBufferChannelSelect');
+    const apiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
+    loadBufferChannels(apiKey, 'pinterest', 'pinterestBufferChannelSelect', getChatId());
 }
 
 // ============================================
@@ -2404,11 +2446,7 @@ async function loadVkVideoConfig() {
         if (premoderEl) {
             // auto_publish=false означает premoderation включена
             premoderEl.checked = cfg.auto_publish === false || cfg.auto_publish === undefined;
-            toggleVkVideoModeratorField();
         }
-
-        const moderatorEl = document.getElementById('vkVideoModeratorUserId');
-        if (moderatorEl) moderatorEl.value = cfg.moderator_user_id || '';
 
     } catch (e) {
         console.error('loadVkVideoConfig', e);
@@ -2430,7 +2468,6 @@ async function saveVkVideoSettings() {
     const allowedWeekdays = getWeekdays('vkvideo-weekday');
     const randomPublish = !!document.getElementById('vkVideoRandomPublish')?.checked;
     const premoderation = !!document.getElementById('vkVideoPremoderation')?.checked;
-    const moderatorUserId = document.getElementById('vkVideoModeratorUserId')?.value?.trim() || '';
 
     const statusEl = document.getElementById('vkVideoSettingsStatus');
 
@@ -2447,8 +2484,7 @@ async function saveVkVideoSettings() {
                 publish_interval_hours: publishInterval,
                 random_publish: randomPublish,
                 premoderation_enabled: premoderation,
-                allowed_weekdays: allowedWeekdays,
-                moderator_user_id: moderatorUserId
+                allowed_weekdays: allowedWeekdays
             })
         });
         const data = await res.json();
@@ -2533,23 +2569,22 @@ function onTiktokChannelSelectChange() {
 }
 
 function fetchTiktokBufferChannels() {
-    const apiKey = document.getElementById('tiktokBufferApiKey')?.value?.trim();
-    loadBufferChannels(apiKey, 'tiktok', 'tiktokBufferChannelSelect');
+    const apiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
+    loadBufferChannels(apiKey, 'tiktok', 'tiktokBufferChannelSelect', getChatId());
 }
 
 async function connectTiktokBuffer() {
     const chatId = getChatId();
-    const apiKey = document.getElementById('tiktokBufferApiKey')?.value?.trim();
     const channelId = document.getElementById('tiktokBufferChannelId')?.value?.trim();
-    if (!apiKey || !channelId) {
-        showToast('Введите Buffer API Token и выберите канал', 'error');
+    if (!channelId) {
+        showToast('Выберите Buffer Channel', 'error');
         return;
     }
     try {
         const res = await fetch(`${API_MANAGE}/channels/tiktok`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: chatId, buffer_api_key: apiKey, buffer_channel_id: channelId })
+            body: JSON.stringify({ chat_id: chatId, buffer_channel_id: channelId })
         });
         if (res.ok) {
             showToast('TikTok подключён через Buffer', 'success');
@@ -2565,7 +2600,7 @@ async function connectTiktokBuffer() {
 
 async function testTiktokBufferConnection() {
     const chatId = getChatId();
-    const apiKey = document.getElementById('tiktokBufferApiKey')?.value?.trim();
+    const apiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
     const channelId = document.getElementById('tiktokBufferChannelId')?.value?.trim();
     try {
         const res = await fetch(`${API_MANAGE}/channels/tiktok/test-buffer`, {
@@ -2611,7 +2646,6 @@ async function saveTiktokSettings() {
     updateTiktokScheduleTime();
     updateTiktokScheduleEndTime();
 
-    const moderatorUserId = (document.getElementById('tiktokModeratorUserId')?.value || '').trim() || chatId;
     const premoderation = !!document.getElementById('tiktokPremoderation')?.checked;
 
     try {
@@ -2628,7 +2662,6 @@ async function saveTiktokSettings() {
                 random_publish: !!document.getElementById('tiktokRandomPublish')?.checked,
                 auto_publish: !premoderation,
                 allowed_weekdays: getWeekdays('tiktok-weekday'),
-                moderator_user_id: moderatorUserId,
                 is_active: true
             })
         });
@@ -2699,15 +2732,12 @@ async function loadTiktokConfig() {
         if (connected) {
             statusEl.innerHTML = '<span style="color: #0a0;">✅ TikTok подключён через Buffer</span>';
             if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
-            if (cfg.buffer_api_key) {
-                const apiKeyEl = document.getElementById('tiktokBufferApiKey');
-                if (apiKeyEl) apiKeyEl.value = cfg.buffer_api_key;
-            }
             if (cfg.buffer_channel_id) {
                 const hiddenEl = document.getElementById('tiktokBufferChannelId');
                 if (hiddenEl) hiddenEl.value = cfg.buffer_channel_id;
-                if (cfg.buffer_api_key) {
-                    loadBufferChannels(cfg.buffer_api_key, 'tiktok', 'tiktokBufferChannelSelect').then(() => {
+                const globalApiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
+                if (globalApiKey) {
+                    loadBufferChannels(globalApiKey, 'tiktok', 'tiktokBufferChannelSelect', getChatId()).then(() => {
                         const selectEl = document.getElementById('tiktokBufferChannelSelect');
                         if (selectEl) selectEl.value = cfg.buffer_channel_id;
                     });
@@ -2759,11 +2789,7 @@ async function loadTiktokConfig() {
         if (premodEl && cfg.auto_publish !== undefined) {
             premodEl.checked = !cfg.auto_publish;
         }
-        if (cfg.moderator_user_id) {
-            const modEl = document.getElementById('tiktokModeratorUserId');
-            if (modEl) modEl.value = cfg.moderator_user_id;
-        }
-        toggleTiktokModeratorField();
+
     } catch (e) {
         console.error('loadTiktokConfig error:', e);
     }

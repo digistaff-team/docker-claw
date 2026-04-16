@@ -69,10 +69,12 @@ function isValidTz(tz) {
 
 function getFacebookSettings(chatId) {
   const cfg = manageStore.getFacebookConfig(chatId);
+  manageStore.migrateIntegrationSettings(chatId);
+  const globalInt = manageStore.getIntegrationSettings(chatId) || {};
   return {
     isActive: !!cfg?.is_active,
     autoPublish: !!cfg?.auto_publish,
-    bufferApiKey: cfg?.buffer_api_key || null,
+    bufferApiKey: globalInt.buffer_api_key || cfg?.buffer_api_key || null,
     bufferChannelId: cfg?.buffer_channel_id || null,
     pageName: cfg?.page_name || null,
     scheduleTime: cfg?.schedule_time || '10:00',
@@ -82,7 +84,7 @@ function getFacebookSettings(chatId) {
     publishIntervalHours: Number.isFinite(cfg?.publish_interval_hours) ? cfg.publish_interval_hours : 4,
     randomPublish: !!cfg?.random_publish,
     allowedWeekdays: Array.isArray(cfg?.allowed_weekdays) ? cfg.allowed_weekdays : [0, 1, 2, 3, 4, 5, 6],
-    moderatorUserId: cfg?.moderator_user_id || null,
+    moderatorUserId: globalInt.moderator_user_id || cfg?.moderator_user_id || null,
     stats: cfg?.stats || { total_posts: 0, posts_today: 0, last_post_date: null }
   };
 }

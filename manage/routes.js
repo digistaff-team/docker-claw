@@ -612,7 +612,9 @@ router.post('/channels/pinterest/boards/import-buffer', async (req, res) => {
     if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
     // Берём credentials из store (в UI они замаскированы)
     const cfg = manageStore.getPinterestConfig(chatId) || {};
-    const apiKey = req.body.buffer_api_key || cfg.buffer_api_key;
+    manageStore.migrateIntegrationSettings(chatId);
+    const globalInt = manageStore.getIntegrationSettings(chatId) || {};
+    const apiKey = globalInt.buffer_api_key || req.body.buffer_api_key || cfg.buffer_api_key;
     const channelId = req.body.buffer_channel_id || cfg.buffer_channel_id;
     if (!apiKey || !channelId) {
         return res.status(400).json({ error: 'buffer_api_key и buffer_channel_id не настроены' });
@@ -1352,7 +1354,12 @@ router.post('/channels/youtube/run-now', async (req, res) => {
  */
 router.post('/channels/buffer/channels', async (req, res) => {
     try {
-        const { buffer_api_key } = req.body;
+        let { buffer_api_key, chat_id } = req.body;
+        // Если ключ маскирован или не передан — читаем реальный из store
+        if (chat_id && (!buffer_api_key || String(buffer_api_key).endsWith('***'))) {
+            manageStore.migrateIntegrationSettings(chat_id);
+            buffer_api_key = manageStore.getIntegrationSettings(chat_id)?.buffer_api_key || null;
+        }
         if (!buffer_api_key) {
             return res.status(400).json({ error: 'buffer_api_key обязателен' });
         }
@@ -1510,6 +1517,34 @@ router.delete('/channels/tiktok', async (req, res) => {
         res.json({ success: true, message: 'TikTok отключён' });
     } catch (e) {
         res.status(500).json({ error: e.message });
+    }
+});
+
+// GET /api/manage/integrations
+router.get('/integrations', (req, res) => {
+    const chatId = req.query.chat_id;
+    if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+    manageStore.migrateIntegrationSettings(chatId);
+    const s = manageStore.getIntegrationSettings(chatId) || {};
+    res.json({ settings: {
+        buffer_api_key: s.buffer_api_key ? s.buffer_api_key.slice(0, 6) + '***' : null,
+        moderator_user_id: s.moderator_user_id || null
+    }});
+});
+
+// POST /api/manage/integrations
+router.post('/integrations', async (req, res) => {
+    const chatId = req.body.chat_id;
+    if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+    const patch = {};
+    const { buffer_api_key, moderator_user_id } = req.body;
+    if (buffer_api_key !== undefined && !String(buffer_api_key).endsWith('***')) patch.buffer_api_key = buffer_api_key;
+    if (moderator_user_id !== undefined) patch.moderator_user_id = moderator_user_id;
+    try {
+        await manageStore.setIntegrationSettings(chatId, patch);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
     }
 });
 

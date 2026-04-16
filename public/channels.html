@@ -38,6 +38,32 @@
                 <h2>📡 Каналы для публикаций</h2>
                 <p style="color: #666; margin-bottom: 20px;">Подключите каналы для публикаций контента</p>
 
+                <!-- Глобальные настройки интеграций -->
+                <div class="channel-card" id="integrationsBlock" style="margin-bottom: 24px; display: none;">
+                    <h3>🔗 Интеграции</h3>
+                    <p style="color: #666; margin-bottom: 16px; font-size: 13px;">Настройки, общие для всех каналов публикации.</p>
+                    <div class="scheduler-container">
+                        <div class="channel-settings-block">
+                            <h3>⚙️ Buffer API</h3>
+                            <div class="scheduler-field-row">
+                                <label for="globalBufferApiKey">Buffer API Token</label>
+                                <div style="display: flex; gap: 6px; align-items: flex-start;">
+                                    <input type="password" id="globalBufferApiKey" placeholder="Buffer API Token" autocomplete="off" style="flex: 1;" />
+                                    <button class="btn btn-secondary" onclick="testGlobalBufferConnection()" style="white-space: nowrap; padding: 12px 14px; margin-top: 0;" title="Проверить токен">🧪</button>
+                                </div>
+                            </div>
+                            <div class="scheduler-field-row">
+                                <label for="globalModeratorUserId">ID Модератора</label>
+                                <input type="text" id="globalModeratorUserId" placeholder="Telegram user ID модератора" />
+                            </div>
+                            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                <button class="btn btn-success" onclick="saveIntegrationSettings()">💾 Сохранить</button>
+                            </div>
+                            <div id="integrationsStatus" class="scheduler-status"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <nav class="channel-tabs" id="channelTabs">
                     <button class="channel-tab" data-channel="telegram" style="display: none;">Telegram</button>
                     <button class="channel-tab" data-channel="pinterest" style="display: none;">Pinterest</button>
@@ -194,14 +220,6 @@
                                     <h3>⚙️ Настройки канала</h3>
 
                                     <div class="scheduler-field-row">
-                                        <label for="bufferApiKey">Buffer API Token</label>
-                                        <div style="display: flex; gap: 6px; align-items: flex-start;">
-                                            <input type="password" id="bufferApiKey" placeholder="Buffer API Token" autocomplete="off" style="flex: 1;" />
-                                            <button class="btn btn-secondary" onclick="fetchPinterestBufferChannels()" style="white-space: nowrap; padding: 12px 14px; margin-top: 0;" title="Загрузить каналы из Buffer">📥</button>
-                                        </div>
-                                    </div>
-
-                                    <div class="scheduler-field-row">
                                         <label for="bufferChannelId">Buffer Channel ID</label>
                                         <select id="pinterestBufferChannelSelect" onchange="onPinterestChannelSelectChange()">
                                             <option value="">— выберите канал —</option>
@@ -210,8 +228,8 @@
                                     </div>
 
                                     <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px;">
+                                        <button class="btn btn-secondary" onclick="fetchPinterestBufferChannels()" title="Загрузить каналы из Buffer">📥 Загрузить каналы</button>
                                         <button class="btn btn-primary" onclick="connectPinterestBuffer()">🔗 Подключить</button>
-                                        <button class="btn btn-secondary" onclick="testPinterestBufferConnection()">🧪 Проверить соединение</button>
                                         <button class="btn btn-secondary" id="disconnectPinterestBtn" style="display: none;" onclick="disconnectPinterest()">Отключить</button>
                                     </div>
 
@@ -314,10 +332,7 @@
                                         <label for="pinterestPremoderation">Отправлять на премодерацию</label>
                                     </div>
 
-                                    <div class="scheduler-field-row moderator-field" id="pinterestModeratorField">
-                                        <label for="pinterestModeratorUserId">ID Модератора</label>
-                                        <input type="text" id="pinterestModeratorUserId" placeholder="Telegram user ID модератора" />
-                                    </div>
+
                                 </div>
                             </div>
 
@@ -349,14 +364,6 @@
                                     <h3>⚙️ Настройки канала</h3>
 
                                     <div class="scheduler-field-row">
-                                        <label for="instagramBufferApiKey">Buffer API Token</label>
-                                        <div style="display: flex; gap: 6px; align-items: flex-start;">
-                                            <input type="password" id="instagramBufferApiKey" placeholder="Buffer API Token" autocomplete="off" style="flex: 1;" />
-                                            <button class="btn btn-secondary" onclick="fetchInstagramBufferChannels()" style="white-space: nowrap; padding: 12px 14px; margin-top: 0;" title="Загрузить каналы из Buffer">📥</button>
-                                        </div>
-                                    </div>
-
-                                    <div class="scheduler-field-row">
                                         <label for="instagramBufferChannelSelect">Buffer Channel ID</label>
                                         <select id="instagramBufferChannelSelect" onchange="onInstagramChannelSelectChange()">
                                             <option value="">— выберите канал —</option>
@@ -365,8 +372,8 @@
                                     </div>
 
                                     <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px;">
+                                        <button class="btn btn-secondary" onclick="fetchInstagramBufferChannels()" title="Загрузить каналы из Buffer">📥 Загрузить каналы</button>
                                         <button class="btn btn-primary" onclick="connectInstagram()">🔗 Подключить</button>
-                                        <button class="btn btn-secondary" onclick="testInstagramBufferConnection()">🧪 Проверить соединение</button>
                                         <button class="btn btn-secondary" id="disconnectInstagramBtn" style="display: none;" onclick="disconnectInstagram()">Отключить</button>
                                     </div>
 
@@ -462,11 +469,7 @@
                                         <label for="instagramPremoderation">Отправлять на премодерацию</label>
                                     </div>
                                     
-                                    <!-- Moderator Field (conditionally shown) -->
-                                    <div class="scheduler-field-row moderator-field" id="instagramModeratorField">
-                                        <label for="instagramModeratorUserId">ID Модератора</label>
-                                        <input type="text" id="instagramModeratorUserId" placeholder="Telegram user ID модератора" />
-                                    </div>
+
                                 </div>
                             </div>
 
@@ -628,10 +631,7 @@
                                 <div class="channel-settings-block">
                                     <h3>⚙️ Настройки канала</h3>
 
-                                    <div class="scheduler-field-row moderator-field" id="vkVideoModeratorField">
-                                        <label for="vkVideoModeratorUserId">ID Модератора</label>
-                                        <input type="text" id="vkVideoModeratorUserId" placeholder="123456789" />
-                                    </div>
+
                                 </div>
 
                                 <div class="schedule-settings-block">
@@ -737,14 +737,6 @@
                                     <h3>⚙️ Настройки канала</h3>
 
                                     <div class="scheduler-field-row">
-                                        <label for="youtubeBufferApiKey">Buffer API Token</label>
-                                        <div style="display: flex; gap: 6px; align-items: flex-start;">
-                                            <input type="password" id="youtubeBufferApiKey" placeholder="Buffer API Token" autocomplete="off" style="flex: 1;" />
-                                            <button class="btn btn-secondary" onclick="fetchYoutubeBufferChannels()" style="white-space: nowrap; padding: 12px 14px; margin-top: 0;" title="Загрузить каналы из Buffer">📥</button>
-                                        </div>
-                                    </div>
-
-                                    <div class="scheduler-field-row">
                                         <label for="youtubeBufferChannelId">Buffer Channel ID</label>
                                         <select id="youtubeBufferChannelSelect" onchange="onYoutubeChannelSelectChange()">
                                             <option value="">— выберите канал —</option>
@@ -757,14 +749,11 @@
                                     </div>
 
                                     <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px;">
-                                        <button class="btn btn-secondary" onclick="testYoutubeBufferConnection()">🧪 Проверить соединение</button>
+                                        <button class="btn btn-secondary" onclick="fetchYoutubeBufferChannels()" title="Загрузить каналы из Buffer">📥 Загрузить каналы</button>
                                         <button class="btn btn-secondary" id="disconnectYoutubeBtn" style="display: none;" onclick="disconnectYoutube()">Отключить</button>
                                     </div>
 
-                                    <div class="scheduler-field-row moderator-field" id="youtubeModeratorField">
-                                        <label for="youtubeModeratorUserId">ID Модератора</label>
-                                        <input type="text" id="youtubeModeratorUserId" placeholder="Telegram user ID модератора" />
-                                    </div>
+
                                 </div>
 
                                 <div class="schedule-settings-block">
@@ -872,11 +861,6 @@
                                     <h3>⚙️ Настройки канала</h3>
 
                                     <div class="scheduler-field-row">
-                                        <label for="fbBufferApiKey">Buffer API Token</label>
-                                        <input type="password" id="fbBufferApiKey" placeholder="buf..." autocomplete="off" />
-                                    </div>
-
-                                    <div class="scheduler-field-row">
                                         <label for="fbBufferChannelId">Facebook канал (из Buffer)</label>
                                         <select id="fbBufferChannelId">
                                             <option value="">-- Сначала введите Buffer API Token --</option>
@@ -885,14 +869,9 @@
 
                                     <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px;">
                                         <button class="btn btn-secondary" onclick="fetchFacebookBufferChannels()">🔄 Загрузить каналы</button>
-                                        <button class="btn btn-secondary" onclick="testFacebookBufferConnection()">🧪 Проверить подключение</button>
                                     </div>
 
-                                    <!-- Moderator Field (conditionally shown) -->
-                                    <div class="scheduler-field-row moderator-field" id="facebookModeratorField">
-                                        <label for="facebookModeratorUserId">ID Модератора</label>
-                                        <input type="text" id="facebookModeratorUserId" placeholder="Telegram user ID модератора" />
-                                    </div>
+
                                 </div>
 
                                 <!-- BLOCK 2: Schedule Settings -->
@@ -1478,14 +1457,6 @@
                                     <h3>⚙️ Настройки канала</h3>
 
                                     <div class="scheduler-field-row">
-                                        <label for="tiktokBufferApiKey">Buffer API Token</label>
-                                        <div style="display: flex; gap: 6px; align-items: flex-start;">
-                                            <input type="password" id="tiktokBufferApiKey" placeholder="Buffer API Token" autocomplete="off" style="flex: 1;" />
-                                            <button class="btn btn-secondary" onclick="fetchTiktokBufferChannels()" style="white-space: nowrap; padding: 12px 14px; margin-top: 0;" title="Загрузить каналы из Buffer">📥</button>
-                                        </div>
-                                    </div>
-
-                                    <div class="scheduler-field-row">
                                         <label for="tiktokBufferChannelId">Buffer Channel ID</label>
                                         <select id="tiktokBufferChannelSelect" onchange="onTiktokChannelSelectChange()">
                                             <option value="">— выберите канал —</option>
@@ -1494,15 +1465,12 @@
                                     </div>
 
                                     <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px;">
+                                        <button class="btn btn-secondary" onclick="fetchTiktokBufferChannels()" title="Загрузить каналы из Buffer">📥 Загрузить каналы</button>
                                         <button class="btn btn-primary" onclick="connectTiktokBuffer()">🔗 Подключить</button>
-                                        <button class="btn btn-secondary" onclick="testTiktokBufferConnection()">🧪 Проверить соединение</button>
                                         <button class="btn btn-secondary" id="disconnectTiktokBtn" style="display: none;" onclick="disconnectTiktok()">Отключить</button>
                                     </div>
 
-                                    <div class="scheduler-field-row moderator-field" id="tiktokModeratorField">
-                                        <label for="tiktokModeratorUserId">ID Модератора</label>
-                                        <input type="text" id="tiktokModeratorUserId" placeholder="123456789" />
-                                    </div>
+
                                 </div>
 
                                 <div class="schedule-settings-block">

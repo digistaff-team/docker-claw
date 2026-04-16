@@ -65,9 +65,11 @@ function isValidTz(tz) {
 
 function getIgSettings(chatId) {
   const cfg = manageStore.getInstagramConfig(chatId);
+  manageStore.migrateIntegrationSettings(chatId);
+  const globalInt = manageStore.getIntegrationSettings(chatId) || {};
   return {
     isActive: !!cfg?.is_active,
-    bufferApiKey: cfg?.buffer_api_key || null,
+    bufferApiKey: globalInt.buffer_api_key || cfg?.buffer_api_key || null,
     bufferChannelId: cfg?.buffer_channel_id || null,
     scheduleTime: cfg?.schedule_time || '10:00',
     scheduleEndTime: cfg?.schedule_end_time || null,
@@ -77,7 +79,7 @@ function getIgSettings(chatId) {
     randomPublish: !!cfg?.random_publish,
     premoderationEnabled: cfg?.auto_publish === true ? false : true,
     allowedWeekdays: Array.isArray(cfg?.allowed_weekdays) ? cfg.allowed_weekdays : [0, 1, 2, 3, 4, 5, 6],
-    moderator_user_id: cfg?.moderator_user_id || null,
+    moderator_user_id: globalInt.moderator_user_id || cfg?.moderator_user_id || null,
     stats: cfg?.stats || { total_posts: 0, posts_today: 0, last_post_date: null }
   };
 }
