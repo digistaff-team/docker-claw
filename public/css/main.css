@@ -3158,7 +3158,22 @@ select {
     text-align: center;
 }
 
-/* Timezone selector */
+/* Timezone selector — inline group inside scheduler-time-pair */
+.scheduler-tz-group {
+    flex: 1 1 auto;
+    min-width: 160px;
+}
+
+.scheduler-tz-group select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 14px;
+    background: white;
+}
+
+/* Legacy standalone row (kept for backward compat) */
 .scheduler-tz-row {
     margin-bottom: 12px;
 }
