@@ -2269,7 +2269,7 @@ async function loadBufferChannels(apiKey, service, selectElementId, chatId = nul
         const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ buffer_api_key: apiKey })
+            body: JSON.stringify({ buffer_api_key: apiKey, chat_id: chatId })
         });
 
         const data = await res.json();

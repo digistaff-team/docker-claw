@@ -132,68 +132,6 @@
                         <div id="aiStatus" class="channel-status" style="margin-top: 14px; font-size: 14px;"></div>
                     </div>
 
-                    <!-- Настройки контекста -->
-                    <div class="channel-card">
-                        <h3>⚙️ Настройки контекста</h3>
-                        <p style="color: #666; margin-bottom: 16px;">Параметры формирования контекста, который передаётся ИИ агенту при каждом запросе.</p>
-                        
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                            <div>
-                                <label for="ctxMaxCommands" style="font-size: 13px;">📋 Кол-во последних команд</label>
-                                <input type="number" id="ctxMaxCommands" min="1" max="50" value="5" style="width: 100%;" />
-                            </div>
-                            <div>
-                                <label for="ctxMaxFiles" style="font-size: 13px;">📁 Максимум файлов в списке</label>
-                                <input type="number" id="ctxMaxFiles" min="10" max="500" value="80" style="width: 100%;" />
-                            </div>
-                            <div>
-                                <label for="ctxMaxDepth" style="font-size: 13px;">🔍 Глубина поиска файлов</label>
-                                <input type="number" id="ctxMaxDepth" min="1" max="10" value="3" style="width: 100%;" />
-                            </div>
-                            <div>
-                                <label for="ctxMaxFileLines" style="font-size: 13px;">📄 Строк файлов показывать</label>
-                                <input type="number" id="ctxMaxFileLines" min="5" max="100" value="30" style="width: 100%;" />
-                            </div>
-                            <div>
-                                <label for="ctxPersonaLines" style="font-size: 13px;">🎭 Строк персоны (на файл)</label>
-                                <input type="number" id="ctxPersonaLines" min="5" max="100" value="20" style="width: 100%;" />
-                            </div>
-                            <div>
-                                <label for="ctxPersonaChars" style="font-size: 13px;">📝 Символов персоны (на файл)</label>
-                                <input type="number" id="ctxPersonaChars" min="100" max="5000" value="500" style="width: 100%;" />
-                            </div>
-                            <div>
-                                <label for="ctxStdoutMaxChars" style="font-size: 13px;">📤 Макс. символов stdout</label>
-                                <input type="number" id="ctxStdoutMaxChars" min="50" max="2000" value="200" style="width: 100%;" />
-                            </div>
-                            <div>
-                                <label for="ctxStderrMaxChars" style="font-size: 13px;">⚠️ Макс. символов stderr</label>
-                                <input type="number" id="ctxStderrMaxChars" min="50" max="2000" value="200" style="width: 100%;" />
-                            </div>
-                        </div>
-
-                        <div style="margin-top: 16px; padding: 12px; background: #f8f9fa; border-radius: 8px;">
-                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" id="ctxIncludeStdout" checked />
-                                    <span style="font-size: 13px;">Включать stdout в контекст</span>
-                                </label>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 12px;">
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" id="ctxIncludeStderr" checked />
-                                    <span style="font-size: 13px;">Включать stderr в контекст</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div style="margin-top: 16px; display: flex; gap: 10px;">
-                            <button class="btn btn-primary" onclick="saveContextSettings()">💾 Сохранить настройки</button>
-                            <button class="btn btn-secondary" onclick="resetContextSettings()">🔄 Сбросить по умолчанию</button>
-                        </div>
-                        <div id="contextSettingsStatus" style="margin-top: 12px; font-size: 13px; color: #666;"></div>
-                    </div>
-
                     <!-- Просмотр системного контекста -->
                     <div class="channel-card">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
