@@ -107,17 +107,17 @@
                         <button class="btn btn-secondary" onclick="loadTopics()">Обновить</button>
                     </div>
                 </div>
-                <div class="content-jobs-table-wrap">
+                <div class="content-jobs-table-wrap" style="max-height: 250px; overflow-y: auto;">
                     <table class="content-jobs-table">
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>Тема</th>
-                                <th>Фокус</th>
-                                <th>Ключи</th>
-                                <th>Статус</th>
-                                <th>Создано</th>
-                                <th>Действия</th>
+                                <th style="position: sticky; top: 0; z-index: 1;">ID</th>
+                                <th style="position: sticky; top: 0; z-index: 1;">Тема</th>
+                                <th style="position: sticky; top: 0; z-index: 1;">Фокус</th>
+                                <th style="position: sticky; top: 0; z-index: 1;">Ключи</th>
+                                <th style="position: sticky; top: 0; z-index: 1;">Статус</th>
+                                <th style="position: sticky; top: 0; z-index: 1;">Создано</th>
+                                <th style="position: sticky; top: 0; z-index: 1;">Действия</th>
                             </tr>
                         </thead>
                         <tbody id="topicsTableBody">
@@ -160,6 +160,49 @@
                                 </table>
                             </div>
                         </div>
+
+                        <!-- Интерьеры -->
+                        <hr style="margin: 20px 0; border: none; border-top: 1px solid #e5e7eb;">
+                        <h3>🏠 Интерьеры</h3>
+                        <p class="content-inline-help">Описания интерьеров для генерации сцены с товаром в видео-пайплайне.</p>
+
+                        <!-- Загрузка из Google Sheets -->
+                        <div class="content-form-grid content-form-grid-single" style="margin-bottom: 8px;">
+                            <div>
+                                <label for="interiorsSheetUrl">Ссылка на таблицу</label>
+                                <input type="text" id="interiorsSheetUrl" placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=0" />
+                            </div>
+                            <div>
+                                <label for="interiorsSheetGid">GID листа</label>
+                                <input type="text" id="interiorsSheetGid" placeholder="Необязательно, можно оставить пустым" />
+                            </div>
+                        </div>
+                        <p class="content-inline-help">Столбцы: Description, Style.</p>
+                        <div class="content-actions" style="margin-bottom: 8px;">
+                            <button class="btn btn-secondary" onclick="previewSheetImport('interiors')">Предпросмотр</button>
+                            <button class="btn btn-success" onclick="applySheetImport('interiors')">Импортировать</button>
+                        </div>
+                        <div class="content-status-line" id="interiorsImportStatus"></div>
+                        <div id="interiorsImportPreviewWrap" class="content-preview-wrap" style="display:none;">
+                            <div class="content-preview-head">
+                                <strong>Предпросмотр импорта</strong>
+                                <span id="interiorsImportPreviewMeta" class="content-inline-help" style="margin:0;"></span>
+                            </div>
+                            <div class="content-jobs-table-wrap">
+                                <table class="content-jobs-table">
+                                    <thead id="interiorsImportPreviewHead"></thead>
+                                    <tbody id="interiorsImportPreviewBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Добавить вручную -->
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; margin-bottom: 12px;">
+                            <input type="text" id="interiorDesc" placeholder="Описание интерьера..." style="flex: 1; min-width: 180px;" />
+                            <input type="text" id="interiorStyle" placeholder="Стиль (modern, loft...)" style="width: 160px;" />
+                            <button class="btn btn-success" onclick="addInterior()">Добавить</button>
+                        </div>
+                        <div id="interiorsList" style="max-height: 200px; overflow-y: auto;"><div style="color: #999; font-size: 13px;">Загрузка...</div></div>
                     </div>
 
                     <div class="content-card-block">

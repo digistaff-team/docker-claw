@@ -250,6 +250,63 @@
                 <button class="action-btn danger" onclick="runCommand('pm2 restart all')">🔄 PM2 Restart All</button>
             </div>
         </div>
+
+        <div class="actions-panel" style="margin-top: 20px;">
+            <h3>⚙️ Настройки контекста ИИ</h3>
+            <p style="color: #666; margin-bottom: 16px; font-size: 14px;">Параметры формирования контекста, который передаётся ИИ агенту при каждом запросе.</p>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px;">
+                <div>
+                    <label style="font-size: 13px; display: block; margin-bottom: 4px;">📋 Кол-во последних команд</label>
+                    <input type="number" id="ctxMaxCommands" min="1" max="50" value="5" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+                </div>
+                <div>
+                    <label style="font-size: 13px; display: block; margin-bottom: 4px;">📁 Максимум файлов в списке</label>
+                    <input type="number" id="ctxMaxFiles" min="10" max="500" value="80" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+                </div>
+                <div>
+                    <label style="font-size: 13px; display: block; margin-bottom: 4px;">🔍 Глубина поиска файлов</label>
+                    <input type="number" id="ctxMaxDepth" min="1" max="10" value="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+                </div>
+                <div>
+                    <label style="font-size: 13px; display: block; margin-bottom: 4px;">📄 Строк файлов показывать</label>
+                    <input type="number" id="ctxMaxFileLines" min="5" max="100" value="30" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+                </div>
+                <div>
+                    <label style="font-size: 13px; display: block; margin-bottom: 4px;">🎭 Строк персоны (на файл)</label>
+                    <input type="number" id="ctxPersonaLines" min="5" max="100" value="20" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+                </div>
+                <div>
+                    <label style="font-size: 13px; display: block; margin-bottom: 4px;">📝 Символов персоны (на файл)</label>
+                    <input type="number" id="ctxPersonaChars" min="100" max="5000" value="500" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+                </div>
+                <div>
+                    <label style="font-size: 13px; display: block; margin-bottom: 4px;">📤 Макс. символов stdout</label>
+                    <input type="number" id="ctxStdoutMaxChars" min="50" max="2000" value="200" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+                </div>
+                <div>
+                    <label style="font-size: 13px; display: block; margin-bottom: 4px;">⚠️ Макс. символов stderr</label>
+                    <input type="number" id="ctxStderrMaxChars" min="50" max="2000" value="200" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+                </div>
+            </div>
+
+            <div style="padding: 12px; background: #f8f9fa; border-radius: 6px; margin-bottom: 16px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
+                    <input type="checkbox" id="ctxIncludeStdout" checked />
+                    <span style="font-size: 13px;">Включать stdout в контекст</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="ctxIncludeStderr" checked />
+                    <span style="font-size: 13px;">Включать stderr в контекст</span>
+                </label>
+            </div>
+
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button class="action-btn primary" onclick="saveContextSettings()">💾 Сохранить</button>
+                <button class="action-btn warning" onclick="resetContextSettings()">🔄 Сбросить</button>
+                <span id="contextSettingsStatus" style="font-size: 13px; color: #666;"></span>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -417,8 +474,87 @@
             }
         }
 
+        // === Настройки контекста ИИ ===
+
+        async function loadContextSettings() {
+            try {
+                const res = await fetch(`/api/manage/ai/context-settings?chat_id=${encodeURIComponent(chatId)}`);
+                const settings = await res.json();
+                const fields = {
+                    ctxMaxCommands: settings.maxCommands,
+                    ctxMaxFiles: settings.maxFiles,
+                    ctxMaxDepth: settings.maxDepth,
+                    ctxMaxFileLines: settings.maxFileLines,
+                    ctxPersonaLines: settings.personaLines,
+                    ctxPersonaChars: settings.personaChars,
+                    ctxStdoutMaxChars: settings.stdoutMaxChars,
+                    ctxStderrMaxChars: settings.stderrMaxChars
+                };
+                for (const [id, value] of Object.entries(fields)) {
+                    const el = document.getElementById(id);
+                    if (el) el.value = value;
+                }
+                const stdoutEl = document.getElementById('ctxIncludeStdout');
+                const stderrEl = document.getElementById('ctxIncludeStderr');
+                if (stdoutEl) stdoutEl.checked = settings.includeStdout !== false;
+                if (stderrEl) stderrEl.checked = settings.includeStderr !== false;
+            } catch (e) {
+                console.error('loadContextSettings', e);
+            }
+        }
+
+        async function saveContextSettings() {
+            const settings = {
+                maxCommands: parseInt(document.getElementById('ctxMaxCommands')?.value) || 5,
+                maxFiles: parseInt(document.getElementById('ctxMaxFiles')?.value) || 80,
+                maxDepth: parseInt(document.getElementById('ctxMaxDepth')?.value) || 3,
+                maxFileLines: parseInt(document.getElementById('ctxMaxFileLines')?.value) || 30,
+                personaLines: parseInt(document.getElementById('ctxPersonaLines')?.value) || 20,
+                personaChars: parseInt(document.getElementById('ctxPersonaChars')?.value) || 500,
+                stdoutMaxChars: parseInt(document.getElementById('ctxStdoutMaxChars')?.value) || 200,
+                stderrMaxChars: parseInt(document.getElementById('ctxStderrMaxChars')?.value) || 200,
+                includeStdout: document.getElementById('ctxIncludeStdout')?.checked !== false,
+                includeStderr: document.getElementById('ctxIncludeStderr')?.checked !== false
+            };
+            try {
+                const res = await fetch(`/api/manage/ai/context-settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: chatId, ...settings })
+                });
+                const statusEl = document.getElementById('contextSettingsStatus');
+                if (res.ok) {
+                    if (statusEl) {
+                        statusEl.innerHTML = '<span style="color: #28a745;">✅ Сохранено</span>';
+                        setTimeout(() => { statusEl.textContent = ''; }, 3000);
+                    }
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    if (statusEl) statusEl.innerHTML = `<span style="color: #dc3545;">❌ ${data.error || 'Ошибка'}</span>`;
+                }
+            } catch (e) {
+                const statusEl = document.getElementById('contextSettingsStatus');
+                if (statusEl) statusEl.innerHTML = '<span style="color: #dc3545;">❌ Ошибка сети</span>';
+            }
+        }
+
+        function resetContextSettings() {
+            const defaults = { ctxMaxCommands: 5, ctxMaxFiles: 80, ctxMaxDepth: 3, ctxMaxFileLines: 30, ctxPersonaLines: 20, ctxPersonaChars: 500, ctxStdoutMaxChars: 200, ctxStderrMaxChars: 200 };
+            for (const [id, value] of Object.entries(defaults)) {
+                const el = document.getElementById(id);
+                if (el) el.value = value;
+            }
+            const stdoutEl = document.getElementById('ctxIncludeStdout');
+            const stderrEl = document.getElementById('ctxIncludeStderr');
+            if (stdoutEl) stdoutEl.checked = true;
+            if (stderrEl) stderrEl.checked = true;
+            const statusEl = document.getElementById('contextSettingsStatus');
+            if (statusEl) { statusEl.textContent = 'Значения сброшены. Нажмите «Сохранить» для применения.'; }
+        }
+
         // Initial load
         loadContainerInfo();
+        loadContextSettings();
         
         // Focus on terminal input
         terminalInput.focus();

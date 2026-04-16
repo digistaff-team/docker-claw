@@ -194,7 +194,8 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
 
 async function generateVkImage(chatId, topic, imagePrompt) {
   const basePrompt = (imagePrompt || `VK post image. Topic: ${topic.topic}. Style: bright, professional, eye-catching, no text overlay, social media optimized.`).slice(0, 800);
-  return inputImageContext.generateImage(chatId, basePrompt, '1:1', 'grok-imagine/text-to-image');
+  const imageModel = manageStore.getImageGenSettings(chatId).model;
+  return inputImageContext.generateImage(chatId, basePrompt, '1:1', imageModel);
 }
 
 async function saveImageToContainer(chatId, buffer, jobId) {

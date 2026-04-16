@@ -95,6 +95,28 @@
                     <textarea class="editor" id="personEditor" placeholder="Введите содержимое файла..."></textarea>
                     <div id="templateHelp" style="margin-top: 15px; color: #666; font-size: 14px;"></div>
                 </div>
+
+                <!-- Системный контекст -->
+                <div style="margin-top: 24px; padding: 20px; background: #f8f9fa; border-radius: 12px; border: 1px solid #e9ecef;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div>
+                            <h3 style="margin: 0 0 4px 0;">📋 Системный контекст</h3>
+                            <p style="margin: 0; color: #666; font-size: 13px;">Итоговая системная роль ИИ агента с учётом персонализации и выбранных навыков.</p>
+                        </div>
+                        <button class="btn btn-secondary" onclick="refreshSystemContext()" style="padding: 6px 14px; font-size: 12px; white-space: nowrap;">🔄 Обновить</button>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+                        <span style="font-size: 13px; font-weight: 600; color: #495057;">Активные навыки:</span>
+                        <div id="activeSkillsList" style="display: flex; flex-wrap: wrap; gap: 6px; min-height: 24px;">
+                            <span style="color: #999; font-size: 13px;">Загрузка...</span>
+                        </div>
+                    </div>
+                    <textarea id="systemContextOutput" readonly style="width: 100%; min-height: 280px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-family: 'Monaco', 'Courier New', monospace; font-size: 12px; line-height: 1.5; resize: vertical; background: white;" placeholder="Нажмите 'Обновить' для загрузки системного контекста..."></textarea>
+                    <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
+                        <button class="btn btn-primary" onclick="copySystemContext()" style="padding: 7px 16px;">📋 Копировать</button>
+                        <span id="contextCopyStatus" style="font-size: 13px; color: #51cf66; display: none;">✓ Скопировано!</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

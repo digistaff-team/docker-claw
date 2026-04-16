@@ -5,6 +5,53 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ИИ - AI Агент</title>
     <link rel="stylesheet" href="/css/main.css">
+    <style>
+        .model-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+        }
+        .model-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 12px 14px;
+            cursor: pointer;
+            transition: border-color 0.15s, box-shadow 0.15s;
+            background: #fff;
+        }
+        .model-card:hover:not(.model-card--disabled) {
+            border-color: #1971c2;
+            box-shadow: 0 0 0 3px rgba(25,113,194,0.1);
+        }
+        .model-card.model-card--active {
+            border-color: #1971c2;
+            background: #f0f7ff;
+        }
+        .model-card--disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+        .model-card__name {
+            font-weight: 600;
+            font-size: 14px;
+            color: #222;
+            margin-bottom: 2px;
+        }
+        .model-card__provider {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 6px;
+        }
+        .model-card__badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge-available { background: #d4edda; color: #155724; }
+        .badge-soon      { background: #e2e3e5; color: #555; }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -32,13 +79,13 @@
             <nav class="nav-tabs" id="mainMenu"></nav>
 
             <div class="panel full-width">
-                <h2>🤖 ИИ Ассистент</h2>
-                <p style="color: #666; margin-bottom: 20px;">Настройте ИИ ассистента через AI Router. После настройки в Telegram боте команды будут обрабатываться умным ассистентом вместо прямого выполнения.</p>
+                <h2>🤖 Настройки AI-моделей</h2>
+                <p style="color: #666; margin-bottom: 20px;">Настройте AI-модели для генерации текста, изображений и видео.</p>
 
                 <div class="channels-grid">
                     <div class="channel-card">
                         <h3>🧠 AI Провайдер</h3>
-                        <p>Выберите провайдера AI для работы ассистента. Вы можете использовать ProTalk или подключить свой API-ключ.</p>
+                        <p>Выберите AI-модель для генерации текста.</p>
                         
                         <!-- Выбор провайдера -->
                         <div style="margin-bottom: 20px; padding: 16px; background: #f8f9fa; border-radius: 8px;">
@@ -132,29 +179,30 @@
                         <div id="aiStatus" class="channel-status" style="margin-top: 14px; font-size: 14px;"></div>
                     </div>
 
-                    <!-- Просмотр системного контекста -->
+                    <!-- Модель генерации изображений -->
                     <div class="channel-card">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                            <h3 style="margin: 0;">📋 Системный контекст</h3>
-                            <button class="btn btn-secondary" onclick="refreshSystemContext()" style="padding: 6px 12px; font-size: 12px;">🔄 Обновить</button>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <h3 style="margin: 0;">🖼️ Модель генерации изображений</h3>
+                            <span id="imageModelSaveStatus" style="font-size: 13px; color: #28a745; display: none;">✓ Сохранено</span>
                         </div>
-                        <p style="color: #666; margin-bottom: 16px;">Итоговая системная роль ИИ агента с учётом персонализации и выбранных навыков.</p>
-                        
-                        <div style="margin-bottom: 12px;">
-                            <label style="font-size: 13px; font-weight: 600; color: #495057;">Активные навыки:</label>
-                            <div id="activeSkillsList" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; min-height: 30px;">
-                                <span style="color: #999; font-size: 13px;">Загрузка...</span>
-                            </div>
-                        </div>
-                        
-                        <label style="font-size: 13px; font-weight: 600; color: #495057;">Итоговый system prompt:</label>
-                        <textarea id="systemContextOutput" readonly style="width: 100%; min-height: 350px; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-family: 'Monaco', 'Courier New', monospace; font-size: 12px; line-height: 1.5; resize: vertical; background: #f8f9fa;" placeholder="Нажмите 'Обновить' для загрузки системного контекста..."></textarea>
-                        
-                        <div style="margin-top: 12px; display: flex; gap: 10px; align-items: center;">
-                            <button class="btn btn-primary" onclick="copySystemContext()" style="padding: 8px 16px;">📋 Копировать</button>
-                            <span id="contextCopyStatus" style="font-size: 13px; color: #51cf66; display: none;">✓ Скопировано!</span>
+                        <p style="color: #666; margin-bottom: 16px; font-size: 13px;">Выберите AI-модель для генерации изображений.</p>
+                        <div class="model-grid" id="imageModelGrid">
+                            <div style="color: #999; font-size: 13px;">Загрузка…</div>
                         </div>
                     </div>
+
+                    <!-- Модель генерации видео -->
+                    <div class="channel-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <h3 style="margin: 0;">🎬 Модель генерации</h3>
+                            <span id="modelSaveStatus" style="font-size: 13px; color: #28a745; display: none;">✓ Сохранено</span>
+                        </div>
+                        <p style="color: #666; margin-bottom: 16px; font-size: 13px;">Выберите AI-модель для image-to-video пайплайна.</p>
+                        <div class="model-grid" id="modelGrid">
+                            <div style="color: #999; font-size: 13px;">Загрузка…</div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>

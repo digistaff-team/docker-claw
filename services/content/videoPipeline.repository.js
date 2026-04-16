@@ -241,10 +241,11 @@ async function updateVideoStatus(chatId, videoId, status, extra = {}) {
  */
 async function getAvailableVideoForChannel(chatId, channelType) {
   return withTransaction(chatId, async (client) => {
-    const res = await client.query(
-      `SELECT va.*, i.description as interior_description, i.style as interior_style
+    // FOR UPDATE SKIP LOCKED нельзя применять к nullable стороне LEFT JOIN,
+    // поэтому сначала блокируем строку в video_assets, затем делаем JOIN отдельно.
+    const lockRes = await client.query(
+      `SELECT va.id
        FROM video_assets va
-       LEFT JOIN interiors i ON va.interior_id = i.id
        WHERE va.chat_id = $1
          AND va.status IN ('video_ready', 'published')
          AND va.scheduled_deletion_at IS NULL
@@ -255,6 +256,16 @@ async function getAvailableVideoForChannel(chatId, channelType) {
        LIMIT 1
        FOR UPDATE SKIP LOCKED`,
       [chatId, channelType]
+    );
+    if (!lockRes.rows[0]) return null;
+
+    const videoId = lockRes.rows[0].id;
+    const res = await client.query(
+      `SELECT va.*, i.description as interior_description, i.style as interior_style
+       FROM video_assets va
+       LEFT JOIN interiors i ON va.interior_id = i.id
+       WHERE va.id = $1`,
+      [videoId]
     );
     return res.rows[0] || null;
   });

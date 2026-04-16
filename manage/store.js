@@ -845,6 +845,25 @@ function setVideoPipelineSettings(chatId, patch = {}) {
     return persist(chatId);
 }
 
+// === Image Gen Settings ===
+
+const ALLOWED_IMAGE_MODELS = ['google/nano-banana-2', 'seedream/4.5-text-to-image', 'grok-imagine/text-to-image'];
+
+function getImageGenSettings(chatId) {
+    return statesCache[chatId]?.imageGenSettings || { model: 'grok-imagine/text-to-image' };
+}
+
+function setImageGenSettings(chatId, patch = {}) {
+    if (!statesCache[chatId]) statesCache[chatId] = {};
+    const current = statesCache[chatId].imageGenSettings || {};
+    const next = { ...current };
+    if (patch.model !== undefined) {
+        next.model = ALLOWED_IMAGE_MODELS.includes(patch.model) ? patch.model : 'grok-imagine/text-to-image';
+    }
+    statesCache[chatId].imageGenSettings = next;
+    return persist(chatId);
+}
+
 // === VK Config ===
 
 function getVkConfig(chatId) {
@@ -1371,6 +1390,9 @@ module.exports = {
     clearVkVideoConfig,
     getVideoPipelineSettings,
     setVideoPipelineSettings,
+    getImageGenSettings,
+    setImageGenSettings,
+    ALLOWED_IMAGE_MODELS,
     getVkConfig,
     setVkConfig,
     getVkSettings,

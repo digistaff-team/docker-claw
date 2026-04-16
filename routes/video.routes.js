@@ -501,4 +501,46 @@ router.post('/settings', async (req, res) => {
   return res.json({ success: true, settings: { model } });
 });
 
+// ============================================
+// Image Gen Settings
+// ============================================
+
+/**
+ * GET /api/video/image-settings
+ * Настройки модели генерации изображений
+ */
+router.get('/image-settings', (req, res) => {
+  const chatId = normalizeChatId(req.query.chat_id);
+  if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+
+  const settings = manageStore.getImageGenSettings(chatId);
+  return res.json({
+    success: true,
+    settings: { model: settings.model || 'grok-imagine/text-to-image' },
+    availableModels: [
+      { id: 'google/nano-banana-2',       name: 'Nano Banana 2', provider: 'Google / KIE.ai',    available: true },
+      { id: 'seedream/4.5-text-to-image', name: 'Seedream 4.5',  provider: 'ByteDance / KIE.ai', available: true },
+      { id: 'grok-imagine/text-to-image', name: 'Grok Imagine',  provider: 'xAI / KIE.ai',       available: true },
+    ]
+  });
+});
+
+/**
+ * POST /api/video/image-settings
+ * Сохранить модель генерации изображений
+ * Body: { chat_id, model }
+ */
+router.post('/image-settings', async (req, res) => {
+  const chatId = normalizeChatId(req.body.chat_id);
+  if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+
+  const model = String(req.body.model || '').trim();
+  if (!manageStore.ALLOWED_IMAGE_MODELS.includes(model)) {
+    return res.status(400).json({ error: `model must be one of: ${manageStore.ALLOWED_IMAGE_MODELS.join(', ')}` });
+  }
+
+  await manageStore.setImageGenSettings(chatId, { model });
+  return res.json({ success: true, settings: { model } });
+});
+
 module.exports = router;

@@ -2,8 +2,6 @@
  * Video Pipeline UI
  */
 
-let selectedModel = 'veo3.1';
-
 // ============================================
 // Init — вызывается common.js после авторизации
 // ============================================
@@ -12,77 +10,8 @@ async function onLoginSuccess() {
     currentChatId = getChatId();
     if (!currentChatId) return;
     await Promise.all([
-        loadModelSettings(),
-        loadInteriors(),
         loadProductImages(),
-        loadVideos(),
-        loadStats(),
     ]);
-}
-
-// ============================================
-// Generation
-// ============================================
-
-// ============================================
-// Model Settings
-// ============================================
-
-async function loadModelSettings() {
-    try {
-        const resp = await fetch(`/api/video/settings?chat_id=${encodeURIComponent(currentChatId)}`);
-        const data = await resp.json();
-        if (!data.success) return;
-
-        selectedModel = data.settings?.model || 'veo3.1';
-        renderModelGrid(data.availableModels || [], selectedModel);
-    } catch (e) {
-        console.error('Model settings load error:', e);
-    }
-}
-
-function renderModelGrid(models, activeModel) {
-    const grid = document.getElementById('modelGrid');
-    if (!grid) return;
-    grid.innerHTML = models.map(m => `
-        <div class="model-card ${m.id === activeModel ? 'model-card--active' : ''} ${!m.available ? 'model-card--disabled' : ''}"
-             onclick="${m.available ? `selectModel('${m.id}')` : ''}">
-            <div class="model-card__name">${m.name}</div>
-            <div class="model-card__provider">${m.provider}</div>
-            <span class="model-card__badge ${m.available ? 'badge-available' : 'badge-soon'}">
-                ${m.available ? 'Доступно' : 'Скоро'}
-            </span>
-        </div>
-    `).join('');
-}
-
-async function selectModel(modelId) {
-    if (modelId === selectedModel) return;
-    try {
-        const resp = await fetch('/api/video/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: currentChatId, model: modelId })
-        });
-        const data = await resp.json();
-        if (data.success) {
-            selectedModel = modelId;
-            // Обновить визуал карточек
-            document.querySelectorAll('.model-card').forEach(el => {
-                el.classList.toggle('model-card--active', el.querySelector('.model-card__name')?.textContent === getModelName(modelId));
-            });
-            await loadModelSettings(); // перерисовать с актуальным состоянием
-            const status = document.getElementById('modelSaveStatus');
-            if (status) { status.style.display = 'inline'; setTimeout(() => status.style.display = 'none', 2000); }
-        }
-    } catch (e) {
-        console.error('Model save error:', e);
-    }
-}
-
-function getModelName(id) {
-    const map = { 'veo3.1': 'Veo 3.1', 'seedance-2': 'Seedance 2.0', 'grok-imagine': 'Grok Imagine' };
-    return map[id] || id;
 }
 
 // ============================================
@@ -184,84 +113,6 @@ function translateStatus(status) {
 }
 
 // ============================================
-// Interiors
-// ============================================
-
-async function loadInteriors() {
-    try {
-        const resp = await fetch(`/api/video/interiors?chat_id=${currentChatId}&limit=50`);
-        const data = await resp.json();
-
-        const container = document.getElementById('interiorsList');
-
-        if (!data.interiors || data.interiors.length === 0) {
-            container.innerHTML = '<div class="empty-state">Нет интерьеров. Добавьте первый.</div>';
-            return;
-        }
-
-        container.innerHTML = data.interiors.map(interior => `
-            <div class="interior-item">
-                <div>
-                    <strong>${interior.style || 'Без стиля'}</strong>
-                    <div style="color: #666; font-size: 13px;">${interior.description.slice(0, 100)}${interior.description.length > 100 ? '...' : ''}</div>
-                    <div style="color: #999; font-size: 11px;">${new Date(interior.created_at).toLocaleString('ru')}</div>
-                </div>
-                <button onclick="deleteInterior(${interior.id})" style="background: #dc3545; color: #fff; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">Удалить</button>
-            </div>
-        `).join('');
-    } catch (e) {
-        console.error('Load interiors error:', e);
-    }
-}
-
-async function addInterior() {
-    const desc = document.getElementById('interiorDesc').value.trim();
-    const style = document.getElementById('interiorStyle').value.trim();
-
-    if (!desc) {
-        alert('Введите описание интерьера');
-        return;
-    }
-
-    try {
-        const resp = await fetch('/api/video/interiors', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: currentChatId, description: desc, style })
-        });
-
-        const data = await resp.json();
-        if (data.success) {
-            document.getElementById('interiorDesc').value = '';
-            document.getElementById('interiorStyle').value = '';
-            loadInteriors();
-        } else {
-            alert('Ошибка: ' + (data.error || 'Неизвестная'));
-        }
-    } catch (e) {
-        alert('Ошибка: ' + e.message);
-    }
-}
-
-async function deleteInterior(id) {
-    if (!confirm('Удалить этот интерьер?')) return;
-
-    try {
-        const resp = await fetch(`/api/video/interiors/${id}?chat_id=${currentChatId}`, {
-            method: 'DELETE'
-        });
-
-        const data = await resp.json();
-        if (data.success) {
-            loadInteriors();
-        } else {
-            alert('Ошибка: ' + (data.error || 'Неизвестная'));
-        }
-    } catch (e) {
-        alert('Ошибка: ' + e.message);
-    }
-}
-
 // ============================================
 // Product Images
 // ============================================
@@ -295,7 +146,9 @@ async function loadProductImages() {
 // ============================================
 
 async function loadVideos() {
-    const status = document.getElementById('statusFilter').value;
+    const statusEl = document.getElementById('statusFilter');
+    if (!statusEl) return;
+    const status = statusEl.value;
     let url = `/api/video/assets?chat_id=${currentChatId}&limit=50`;
     if (status) url += `&status=${status}`;
 
@@ -381,11 +234,11 @@ function startCountdowns() {
 // ============================================
 
 async function loadStats() {
+    const container = document.getElementById('videoStats');
+    if (!container) return;
     try {
         const resp = await fetch(`/api/video/stats?chat_id=${currentChatId}`);
         const data = await resp.json();
-
-        const container = document.getElementById('videoStats');
 
         if (!data.stats) {
             container.innerHTML = '<div class="empty-state">Нет данных</div>';

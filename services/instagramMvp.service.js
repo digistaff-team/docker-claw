@@ -175,7 +175,8 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
 
 async function generateIgImage(chatId, topic, imagePrompt) {
   const basePrompt = (imagePrompt || `Instagram post image. Topic: ${topic.topic}. Style: bright, vibrant, Instagram-optimized, square format, no text overlay.`).slice(0, 800);
-  return inputImageContext.generateImage(chatId, basePrompt, '1:1', 'grok-imagine/text-to-image');
+  const imageModel = manageStore.getImageGenSettings(chatId).model;
+  return inputImageContext.generateImage(chatId, basePrompt, '1:1', imageModel);
 }
 
 async function saveImageToContainer(chatId, buffer, jobId) {

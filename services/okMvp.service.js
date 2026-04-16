@@ -230,7 +230,8 @@ function validateOkContent(text) {
 
 async function generateOkImage(chatId, topic, imagePrompt) {
   const basePrompt = (imagePrompt || `OK social media post image. Topic: ${topic.topic}. Style: bright, professional, eye-catching, no text overlay, 1:1 ratio.`).slice(0, 800);
-  return inputImageContext.generateImage(chatId, basePrompt, '1:1', 'grok-imagine/text-to-image');
+  const imageModel = manageStore.getImageGenSettings(chatId).model;
+  return inputImageContext.generateImage(chatId, basePrompt, '1:1', imageModel);
 }
 
 async function saveImageToContainer(chatId, buffer, jobId) {

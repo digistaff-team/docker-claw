@@ -1,39 +1,119 @@
 const API_MANAGE = `${window.location.origin}/api/manage`;
 
-let currentUserEmail = null;
-
-/**
- * Выполняет запрос к MySQL через локальный API
- * @param {string} sql - SQL запрос с плейсхолдерами %s
- * @param {array} params - Параметры запроса
- * @returns {Promise<{data: array, insert_id?: number}>}
- */
-async function mysqlQuery(sql, params = []) {
-    const response = await fetch(`${API_MANAGE}/mysql/query`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ sql, params })
-    });
-
-    if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`MySQL API error: ${response.status} - ${error}`);
-    }
-
-    const result = await response.json();
-    if (result.error) {
-        throw new Error(result.error);
-    }
-    return result;
-}
+let selectedModel = 'veo3.1';
 
 async function onLoginSuccess() {
     await loadAIProviderStatus();
     await loadAIStatus();
-    await loadContextSettings();
-    await loadSystemContext();
+    await Promise.all([loadModelSettings(), loadImageModelSettings()]);
+}
+
+// === Модель генерации видео ===
+
+async function loadModelSettings() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    try {
+        const resp = await fetch(`/api/video/settings?chat_id=${encodeURIComponent(chatId)}`);
+        const data = await resp.json();
+        if (!data.success) return;
+        selectedModel = data.settings?.model || 'veo3.1';
+        renderModelGrid(data.availableModels || [], selectedModel);
+    } catch (e) {
+        console.error('Model settings load error:', e);
+    }
+}
+
+function renderModelGrid(models, activeModel) {
+    const grid = document.getElementById('modelGrid');
+    if (!grid) return;
+    grid.innerHTML = models.map(m => `
+        <div class="model-card ${m.id === activeModel ? 'model-card--active' : ''} ${!m.available ? 'model-card--disabled' : ''}"
+             onclick="${m.available ? `selectModel('${m.id}')` : ''}">
+            <div class="model-card__name">${m.name}</div>
+            <div class="model-card__provider">${m.provider}</div>
+            <span class="model-card__badge ${m.available ? 'badge-available' : 'badge-soon'}">
+                ${m.available ? 'Доступно' : 'Скоро'}
+            </span>
+        </div>
+    `).join('');
+}
+
+async function selectModel(modelId) {
+    if (modelId === selectedModel) return;
+    const chatId = getChatId();
+    if (!chatId) return;
+    try {
+        const resp = await fetch('/api/video/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, model: modelId })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            selectedModel = modelId;
+            await loadModelSettings();
+            const status = document.getElementById('modelSaveStatus');
+            if (status) { status.style.display = 'inline'; setTimeout(() => status.style.display = 'none', 2000); }
+        }
+    } catch (e) {
+        console.error('Model save error:', e);
+    }
+}
+
+// === Модель генерации изображений ===
+
+let selectedImageModel = 'grok-imagine/text-to-image';
+
+async function loadImageModelSettings() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    try {
+        const resp = await fetch(`/api/video/image-settings?chat_id=${encodeURIComponent(chatId)}`);
+        const data = await resp.json();
+        if (!data.success) return;
+        selectedImageModel = data.settings?.model || 'grok-imagine/text-to-image';
+        renderImageModelGrid(data.availableModels || [], selectedImageModel);
+    } catch (e) {
+        console.error('Image model settings load error:', e);
+    }
+}
+
+function renderImageModelGrid(models, activeModel) {
+    const grid = document.getElementById('imageModelGrid');
+    if (!grid) return;
+    grid.innerHTML = models.map(m => `
+        <div class="model-card ${m.id === activeModel ? 'model-card--active' : ''} ${!m.available ? 'model-card--disabled' : ''}"
+             onclick="${m.available ? `selectImageModel('${m.id}')` : ''}">
+            <div class="model-card__name">${m.name}</div>
+            <div class="model-card__provider">${m.provider}</div>
+            <span class="model-card__badge ${m.available ? 'badge-available' : 'badge-soon'}">
+                ${m.available ? 'Доступно' : 'Скоро'}
+            </span>
+        </div>
+    `).join('');
+}
+
+async function selectImageModel(modelId) {
+    if (modelId === selectedImageModel) return;
+    const chatId = getChatId();
+    if (!chatId) return;
+    try {
+        const resp = await fetch('/api/video/image-settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, model: modelId })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            selectedImageModel = modelId;
+            await loadImageModelSettings();
+            const status = document.getElementById('imageModelSaveStatus');
+            if (status) { status.style.display = 'inline'; setTimeout(() => status.style.display = 'none', 2000); }
+        }
+    } catch (e) {
+        console.error('Image model save error:', e);
+    }
 }
 
 /**
@@ -402,143 +482,3 @@ async function disconnectAI() {
     }
 }
 
-// === Системный контекст с навыками ===
-
-async function loadSystemContext() {
-    // Загружаем email пользователя
-    const chatId = getChatId();
-    if (!chatId) return;
-    
-    try {
-        const res = await fetch(`${API_MANAGE}/ai/status?chat_id=${encodeURIComponent(chatId)}`);
-        const data = await res.json();
-        currentUserEmail = data.aiUserEmail || null;
-        
-        // Автоматически обновляем контекст
-        await refreshSystemContext();
-    } catch (e) {
-        console.error('loadSystemContext', e);
-    }
-}
-
-async function refreshSystemContext() {
-    const outputEl = document.getElementById('systemContextOutput');
-    const skillsListEl = document.getElementById('activeSkillsList');
-    
-    if (!outputEl) return;
-    
-    outputEl.value = 'Загрузка...';
-    skillsListEl.innerHTML = '<span style="color: #999; font-size: 13px;">Загрузка...</span>';
-    
-    try {
-        // 1. Загружаем выбранные навыки
-        let selectedSkills = [];
-        if (currentUserEmail) {
-            const result = await mysqlQuery(
-                `SELECT s.* FROM ai_skills s 
-                 INNER JOIN user_selected_skills us ON s.id = us.skill_id 
-                 WHERE us.user_email = %s AND s.is_active = 1`,
-                [currentUserEmail]
-            );
-            selectedSkills = result.data || [];
-        }
-        
-        // 2. Загружаем файлы персонализации из /workspace/
-        const chatId = getChatId();
-        let personaFiles = {};
-        const personaFilesList = ['IDENTITY.md', 'SOUL.md', 'USER.md', 'MEMORY.md'];
-        
-        for (const fname of personaFilesList) {
-            try {
-                // Читаем файл напрямую из /workspace/ через правильный API
-                const contentRes = await fetch(`/api/files/${encodeURIComponent(chatId)}/content?filepath=${encodeURIComponent('/workspace/' + fname)}`);
-                if (contentRes.ok) {
-                    const content = await contentRes.text();
-                    if (content && content.trim()) {
-                        personaFiles[fname] = content.trim();
-                    }
-                }
-            } catch (e) {
-                console.log(`Файл ${fname} не найден или ошибка чтения:`, e.message);
-            }
-        }
-        
-        console.log('Загруженные файлы персоны:', personaFiles);
-        
-        // 3. Формируем системный контекст
-        let systemPrompt = '';
-        
-        // Базовые инструкции
-        systemPrompt += `=== БАЗОВАЯ РОЛЬ ===\n`;
-        systemPrompt += `Ты - AI-ассистент для bash-команд в изолированном Docker-контейнере. `;
-        systemPrompt += `Ты помогаешь пользователю выполнять команды, анализировать результаты и решать задачи. `;
-        systemPrompt += `Всегда объясняй свои действия и результаты.\n\n`;
-        
-        // Персонализация
-        if (personaFiles['IDENTITY.md'] || personaFiles['SOUL.md'] || personaFiles['USER.md'] || personaFiles['MEMORY.md']) {
-            systemPrompt += `=== ПЕРСОНАЛИЗАЦИЯ ===\n`;
-            if (personaFiles['IDENTITY.md']) {
-                systemPrompt += `--- IDENTITY.md ---\n${personaFiles['IDENTITY.md']}\n\n`;
-            }
-            if (personaFiles['SOUL.md']) {
-                systemPrompt += `--- SOUL.md ---\n${personaFiles['SOUL.md']}\n\n`;
-            }
-            if (personaFiles['USER.md']) {
-                systemPrompt += `--- USER.md ---\n${personaFiles['USER.md']}\n\n`;
-            }
-            if (personaFiles['MEMORY.md']) {
-                systemPrompt += `--- MEMORY.md ---\n${personaFiles['MEMORY.md']}\n\n`;
-            }
-        }
-        
-        // Навыки
-        if (selectedSkills.length > 0) {
-            systemPrompt += `=== АКТИВНЫЕ НАВЫКИ ===\n`;
-            systemPrompt += `Ты имеешь следующие активные навыки:\n\n`;
-            
-            selectedSkills.forEach((skill, idx) => {
-                systemPrompt += `--- НАВЫК ${idx + 1}: ${skill.name} ---\n${skill.system_prompt}\n\n`;
-            });
-        }
-        
-        // Дополнительные инструкции
-        systemPrompt += `=== ИНСТРУКЦИИ ПО ВЫПОЛНЕНИЮ ===\n`;
-        systemPrompt += `1. Анализируй запрос пользователя\n`;
-        systemPrompt += `2. Если нужно выполнить команду - выполняй её через bash\n`;
-        systemPrompt += `3. Объясняй результаты и предлагай улучшения\n`;
-        systemPrompt += `4. Если запрос неясен - уточняй\n`;
-        systemPrompt += `5. Используй свои навыки для решения специфических задач\n`;
-        
-        outputEl.value = systemPrompt;
-        
-        // Отображаем список навыков
-        if (selectedSkills.length > 0) {
-            skillsListEl.innerHTML = selectedSkills.map(s => 
-                `<span class="skill-tag" style="background: #d0ebff; color: #1971c2;">${s.name}</span>`
-            ).join('');
-        } else {
-            skillsListEl.innerHTML = '<span style="color: #999; font-size: 13px;">Нет выбранных навыков</span>';
-        }
-        
-    } catch (e) {
-        console.error('refreshSystemContext error:', e);
-        outputEl.value = 'Ошибка загрузки системного контекста: ' + e.message;
-        skillsListEl.innerHTML = '<span style="color: #ff6b6b; font-size: 13px;">Ошибка загрузки навыков</span>';
-    }
-}
-
-function copySystemContext() {
-    const outputEl = document.getElementById('systemContextOutput');
-    if (!outputEl) return;
-    
-    navigator.clipboard.writeText(outputEl.value).then(() => {
-        const statusEl = document.getElementById('contextCopyStatus');
-        if (statusEl) {
-            statusEl.style.display = 'inline';
-            setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
-        }
-        showToast('Системный контекст скопирован', 'success');
-    }).catch(err => {
-        showToast('Ошибка копирования', 'error');
-    });
-}

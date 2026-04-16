@@ -229,7 +229,8 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
 
 async function generatePinImage(chatId, topic, pinTitle) {
   const basePrompt = (`Pinterest pin image. Topic: ${topic.topic}. Title: ${pinTitle || ''}. Style: vertical, aesthetic, clean, visually appealing, no text overlay, no logos, professional photography style.`).slice(0, 800);
-  return inputImageContext.generateImage(chatId, basePrompt, '2:3', 'grok-imagine/text-to-image');
+  const imageModel = manageStore.getImageGenSettings(chatId).model;
+  return inputImageContext.generateImage(chatId, basePrompt, '2:3', imageModel);
 }
 
 async function saveImageToContainer(chatId, buffer, jobId) {

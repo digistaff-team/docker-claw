@@ -38,6 +38,8 @@ const {
   VIDEO_STATUS // TASK-015
 } = contentModules;
 
+const videoPipelineRepo = require('./content/videoPipeline.repository');
+
 const SCHEDULE_TIME = process.env.CONTENT_MVP_TIME || '09:00';
 const SCHEDULE_TZ = process.env.CONTENT_MVP_TZ || 'Europe/Moscow';
 const CHANNEL_ID = process.env.CHANNEL_ID || null; // Должен быть указан в настройках пользователя
@@ -263,6 +265,7 @@ function findHeaderIndex(header, variants) {
 function normalizeImportMode(value) {
   const mode = String(value || 'topics').trim().toLowerCase();
   if (mode === 'materials' || mode === 'material') return 'materials';
+  if (mode === 'interiors' || mode === 'interior') return 'interiors';
   return 'topics';
 }
 
@@ -486,6 +489,32 @@ async function previewContentImport(chatId, data = {}) {
   }
 
   const header = rows[0].map(normalizeHeader);
+
+  if (mode === 'interiors') {
+    const idx = {
+      description: findHeaderIndex(header, ['description', 'описание', 'интерьер', 'interior']),
+      style: findHeaderIndex(header, ['style', 'стиль'])
+    };
+    if (idx.description < 0) idx.description = 0;
+
+    const existing = await videoPipelineRepo.getInteriors(chatId);
+    const existingSet = new Set(existing.map((r) => String(r.description || '').trim().toLowerCase()));
+
+    const preview = [];
+    let skippedEmpty = 0;
+    let skippedDuplicates = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const description = String(row[idx.description] || '').trim();
+      if (!description) { skippedEmpty++; continue; }
+      const style = idx.style >= 0 ? String(row[idx.style] || '').trim() : '';
+      const duplicate = existingSet.has(description.toLowerCase());
+      if (duplicate) skippedDuplicates++;
+      preview.push({ row: i + 1, description, style, duplicate });
+    }
+    return { mode, sheetId, gid, totalRows: Math.max(rows.length - 1, 0), preview, skippedEmpty, skippedDuplicates };
+  }
+
   if (mode === 'materials') {
     const idx = {
       title: findHeaderIndex(header, ['title', 'название', 'заголовок', 'material']),
@@ -577,7 +606,12 @@ async function importContentFromGoogleSheet(chatId, data = {}) {
   let imported = 0;
   for (const item of previewData.preview) {
     if (item.duplicate) continue;
-    if (mode === 'materials') {
+    if (mode === 'interiors') {
+      await videoPipelineRepo.addInterior(chatId, {
+        description: item.description,
+        style: item.style || null
+      });
+    } else if (mode === 'materials') {
       await repository.createMaterial(chatId, {
         title: item.title,
         content: item.content,
@@ -694,7 +728,8 @@ async function generateImage(chatId, topic, text) {
     `based on context. OUTPUT: Generate detailed optimized prompt including main subject, lighting, ` +
     `atmosphere, color scheme, quality level.`;
 
-  return inputImageContext.generateImage(chatId, basePrompt, '1:1', 'nano-banana-2');
+  const imageModel = manageStore.getImageGenSettings(chatId).model;
+  return inputImageContext.generateImage(chatId, basePrompt, '1:1', imageModel);
 }
 
 async function saveImageToUserWorkspace(chatId, buffer, jobId) {

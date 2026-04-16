@@ -68,8 +68,79 @@ async function loadDashboard() {
     await Promise.all([
         loadTopics(),
         loadMaterials(),
-        loadJobs()
+        loadJobs(),
+        loadInteriors()
     ]);
+}
+
+// ============================================
+// Interiors
+// ============================================
+
+async function loadInteriors() {
+    const container = document.getElementById('interiorsList');
+    if (!container) return;
+    try {
+        const chatId = getChatId();
+        const resp = await fetch(`/api/video/interiors?chat_id=${encodeURIComponent(chatId)}&limit=50`);
+        const data = await resp.json();
+        if (!data.interiors || data.interiors.length === 0) {
+            container.innerHTML = '<div style="color: #999; font-size: 13px;">Нет интерьеров. Добавьте первый.</div>';
+            return;
+        }
+        container.innerHTML = data.interiors.map(interior => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0;">
+                <div>
+                    <strong style="font-size: 13px;">${interior.style || 'Без стиля'}</strong>
+                    <div style="color: #666; font-size: 12px;">${interior.description.slice(0, 100)}${interior.description.length > 100 ? '...' : ''}</div>
+                    <div style="color: #999; font-size: 11px;">${new Date(interior.created_at).toLocaleString('ru')}</div>
+                </div>
+                <button onclick="deleteInterior(${interior.id})" style="background: #dc3545; color: #fff; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; flex-shrink: 0;">Удалить</button>
+            </div>
+        `).join('');
+    } catch (e) {
+        console.error('Load interiors error:', e);
+    }
+}
+
+async function addInterior() {
+    const chatId = getChatId();
+    const desc = document.getElementById('interiorDesc').value.trim();
+    const style = document.getElementById('interiorStyle').value.trim();
+    if (!desc) { alert('Введите описание интерьера'); return; }
+    try {
+        const resp = await fetch('/api/video/interiors', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, description: desc, style })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            document.getElementById('interiorDesc').value = '';
+            document.getElementById('interiorStyle').value = '';
+            loadInteriors();
+        } else {
+            alert('Ошибка: ' + (data.error || 'Неизвестная'));
+        }
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+async function deleteInterior(id) {
+    if (!confirm('Удалить этот интерьер?')) return;
+    const chatId = getChatId();
+    try {
+        const resp = await fetch(`/api/video/interiors/${id}?chat_id=${encodeURIComponent(chatId)}`, { method: 'DELETE' });
+        const data = await resp.json();
+        if (data.success) {
+            loadInteriors();
+        } else {
+            alert('Ошибка: ' + (data.error || 'Неизвестная'));
+        }
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
 }
 
 
@@ -264,8 +335,14 @@ async function deleteTopic(topicId) {
     }
 }
 
+function getImportPrefix(mode) {
+    if (mode === 'materials') return 'materials';
+    if (mode === 'interiors') return 'interiors';
+    return 'topics';
+}
+
 function getImportPayload(mode) {
-    const prefix = mode === 'materials' ? 'materials' : 'topics';
+    const prefix = getImportPrefix(mode);
     return {
         chat_id: getChatId(),
         mode,
@@ -275,7 +352,7 @@ function getImportPayload(mode) {
 }
 
 function renderImportPreview(data, mode) {
-    const prefix = mode === 'materials' ? 'materials' : 'topics';
+    const prefix = getImportPrefix(mode);
     const wrap = document.getElementById(`${prefix}ImportPreviewWrap`);
     const head = document.getElementById(`${prefix}ImportPreviewHead`);
     const body = document.getElementById(`${prefix}ImportPreviewBody`);
@@ -298,6 +375,16 @@ function renderImportPreview(data, mode) {
                 <td>${item.duplicate ? 'yes' : 'no'}</td>
             </tr>
         `).join('') || '<tr><td colspan="5" class="content-empty-cell">Нет строк для импорта</td></tr>';
+    } else if (mode === 'interiors') {
+        head.innerHTML = '<tr><th>Row</th><th>Description</th><th>Style</th><th>Duplicate</th></tr>';
+        body.innerHTML = previewRows.map((item) => `
+            <tr>
+                <td>${item.row}</td>
+                <td>${escapeHtml(item.description || '-')}</td>
+                <td>${escapeHtml(item.style || '-')}</td>
+                <td>${item.duplicate ? 'yes' : 'no'}</td>
+            </tr>
+        `).join('') || '<tr><td colspan="4" class="content-empty-cell">Нет строк для импорта</td></tr>';
     } else {
         head.innerHTML = '<tr><th>Row</th><th>Topic</th><th>Focus</th><th>Status</th><th>Duplicate</th></tr>';
         body.innerHTML = previewRows.map((item) => `
@@ -315,7 +402,7 @@ function renderImportPreview(data, mode) {
 async function previewSheetImport(mode) {
     const chatId = getChatId();
     if (!chatId) return;
-    const prefix = mode === 'materials' ? 'materials' : 'topics';
+    const prefix = getImportPrefix(mode);
     const statusEl = document.getElementById(`${prefix}ImportStatus`);
     if (statusEl) {
         statusEl.textContent = 'Собираем предпросмотр...';
@@ -345,7 +432,7 @@ async function previewSheetImport(mode) {
 async function applySheetImport(mode) {
     const chatId = getChatId();
     if (!chatId) return;
-    const prefix = mode === 'materials' ? 'materials' : 'topics';
+    const prefix = getImportPrefix(mode);
     const statusEl = document.getElementById(`${prefix}ImportStatus`);
     if (statusEl) {
         statusEl.textContent = 'Импортируем данные...';
@@ -362,12 +449,12 @@ async function applySheetImport(mode) {
             statusEl.className = 'content-status-line ok';
         }
         showToast('Импорт завершён', 'success');
-        // Скрываем блок предпросмотра
-        const prefix2 = mode === 'materials' ? 'materials' : 'topics';
-        const previewWrap = document.getElementById(`${prefix2}ImportPreviewWrap`);
+        const previewWrap = document.getElementById(`${prefix}ImportPreviewWrap`);
         if (previewWrap) previewWrap.style.display = 'none';
         if (mode === 'materials') {
             await loadMaterials();
+        } else if (mode === 'interiors') {
+            await loadInteriors();
         } else {
             await loadTopics();
         }
