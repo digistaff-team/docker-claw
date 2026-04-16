@@ -45,16 +45,18 @@
                     <div class="scheduler-container">
                         <div class="channel-settings-block">
                             <h3>⚙️ Buffer API</h3>
-                            <div class="scheduler-field-row">
-                                <label for="globalBufferApiKey">Buffer API Token</label>
-                                <div style="display: flex; gap: 6px; align-items: flex-start;">
-                                    <input type="password" id="globalBufferApiKey" placeholder="Buffer API Token" autocomplete="off" style="flex: 1;" />
-                                    <button class="btn btn-secondary" onclick="testGlobalBufferConnection()" style="white-space: nowrap; padding: 12px 14px; margin-top: 0;" title="Проверить токен">🧪</button>
+                            <div style="display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap;">
+                                <div style="flex: 1; min-width: 220px;">
+                                    <label for="globalBufferApiKey" style="display: block; margin-bottom: 6px;">Buffer API Token</label>
+                                    <div style="display: flex; gap: 6px; align-items: center;">
+                                        <input type="password" id="globalBufferApiKey" placeholder="Buffer API Token" autocomplete="off" style="flex: 1;" />
+                                        <button class="btn btn-secondary" onclick="testGlobalBufferConnection()" style="white-space: nowrap; padding: 12px 14px;" title="Проверить токен">🧪</button>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="scheduler-field-row">
-                                <label for="globalModeratorUserId">ID Модератора</label>
-                                <input type="text" id="globalModeratorUserId" placeholder="Telegram user ID модератора" />
+                                <div style="flex: 1; min-width: 180px;">
+                                    <label for="globalModeratorUserId" style="display: block; margin-bottom: 6px;">ID Модератора</label>
+                                    <input type="text" id="globalModeratorUserId" placeholder="Telegram user ID модератора" style="width: 100%;" />
+                                </div>
                             </div>
                             <div style="display: flex; gap: 8px; margin-bottom: 8px;">
                                 <button class="btn btn-success" onclick="saveIntegrationSettings()">💾 Сохранить</button>

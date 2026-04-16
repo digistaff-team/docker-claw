@@ -219,69 +219,64 @@ async function generateImageViaKIE(chatId, prompt, productImageUrl, correlationI
   const apiKey = process.env.KIE_API_KEY;
   if (!apiKey) throw new Error('KIE_API_KEY is not set');
 
-  const body = {
+  const model = process.env.KIE_IMAGE_MODEL || 'kie-image-v1';
+  const input = {
     prompt,
-    model: process.env.KIE_IMAGE_MODEL || 'kie-image-v1',
     aspect_ratio: '9:16',
-    n: 1,
-    enableTranslation: true
+    nsfw_checker: true
   };
-
-  // Если есть URL изображения товара — передаём в imageUrls
   if (productImageUrl) {
-    body.imageUrls = [productImageUrl];
+    input.imageUrls = [productImageUrl];
   }
 
-  const resp = await fetch('https://api.kie.ai/api/v1/image/generate', {
+  const createResp = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(body),
-    timeout: 60000
+    body: JSON.stringify({ model, input }),
+    timeout: 30000
   });
 
-  if (!resp.ok) {
-    const errText = await resp.text();
-    throw new Error(`KIE image API failed: ${resp.status} ${errText.slice(0, 300)}`);
+  if (!createResp.ok) {
+    const errText = await createResp.text();
+    throw new Error(`KIE image API failed: ${createResp.status} ${errText.slice(0, 300)}`);
   }
 
-  const data = await resp.json();
+  const createData = await createResp.json();
 
-  if (data.code !== 200) {
-    if (data.code === 402) throw new Error('KIE: Insufficient credits');
-    if (data.code === 422) throw new Error(`KIE: Validation error — ${data.msg}`);
-    if (data.code === 429) throw new Error('KIE: Rate limited');
-    throw new Error(`KIE image error: ${data.msg} (code ${data.code})`);
+  if (createData.code !== 200) {
+    if (createData.code === 402) throw new Error('KIE: Insufficient credits');
+    if (createData.code === 422) throw new Error(`KIE: Validation error — ${createData.msg}`);
+    if (createData.code === 429) throw new Error('KIE: Rate limited');
+    throw new Error(`KIE image error: ${createData.msg} (code ${createData.code})`);
   }
 
-  const taskId = data?.data?.taskId;
+  const taskId = createData?.data?.taskId;
   if (!taskId) throw new Error('KIE: no taskId in response');
 
-  // Polling
-  const maxPollAttempts = 30;
-  const pollInterval = 3000;
+  const pollUrl = `https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${taskId}`;
+  const pollHeaders = { 'Authorization': `Bearer ${apiKey}` };
 
-  for (let i = 0; i < maxPollAttempts; i++) {
-    await new Promise(r => setTimeout(r, pollInterval));
+  for (let i = 0; i < 18; i++) {
+    await new Promise(r => setTimeout(r, 5000));
 
-    const statusResp = await fetch(`https://api.kie.ai/api/v1/image/tasks/${taskId}`, {
-      headers: { 'Authorization': `Bearer ${apiKey}` },
-      timeout: 30000
-    });
+    const pollResp = await fetch(pollUrl, { headers: pollHeaders, timeout: 15000 });
+    if (!pollResp.ok) continue;
+    const pollData = await pollResp.json();
+    const state = pollData?.data?.state;
 
-    if (!statusResp.ok) continue;
-    const statusData = await statusResp.json();
+    if (state === 'success') {
+      const resultJson = JSON.parse(pollData.data.resultJson || '{}');
+      const imageUrl = resultJson?.resultUrls?.[0];
+      if (!imageUrl) throw new Error('KIE image: no result URL');
 
-    if (statusData.code === 200 && statusData.data?.resultUrl) {
-      // Скачиваем изображение
-      const imgResp = await fetch(statusData.data.resultUrl, { timeout: 60000 });
+      const imgResp = await fetch(imageUrl, { timeout: 60000 });
       if (!imgResp.ok) throw new Error('Failed to download scene image');
 
       const buffer = await imgResp.buffer();
 
-      // Сохраняем
       const filename = `scene_${correlationId}_${attempt}.png`;
       const chatTempDir = path.join(VIDEO_TEMP_ROOT, chatId);
       await fs.mkdir(chatTempDir, { recursive: true });
@@ -289,11 +284,11 @@ async function generateImageViaKIE(chatId, prompt, productImageUrl, correlationI
       await fs.writeFile(filepath, buffer);
 
       console.log(`[VIDEO-PIPELINE] Scene saved: ${filepath} (${buffer.length} bytes)`);
-      return { imagePath: filepath, imageUrl: statusData.data.resultUrl };
+      return { imagePath: filepath, imageUrl };
     }
 
-    if (statusData.code === 500 || statusData.code === 501) {
-      throw new Error(`KIE image failed: ${statusData.msg}`);
+    if (state === 'fail') {
+      throw new Error(`KIE image failed: ${pollData.data?.failMsg || 'unknown'}`);
     }
   }
 

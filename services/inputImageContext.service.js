@@ -87,50 +87,55 @@ async function getInputContext(chatId) {
 }
 
 /**
- * Image-to-image через /api/v1/image/generate
+ * Image-to-image через /api/v1/jobs/createTask (тот же эндпоинт что t2i, но с imageUrls в input)
  */
-async function _generateI2I(prompt, imagePublicUrl, aspectRatio) {
+async function _generateI2I(prompt, imagePublicUrl, aspectRatio, model) {
   const apiKey = process.env.KIE_API_KEY;
   if (!apiKey) throw new Error('KIE_API_KEY is not set');
 
-  const resp = await fetch('https://api.kie.ai/api/v1/image/generate', {
+  const createResp = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      prompt: prompt.slice(0, 800),
-      model: process.env.KIE_IMAGE_MODEL || 'kie-image-v1',
-      aspect_ratio: aspectRatio,
-      imageUrls: [imagePublicUrl],
-      n: 1,
-      enableTranslation: true
+      model,
+      input: {
+        prompt: prompt.slice(0, 800),
+        aspect_ratio: aspectRatio,
+        nsfw_checker: true,
+        imageUrls: [imagePublicUrl]
+      }
     }),
-    timeout: 60000
+    timeout: 30000
   });
 
-  if (!resp.ok) {
-    const errText = await resp.text();
-    throw new Error(`KIE i2i API failed: ${resp.status} ${errText.slice(0, 300)}`);
+  if (!createResp.ok) {
+    const err = await createResp.text();
+    throw new Error(`KIE i2i createTask failed: ${createResp.status} ${err.slice(0, 300)}`);
   }
-  const data = await resp.json();
-  if (data.code !== 200) throw new Error(`KIE i2i error: ${data.msg} (code ${data.code})`);
-  const taskId = data?.data?.taskId;
+  const createData = await createResp.json();
+  if (createData.code !== 200) throw new Error(`KIE i2i error: ${createData.msg}`);
+  const taskId = createData?.data?.taskId;
   if (!taskId) throw new Error('KIE i2i: no taskId');
 
-  for (let i = 0; i < 30; i++) {
-    await new Promise(r => setTimeout(r, 3000));
-    const statusResp = await fetch(`https://api.kie.ai/api/v1/image/tasks/${taskId}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-      timeout: 30000
-    });
-    if (!statusResp.ok) continue;
-    const statusData = await statusResp.json();
-    if (statusData.code === 200 && statusData.data?.resultUrl) {
-      const imgResp = await fetch(statusData.data.resultUrl, { timeout: 60000 });
-      if (!imgResp.ok) throw new Error('Failed to download i2i image');
+  const pollUrl = `https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${taskId}`;
+  const pollHeaders = { Authorization: `Bearer ${apiKey}` };
+
+  for (let attempt = 0; attempt < 18; attempt++) {
+    await new Promise(r => setTimeout(r, 5000));
+    const pollResp = await fetch(pollUrl, { headers: pollHeaders, timeout: 15000 });
+    if (!pollResp.ok) continue;
+    const pollData = await pollResp.json();
+    const state = pollData?.data?.state;
+    if (state === 'success') {
+      const resultJson = JSON.parse(pollData.data.resultJson || '{}');
+      const imageUrl = resultJson?.resultUrls?.[0];
+      if (!imageUrl) throw new Error('KIE i2i: no result URL');
+      const imgResp = await fetch(imageUrl, { timeout: 30000 });
+      if (!imgResp.ok) throw new Error(`KIE i2i download failed: ${imgResp.status}`);
       return await imgResp.buffer();
     }
-    if (statusData.code === 500 || statusData.code === 501) {
-      throw new Error(`KIE i2i failed: ${statusData.msg}`);
+    if (state === 'fail') {
+      throw new Error(`KIE i2i failed: ${pollData.data.failMsg || 'unknown'}`);
     }
   }
   throw new Error('KIE i2i timeout');
@@ -204,7 +209,7 @@ async function generateImage(chatId, basePrompt, aspectRatio, t2iModel) {
     const imagePublicUrl = `${config.APP_URL}/api/video/input/${chatId}/${encodeURIComponent(imageFile)}`;
     console.log(`[IMAGE-CTX] i2i: chatId=${chatId} file=${imageFile}`);
     try {
-      return await _generateI2I(prompt, imagePublicUrl, aspectRatio);
+      return await _generateI2I(prompt, imagePublicUrl, aspectRatio, t2iModel);
     } catch (e) {
       console.warn(`[IMAGE-CTX] i2i failed, fallback t2i: ${e.message}`);
     }
