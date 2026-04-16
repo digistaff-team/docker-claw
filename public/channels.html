@@ -170,7 +170,7 @@
 
                             <div class="scheduler-controls">
                                 <button class="btn btn-primary" onclick="saveContentSettings()">Сохранить настройки</button>
-                                <button class="btn btn-success" id="telegramRunNowBtn" onclick="runTelegramNow()">▶️ Сгенерировать сейчас</button>
+                                <button class="btn btn-success" id="telegramRunNowBtn" onclick="runTelegramNow()">▶️ Тест сейчас</button>
                             </div>
                             <div id="contentSettingsStatus" class="scheduler-status"></div>
                         </div>
@@ -323,7 +323,7 @@
 
                             <div class="scheduler-controls">
                                 <button class="btn btn-success" onclick="savePinterestConfig()">Сохранить настройки</button>
-                                <button class="btn btn-primary" onclick="runPinterestNow()">▶️ Сгенерировать сейчас</button>
+                                <button class="btn btn-primary" onclick="runPinterestNow()">▶️ Тест сейчас</button>
                             </div>
                             <div id="pinterestSettingsStatus" class="scheduler-status"></div>
                         </div>
@@ -473,7 +473,7 @@
                             <!-- Action Buttons -->
                             <div class="scheduler-controls">
                                 <button class="btn btn-primary" onclick="saveInstagramConfig()">Сохранить настройки</button>
-                                <button class="btn btn-success" onclick="runInstagramNow()">▶️ Сгенерировать сейчас</button>
+                                <button class="btn btn-success" onclick="runInstagramNow()">▶️ Тест сейчас</button>
                             </div>
                             <div id="instagramSettingsStatus" class="scheduler-status"></div>
                         </div>
@@ -607,7 +607,7 @@
 
                             <div class="scheduler-controls">
                                 <button class="btn btn-primary" onclick="saveVkSettings()">Сохранить настройки</button>
-                                <button class="btn btn-success" id="vkRunNowBtn" onclick="runVkNow()">▶️ Сгенерировать сейчас</button>
+                                <button class="btn btn-success" id="vkRunNowBtn" onclick="runVkNow()">▶️ Тест сейчас</button>
                             </div>
                             <div id="vkSettingsStatus" class="scheduler-status"></div>
                         </div>
@@ -715,7 +715,7 @@
 
                             <div class="scheduler-controls">
                                 <button class="btn btn-success" onclick="saveVkVideoSettings()">Сохранить настройки</button>
-                                <button class="btn btn-primary" id="vkVideoRunNowBtn" onclick="runVkVideoNow()">▶️ Сгенерировать сейчас</button>
+                                <button class="btn btn-primary" id="vkVideoRunNowBtn" onclick="runVkVideoNow()">▶️ Тест сейчас</button>
                             </div>
                             <div id="vkVideoSettingsStatus" class="scheduler-status"></div>
                         </div>
@@ -847,7 +847,7 @@
 
                             <div class="scheduler-controls">
                                 <button class="btn btn-primary" onclick="saveYoutubeConfig()">Сохранить настройки</button>
-                                <button class="btn btn-success" id="youtubeRunNowBtn" onclick="runYoutubeNow()">▶️ Сгенерировать сейчас</button>
+                                <button class="btn btn-success" id="youtubeRunNowBtn" onclick="runYoutubeNow()">▶️ Тест сейчас</button>
                             </div>
                             <div id="youtubeSettingsStatus" class="scheduler-status"></div>
                         </div>
@@ -973,7 +973,7 @@
                             <!-- Action Buttons -->
                             <div class="scheduler-controls">
                                 <button class="btn btn-primary" onclick="saveFacebookConfig()">Сохранить настройки</button>
-                                <button class="btn btn-success" onclick="runFacebookNow()">▶️ Сгенерировать сейчас</button>
+                                <button class="btn btn-success" onclick="runFacebookNow()">▶️ Тест сейчас</button>
                             </div>
                             <div id="facebookSettingsStatus" class="scheduler-status"></div>
                         </div>
@@ -1127,7 +1127,7 @@
 
                             <div class="scheduler-controls">
                                 <button class="btn btn-success" onclick="saveWordpressConfig()">Сохранить настройки</button>
-                                <button class="btn btn-primary" onclick="runWordpressNow()">▶️ Сгенерировать сейчас</button>
+                                <button class="btn btn-primary" onclick="runWordpressNow()">▶️ Тест сейчас</button>
                             </div>
                             <div id="wordpressSettingsStatus" class="scheduler-status"></div>
 
@@ -1395,7 +1395,7 @@
 
                             <div class="scheduler-controls">
                                 <button class="btn btn-primary" onclick="saveOkSettings()">Сохранить настройки</button>
-                                <button class="btn btn-success" id="okRunNowBtn" onclick="runOkNow()">▶️ Сгенерировать сейчас</button>
+                                <button class="btn btn-success" id="okRunNowBtn" onclick="runOkNow()">▶️ Тест сейчас</button>
                             </div>
                             <div id="okSettingsStatus" class="scheduler-status"></div>
                         </div>
@@ -1471,6 +1471,7 @@
 
                         <div id="tiktokStatus" class="channel-status" style="margin-top: 0; font-size: 14px;"></div>
 
+                        <!-- Настройки публикации -->
                         <div id="tiktokSettingsBlock" style="margin-top: 20px;">
                             <div class="scheduler-container">
                                 <div class="channel-settings-block">
@@ -1497,6 +1498,11 @@
                                         <button class="btn btn-secondary" onclick="testTiktokBufferConnection()">🧪 Проверить соединение</button>
                                         <button class="btn btn-secondary" id="disconnectTiktokBtn" style="display: none;" onclick="disconnectTiktok()">Отключить</button>
                                     </div>
+
+                                    <div class="scheduler-field-row moderator-field" id="tiktokModeratorField">
+                                        <label for="tiktokModeratorUserId">ID Модератора</label>
+                                        <input type="text" id="tiktokModeratorUserId" placeholder="123456789" />
+                                    </div>
                                 </div>
 
                                 <div class="schedule-settings-block">
@@ -1504,7 +1510,7 @@
 
                                     <div class="scheduler-time-pair">
                                         <div class="scheduler-time-group">
-                                            <label>Публиковать в</label>
+                                            <label>Начать в</label>
                                             <div class="scheduler-time-row">
                                                 <select id="tiktokScheduleHour" onchange="updateTiktokScheduleTime()">
                                                     <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
@@ -1518,6 +1524,23 @@
                                                 <input type="text" id="tiktokScheduleMinute" maxlength="2" placeholder="00"
                                                        oninput="validateTiktokMinutes(); updateTiktokScheduleTime()">
                                                 <input type="hidden" id="tiktokScheduleTime">
+                                            </div>
+                                        </div>
+                                        <div class="scheduler-time-group">
+                                            <label>Завершить в</label>
+                                            <div class="scheduler-time-row">
+                                                <select id="tiktokScheduleEndHour" onchange="updateTiktokScheduleEndTime()">
+                                                    <option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option>
+                                                    <option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option>
+                                                    <option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option>
+                                                    <option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                                                    <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
+                                                    <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23" selected>23</option>
+                                                </select>
+                                                <span>:</span>
+                                                <input type="text" id="tiktokScheduleEndMinute" maxlength="2" placeholder="00"
+                                                       oninput="validateTiktokEndMinutes(); updateTiktokScheduleEndTime()">
+                                                <input type="hidden" id="tiktokScheduleEndTime">
                                             </div>
                                         </div>
                                         <div class="scheduler-time-group scheduler-tz-group">
@@ -1534,15 +1557,38 @@
                                     </div>
 
                                     <div class="scheduler-field-row">
-                                        <label>
-                                            <input type="checkbox" id="tiktokAutoPublish" />
-                                            Автопубликация (без модерации)
-                                        </label>
+                                        <label for="tiktokPublishInterval">Периодичность публикаций</label>
+                                        <select id="tiktokPublishInterval">
+                                            <option value="1">Каждый час</option>
+                                            <option value="3">Каждые 3 часа</option>
+                                            <option value="6" selected>Каждые 6 часов</option>
+                                            <option value="12">Каждые 12 часов</option>
+                                            <option value="24">Раз в сутки</option>
+                                        </select>
                                     </div>
 
-                                    <button class="btn btn-primary" onclick="saveTiktokSchedule()" style="margin-top: 12px;">💾 Сохранить расписание</button>
+                                    <label>Дни недели</label>
+                                    <div class="scheduler-weekdays-row" id="tiktokWeekdays">
+                                        <!-- Generated by JS -->
+                                    </div>
+
+                                    <div class="scheduler-checkbox-row">
+                                        <input type="checkbox" id="tiktokRandomPublish">
+                                        <label for="tiktokRandomPublish">Рандом 0-15% от интервала</label>
+                                    </div>
+
+                                    <div class="scheduler-checkbox-row">
+                                        <input type="checkbox" id="tiktokPremoderation" checked onchange="toggleTiktokModeratorField()">
+                                        <label for="tiktokPremoderation">Отправлять на премодерацию</label>
+                                    </div>
                                 </div>
                             </div>
+
+                            <div class="scheduler-controls">
+                                <button class="btn btn-primary" onclick="saveTiktokSettings()">Сохранить настройки</button>
+                                <button class="btn btn-success" id="tiktokRunNowBtn" onclick="runTiktokNow()">▶️ Тест сейчас</button>
+                            </div>
+                            <div id="tiktokSettingsStatus" class="scheduler-status"></div>
                         </div>
                     </div>
                 </div>

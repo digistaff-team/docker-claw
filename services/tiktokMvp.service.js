@@ -56,6 +56,7 @@ function getTiktokSettings(chatId) {
     isActive: !!cfg?.is_active,
     autoPublish: !!cfg?.auto_publish,
     scheduleTime: cfg?.schedule_time || '12:00',
+    scheduleEndTime: cfg?.schedule_end_time || null,
     scheduleTz: isValidTz(cfg?.schedule_tz) ? cfg.schedule_tz : SCHEDULE_TZ,
     dailyLimit: Number.isFinite(cfg?.daily_limit) ? cfg.daily_limit : DAILY_TIKTOK_LIMIT,
     publishIntervalHours: Number.isFinite(cfg?.publish_interval_hours) ? cfg.publish_interval_hours : 6,
@@ -487,7 +488,16 @@ async function publishScheduledPosts() {
       if (!settings.isActive) continue;
 
       const { time: nowTime } = getNowInTz(settings.scheduleTz);
-      if (nowTime !== settings.scheduleTime) continue;
+      const [nowH, nowM] = nowTime.split(':').map(Number);
+      const nowMinutes = nowH * 60 + nowM;
+
+      const [startH, startM] = (settings.scheduleTime || '12:00').split(':').map(Number);
+      if (nowMinutes < startH * 60 + startM) continue;
+
+      if (settings.scheduleEndTime) {
+        const [endH, endM] = settings.scheduleEndTime.split(':').map(Number);
+        if (nowMinutes >= endH * 60 + endM) continue;
+      }
 
       const dayOfWeek = now.getDay();
       if (!settings.allowedWeekdays.includes(dayOfWeek)) continue;
@@ -536,6 +546,40 @@ function setTiktokCwBot(bot) {
 }
 
 // ============================================
+// Ручной запуск (UI «Тест сейчас»)
+// ============================================
+
+async function runNow(chatId, bot, reason = 'manual') {
+  const settings = getTiktokSettings(chatId);
+  if (!settings.isActive) {
+    return { ok: false, message: 'TikTok не подключён.' };
+  }
+
+  await repository.ensureSchema(chatId);
+  const topic = await repository.reserveNextTopic(chatId, 'tiktok');
+  if (!topic) {
+    return { ok: false, message: 'Нет доступных тем для генерации.' };
+  }
+
+  try {
+    const jobResult = await handleTiktokGenerateJob(
+      chatId,
+      { topic },
+      bot,
+      `tiktok_manual_${Date.now()}`
+    );
+    if (!jobResult?.success) {
+      await repository.releaseTopic(chatId, topic.id);
+      return { ok: false, message: jobResult?.error || 'Генерация не удалась.' };
+    }
+    return { ok: true, message: 'TikTok-задача запущена. Черновик придёт в Telegram.' };
+  } catch (e) {
+    await repository.releaseTopic(chatId, topic.id);
+    return { ok: false, message: `Ошибка: ${e.message}` };
+  }
+}
+
+// ============================================
 // Exports
 // ============================================
 
@@ -546,5 +590,6 @@ module.exports = {
   stopScheduler,
   setTiktokCwBot,
   getTiktokSettings,
-  publishTiktokPost
+  publishTiktokPost,
+  runNow
 };

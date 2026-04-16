@@ -533,8 +533,6 @@ async function renderMenu(currentPage) {
         { href: '/content.html', label: '📝 Контент' },
         { href: '/video.html', label: '🎬 Видео' },
         { href: '/ai.html', label: '🤖 ИИ' },
-        { href: '/skills.html', label: '🧠 Навыки' },
-        { href: '/balance.html', label: '💰 Баланс' },
         // Консоль доступна только админу
         ...(isAdmin ? [{ href: '/console.html', label: '💻 Консоль' }] : []),
         { href: '/info.html', label: '📊 Инфо' }

@@ -45,6 +45,23 @@ const MODERATOR_USER_ID = process.env.CONTENT_MVP_MODERATOR_USER_ID || '12824743
 const DAILY_LIMIT = parseInt(process.env.CONTENT_MVP_DAILY_LIMIT || '1', 10);
 const MAX_IMAGE_ATTEMPTS = parseInt(process.env.CONTENT_MVP_MAX_IMAGE_ATTEMPTS || '3', 10);
 
+// Ошибки, при которых повторные попытки генерации картинки бессмысленны
+function isFatalImageError(msg) {
+  return /credits insufficient|balance isn't enough|KIE_API_KEY is not set/i.test(msg);
+}
+
+// Человекочитаемое сообщение об ошибке генерации для показа в UI
+function friendlyGenError(msg) {
+  const s = msg || 'Генерация не удалась.';
+  if (/credits insufficient|balance isn't enough/i.test(s)) {
+    return 'Недостаточно средств на балансе KIE.ai для генерации изображения. Пополните баланс и повторите.';
+  }
+  if (/KIE_API_KEY is not set/i.test(s)) {
+    return 'Ключ KIE_API_KEY не настроен. Обратитесь к администратору.';
+  }
+  return s;
+}
+
 // TASK-015: Video configuration
 const DEFAULT_CONTENT_TYPE = process.env.CONTENT_MVP_CONTENT_TYPE || 'text+image'; // 'text+image' | 'text+video'
 const VIDEO_FALLBACK_ENABLED = process.env.VIDEO_FALLBACK_ENABLED !== 'false';
@@ -814,11 +831,13 @@ async function handleGenerateJob(chatId, queueJob, bot, correlationId) {
       break;
     } catch (e) {
       imageErr = e?.message || String(e);
+      // Не повторяем при фатальных ошибках (нет баланса, нет ключа)
+      if (isFatalImageError(imageErr)) break;
     }
   }
   if (!imagePath) {
     await releaseTopic(chatId, topic, `image_generation_failed: ${imageErr}`);
-    return { success: false, error: `Image generation failed: ${imageErr}`, retry: true };
+    return { success: false, error: `Image generation failed: ${imageErr}`, retry: !isFatalImageError(imageErr) };
   }
 
   // Создаём job в БД
@@ -1172,6 +1191,8 @@ async function generateDraft(chatId, reason = 'manual', correlationId = null) {
       break;
     } catch (e) {
       imageErr = e?.message || String(e);
+      // Не повторяем при фатальных ошибках (нет баланса, нет ключа)
+      if (isFatalImageError(imageErr)) break;
     }
   }
   if (!imagePath) {
@@ -1677,10 +1698,10 @@ async function runNow(chatId, bot, reason = 'manual') {
       if (result.success) {
         return { ok: true, message: 'Генерация выполнена успешно.', correlationId };
       } else {
-        return { ok: false, message: result.error || 'Генерация не удалась.', correlationId };
+        return { ok: false, message: friendlyGenError(result.error), correlationId };
       }
     } catch (e) {
-      return { ok: false, message: `Ошибка генерации: ${e.message}`, correlationId };
+      return { ok: false, message: friendlyGenError(e.message), correlationId };
     }
   }
 

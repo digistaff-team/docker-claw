@@ -201,6 +201,8 @@ Webhook endpoint: `POST /api/video/callback/:chatId/:videoId` → `videoPipeline
 
 **Frontend auth pattern:** `common.js` объявляет `let currentChatId` и `getChatId()`. Каждый page-specific JS (например `video.js`, `content.js`) определяет `async function onLoginSuccess()`, которую `common.js` вызывает после успешной авторизации. Не объявлять `let currentChatId` повторно в page-specific JS — это вызовет `SyntaxError: Identifier already been declared`.
 
+**Channel scheduler pattern:** При добавлении нового канала на `channels.html` использовать утилиты из `public/js/timezone-helper.js`: `generateTimezoneSelect(elementId, tz)`, `generateWeekdayCheckboxes(prefix, days)`, `getWeekdays(prefix)`, `setWeekdays(prefix, days)`. Эталонная разметка блока — `public/templates/channel-scheduler-template.html`. Сложная логика для отдельных каналов выносится в отдельный файл (`channels-wordpress.js`, `channels-facebook.js`); инициализация всех TZ-селектов вызывается через `initSchedulerChannels()` в `channels.js`.
+
 ### Файловая система
 
 ```

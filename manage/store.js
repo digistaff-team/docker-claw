@@ -735,6 +735,7 @@ function setTiktokConfig(chatId, patch = {}) {
     if (patch.is_active !== undefined) next.is_active = !!patch.is_active;
     if (patch.auto_publish !== undefined) next.auto_publish = !!patch.auto_publish;
     if (patch.schedule_time !== undefined) next.schedule_time = patch.schedule_time || null;
+    if (patch.schedule_end_time !== undefined) next.schedule_end_time = patch.schedule_end_time || null;
     if (patch.schedule_tz !== undefined) next.schedule_tz = patch.schedule_tz || null;
     if (patch.daily_limit !== undefined) next.daily_limit = Number.isFinite(patch.daily_limit) ? patch.daily_limit : 3;
     if (patch.publish_interval_hours !== undefined) next.publish_interval_hours = Number.isFinite(patch.publish_interval_hours) ? patch.publish_interval_hours : 6;

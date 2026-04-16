@@ -8,6 +8,7 @@ const okMvpService = require('../services/okMvp.service');
 const pinterestMvpService = require('../services/pinterestMvp.service');
 const instagramMvpService = require('../services/instagramMvp.service');
 const facebookMvpService = require('../services/facebookMvp.service');
+const tiktokMvpService = require('../services/tiktokMvp.service');
 const wordpressMvpService = require('../services/wordpressMvp.service');
 const blogGenerator = require('../services/blogGenerator.service');
 const wpRepo = require('../services/content/wordpress.repository');
@@ -715,6 +716,25 @@ router.post('/facebook/run-now', async (req, res) => {
   }
   try {
     const result = await facebookMvpService.runNow(chatId, bot, reason);
+    return res.json(result);
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/content/tiktok/run-now — ручной запуск генерации TikTok
+router.post('/tiktok/run-now', async (req, res) => {
+  const chatId = normalizeChatId(req.body.chat_id);
+  const reason = String(req.body.reason || 'api').trim() || 'api';
+  if (!chatId) {
+    return res.status(400).json({ error: 'chat_id is required' });
+  }
+  const bot = resolveBotFacade(chatId);
+  if (!bot) {
+    return res.status(409).json({ error: 'Telegram bot is not running for chat_id' });
+  }
+  try {
+    const result = await tiktokMvpService.runNow(chatId, bot, reason);
     return res.json(result);
   } catch (e) {
     return res.status(500).json({ error: e.message });

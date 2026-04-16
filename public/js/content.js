@@ -285,9 +285,11 @@ function renderImportPreview(data, mode) {
     wrap.style.display = 'block';
     meta.textContent = `rows: ${data.totalRows}, duplicates: ${data.skippedDuplicates}, empty: ${data.skippedEmpty}`;
 
+    const previewRows = (data.preview || []).slice(0, 5);
+
     if (mode === 'materials') {
         head.innerHTML = '<tr><th>Row</th><th>Title</th><th>Source</th><th>Content</th><th>Duplicate</th></tr>';
-        body.innerHTML = (data.preview || []).map((item) => `
+        body.innerHTML = previewRows.map((item) => `
             <tr>
                 <td>${item.row}</td>
                 <td>${escapeHtml(item.title || '-')}</td>
@@ -298,7 +300,7 @@ function renderImportPreview(data, mode) {
         `).join('') || '<tr><td colspan="5" class="content-empty-cell">Нет строк для импорта</td></tr>';
     } else {
         head.innerHTML = '<tr><th>Row</th><th>Topic</th><th>Focus</th><th>Status</th><th>Duplicate</th></tr>';
-        body.innerHTML = (data.preview || []).map((item) => `
+        body.innerHTML = previewRows.map((item) => `
             <tr>
                 <td>${item.row}</td>
                 <td>${escapeHtml(item.topic || '-')}</td>
@@ -360,12 +362,15 @@ async function applySheetImport(mode) {
             statusEl.className = 'content-status-line ok';
         }
         showToast('Импорт завершён', 'success');
+        // Скрываем блок предпросмотра
+        const prefix2 = mode === 'materials' ? 'materials' : 'topics';
+        const previewWrap = document.getElementById(`${prefix2}ImportPreviewWrap`);
+        if (previewWrap) previewWrap.style.display = 'none';
         if (mode === 'materials') {
             await loadMaterials();
         } else {
             await loadTopics();
         }
-        await previewSheetImport(mode);
     } catch (e) {
         if (statusEl) {
             statusEl.textContent = e.message;

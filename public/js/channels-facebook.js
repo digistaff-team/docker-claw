@@ -364,7 +364,7 @@ window.runFacebookNow = async function() {
         const btn = $('fbRunNowBtn');
         if (btn) {
             btn.disabled = false;
-            btn.textContent = '▶️ Сгенерировать сейчас';
+            btn.textContent = '▶️ Тест сейчас';
         }
     }
 };
