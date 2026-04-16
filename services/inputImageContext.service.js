@@ -5,6 +5,7 @@ const fetch = require('node-fetch');
 const sessionService = require('./session.service');
 const dockerService = require('./docker.service');
 const config = require('../config');
+const vpRepo = require('./content/videoPipeline.repository');
 
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif']);
 const TEXT_EXTS = new Set(['.txt', '.md']);
@@ -190,9 +191,65 @@ async function _generateT2I(prompt, aspectRatio, model) {
   throw new Error('Image t2i timeout');
 }
 
+const LIGHTING_VARIANTS = [
+  'soft diffused natural light from a large window',
+  'warm golden hour sunlight, long shadows',
+  'bright studio strobe, white background rim light',
+  'moody low-key lighting, single side light source',
+  'overcast daylight, even shadowless illumination',
+  'candlelight-warm ambient glow, soft bokeh',
+  'cool north-window light, neutral tones',
+  'backlit silhouette light, glowing edges',
+];
+
+const ANGLE_VARIANTS = [
+  'front view, eye-level, centered composition',
+  'three-quarter angle, slight elevation, dynamic perspective',
+  'top-down flat lay, overhead shot',
+  'low angle, looking up, dramatic perspective',
+  'side profile, clean background, minimalist framing',
+  'close-up macro, sharp detail, extreme shallow depth of field',
+  'diagonal composition, 45-degree angle, lifestyle context',
+  'birds-eye view, symmetrical flat lay arrangement',
+];
+
+/**
+ * Собирает структурированный промпт:
+ * [Интерьер] + [Товар/Контекст] + [Освещение] + [Ракурс/Композиция] + [Стиль рендера]
+ *
+ * @param {string} productContext - описание товара или тема поста (из .txt файла или basePrompt канала)
+ * @param {object|null} interior  - { style, description } из таблицы interiors, или null
+ * @param {string} [lighting]     - конкретный вариант освещения (для тестов); если не передан — случайный
+ * @param {string} [angle]        - конкретный ракурс (для тестов); если не передан — случайный
+ * @returns {string}
+ */
+function _buildPrompt(productContext, interior, lighting, angle) {
+  const parts = ['Professional product photography'];
+
+  if (interior) {
+    const style = interior.style || 'modern interior';
+    const desc = String(interior.description || '').trim();
+    parts.push(`Interior: ${style}${desc ? `, ${desc}` : ''}`);
+  }
+
+  parts.push(productContext);
+
+  const light = lighting || LIGHTING_VARIANTS[Math.floor(Math.random() * LIGHTING_VARIANTS.length)];
+  parts.push(light);
+
+  const shot = angle || ANGLE_VARIANTS[Math.floor(Math.random() * ANGLE_VARIANTS.length)];
+  parts.push(shot);
+
+  parts.push('no text, no logos, no watermarks');
+  parts.push('photorealistic, commercial photography, 4K');
+
+  return parts.join('. ').slice(0, 800);
+}
+
 /**
  * Генерирует изображение: i2i если в /workspace/input есть картинка, иначе t2i.
- * При i2i: textPrompt из .txt/.md переопределяет basePrompt.
+ * Структурированный промпт: интерьер из БД + товар (textPrompt из .txt или basePrompt канала).
+ * При i2i: textPrompt из .txt/.md используется как описание товара, не заменяет весь промпт.
  * При сбое i2i — fallback на t2i.
  *
  * @param {string} chatId
@@ -202,8 +259,19 @@ async function _generateT2I(prompt, aspectRatio, model) {
  * @returns {Promise<Buffer>}
  */
 async function generateImage(chatId, basePrompt, aspectRatio, t2iModel) {
-  const { textPrompt, imageFile } = await getInputContext(chatId);
-  const prompt = textPrompt || basePrompt;
+  const [{ textPrompt, imageFile }, interior] = await Promise.all([
+    getInputContext(chatId),
+    vpRepo.ensureSchema(chatId)
+      .then(() => vpRepo.getRandomInterior(chatId))
+      .catch(e => { console.warn(`[IMAGE-CTX] Interior fetch skipped: ${e.message}`); return null; })
+  ]);
+
+  const productContext = textPrompt || basePrompt;
+  const prompt = _buildPrompt(productContext, interior);
+
+  if (interior) {
+    console.log(`[IMAGE-CTX] Interior: style="${interior.style || 'n/a'}" id=${interior.id}`);
+  }
 
   if (imageFile) {
     const imagePublicUrl = `${config.APP_URL}/api/video/input/${chatId}/${encodeURIComponent(imageFile)}`;
@@ -219,4 +287,4 @@ async function generateImage(chatId, basePrompt, aspectRatio, t2iModel) {
   return await _generateT2I(prompt, aspectRatio, t2iModel);
 }
 
-module.exports = { getInputContext, generateImage, _parseFiles };
+module.exports = { getInputContext, generateImage, _parseFiles, _buildPrompt, LIGHTING_VARIANTS, ANGLE_VARIANTS };
