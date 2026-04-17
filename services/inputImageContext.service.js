@@ -96,7 +96,7 @@ const I2I_SCHEMAS = {
 const I2I_DEFAULT_SCHEMA = { imageField: 'imageUrls' };
 
 // Модели, которые не поддерживают t2i — при отсутствии фото используем fallback
-const I2I_ONLY_MODELS = new Set(['flux-2/pro-image-to-image']);
+const I2I_ONLY_MODELS = new Set(['flux-2/pro-image-to-image', 'seedream/4.5-edit', 'nano-banana-2']);
 
 /**
  * Image-to-image через /api/v1/jobs/createTask.
@@ -162,9 +162,7 @@ async function _generateI2I(prompt, imagePublicUrl, aspectRatio, model) {
  * Text-to-image через /api/v1/jobs/createTask
  */
 // Дополнительные обязательные параметры для t2i по моделям
-const T2I_EXTRAS = {
-  'seedream/4.5-edit': { quality: 'basic', image_urls: [] },
-};
+const T2I_EXTRAS = {};
 
 async function _generateT2I(prompt, aspectRatio, model) {
   const apiKey = process.env.KIE_API_KEY;

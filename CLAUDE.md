@@ -88,7 +88,7 @@ AI агент (agentLoop) обрабатывает сообщения через
 |-----------|------------|----------|
 | Сессии и контейнеры | `services/session.service.js` | In-memory Map sessions (chatId → сессия). `createSession`, `destroySession`, `recoverAllSessions` |
 | Docker CLI | `services/docker.service.js` | `child_process.spawn`, контейнеры `sandbox-user-{chatId}`, блокировка опасных команд |
-| Состояние пользователей | `manage/store.js` | In-memory `statesCache` + файлы `{DATA_ROOT}/manage-state-{chatId}.json` (атомарная запись через .tmp + rename). Хранит настройки всех каналов, `videoPipelineSettings` (выбранная модель, дефолт `{ model: 'veo3.1' }`) |
+| Состояние пользователей | `manage/store.js` | In-memory `statesCache` + файлы `{DATA_ROOT}/manage-state-{chatId}.json` (атомарная запись через .tmp + rename). Хранит настройки всех каналов, `videoPipelineSettings` (выбранная модель, дефолт `{ model: 'veo3.1' }`), `imageGenSettings` (модель генерации фото, дефолт `'grok-imagine/text-to-image'`). `getImageGenSettings(chatId)` валидирует модель на чтении против `ALLOWED_IMAGE_MODELS` |
 | AI Agent Loop | `manage/telegram/agentLoop.js` (47 KB) | Цикл рассуждений: контекст → LLM → tool_calls → toolHandlers → iterate до `task_completed` |
 | Tool Handlers | `manage/telegram/toolHandlers.js` (77 KB) | Реализация инструментов AI: файлы, bash, планы, контекст |
 | AI Tools Schema | `manage/telegram/tools.js` (24 KB) | JSON-определения инструментов для LLM. Три набора: `TOOLS_CHAT`, `TOOLS_WORKSPACE`, `TOOLS_TERMINAL` |
@@ -125,7 +125,7 @@ AI агент (agentLoop) обрабатывает сообщения через
 | Планы | `services/plan.service.js` | Управление пользовательскими планами для AI-агента |
 | Зависимости | `services/deps.service.js` | Установка npm/pip зависимостей в контейнере |
 | Изображения | `services/imageGen.service.js` | Утилиты для генерации изображений |
-| Input контекст | `services/inputImageContext.service.js` | Сканирует `/workspace/input` контейнера: выбирает случайное изображение и первый .txt/.md файл (до 500 символов) для подстановки в промпт генерации. Чистая функция `_parseFiles` экспортируется для тестов |
+| Input контекст | `services/inputImageContext.service.js` | Единая точка генерации изображений для всех каналов. `generateImage(chatId, basePrompt, aspectRatio, model)`: сканирует `/workspace/input` (PNG/JPG/WEBP/GIF), берёт случайный интерьер из БД, строит структурированный промпт через `_buildPrompt()` (интерьер + товар + случайное освещение из 8 вариантов + случайный ракурс из 8 вариантов). i2i запускается только если модель есть в `I2I_SCHEMAS`; каждая модель использует своё поле для референса (`imageUrls`, `image_input`, `image_urls`, `input_urls`). `flux-2/pro-image-to-image` — i2i-only (в `I2I_ONLY_MODELS`), при отсутствии файла fallback на `grok-imagine/text-to-image`. `grok-imagine/text-to-image` — t2i-only, i2i не пытается. Чистые функции `_parseFiles`, `_buildPrompt` экспортируются для тестов |
 
 ### Маршрутизация
 
@@ -165,7 +165,9 @@ AI агент (agentLoop) обрабатывает сообщения через
 
 Webhook endpoint: `POST /api/video/callback/:chatId/:videoId` → `videoPipeline.resolveVideoCallback(videoId, body)`.
 
-Выбор модели хранится в `manageStore.getVideoPipelineSettings(chatId).model` (дефолт `'veo3.1'`) и выставляется через `GET/POST /api/video/settings`.
+Выбор модели видео хранится в `manageStore.getVideoPipelineSettings(chatId).model` (дефолт `'veo3.1'`) и выставляется через `GET/POST /api/video/settings`.
+
+Выбор модели изображений хранится в `manageStore.getImageGenSettings(chatId).model` (дефолт `'grok-imagine/text-to-image'`) и выставляется через `GET/POST /api/video/image-settings`. Поддерживаемые модели (`ALLOWED_IMAGE_MODELS` в `manage/store.js`): `grok-imagine/text-to-image` (t2i-only), `nano-banana-2` (i2i+t2i), `seedream/4.5-edit` (i2i+t2i), `flux-2/pro-image-to-image` (i2i-only). **Важно:** KIE.ai использует разные имена полей для референсного изображения в зависимости от модели — схемы в `I2I_SCHEMAS` в `inputImageContext.service.js`. При добавлении новой i2i-модели нужно добавить схему туда же.
 
 Временные файлы: `VIDEO_TEMP_ROOT` (по умолчанию `{DATA_ROOT}/.video-temp/{chatId}/`). Публичные URL для KIE.ai: `/api/video/temp/:chatId/:filename` (сцены) и `/api/video/input/:chatId/:filename` (фото товаров из input/).
 
