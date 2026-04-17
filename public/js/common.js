@@ -527,12 +527,11 @@ async function renderMenu(currentPage) {
     }
 
     const menuItems = [
-        { href: '/auth.html', label: '🎭 Персона' },
-        { href: '/files.html', label: '📁 Файлы' },
         { href: '/channels.html', label: '📡 Каналы' },
-        { href: '/content.html', label: '📝 Контент' },
-        { href: '/video.html', label: '🎬 Видео' },
-        { href: '/ai.html', label: '🤖 ИИ' },
+        { href: '/ai.html', label: '🤖 AI-модели' },
+        { href: '/auth.html', label: '🎭 Персона' },
+        { href: '/content.html', label: '📝 Материалы' },
+        { href: '/files.html', label: '📁 Файлы' },
         // Консоль доступна только админу
         ...(isAdmin ? [{ href: '/console.html', label: '💻 Консоль' }] : []),
         { href: '/info.html', label: '📊 Инфо' }

@@ -1524,6 +1524,88 @@ router.delete('/channels/tiktok', async (req, res) => {
     }
 });
 
+// === Instagram Reels Channel ===
+
+router.get('/channels/instagram-reels', async (req, res) => {
+    try {
+        const chatId = req.query.chat_id;
+        if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
+        const config = manageStore.getInstagramReelsConfig(chatId) || {};
+        res.json({ config });
+    } catch (e) {
+        console.error('GET /api/manage/channels/instagram-reels', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.post('/channels/instagram-reels', async (req, res) => {
+    try {
+        const {
+            chat_id,
+            buffer_channel_id,
+            schedule_time,
+            schedule_end_time,
+            schedule_tz,
+            daily_limit,
+            publish_interval_hours,
+            random_publish,
+            premoderation_enabled,
+            allowed_weekdays,
+            moderator_user_id,
+            is_active
+        } = req.body;
+        if (!chat_id) return res.status(400).json({ error: 'chat_id is required' });
+
+        manageStore.setInstagramReelsConfig(chat_id, {
+            buffer_channel_id: buffer_channel_id || null,
+            schedule_time,
+            schedule_end_time,
+            schedule_tz,
+            daily_limit: parseInt(daily_limit, 10) || 3,
+            publish_interval_hours: parseFloat(publish_interval_hours) || 6,
+            random_publish: !!random_publish,
+            auto_publish: !premoderation_enabled,
+            allowed_weekdays: Array.isArray(allowed_weekdays) ? allowed_weekdays : [0, 1, 2, 3, 4, 5, 6],
+            moderator_user_id: moderator_user_id || null,
+            is_active: !!is_active
+        });
+
+        res.json({ success: true });
+    } catch (e) {
+        console.error('POST /api/manage/channels/instagram-reels', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.post('/channels/instagram-reels/run-now', async (req, res) => {
+    try {
+        const { chat_id: chatId } = req.body;
+        if (!chatId) return res.status(400).json({ error: 'chat_id required' });
+        const igMvp = require('../services/instagramMvp.service');
+        const bots = require('./telegram/runner').bots;
+        const botEntry = bots?.get(chatId);
+        const result = await igMvp.runNowReels(chatId, botEntry?.bot || null);
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ ok: false, error: e.message });
+    }
+});
+
+// GET /api/manage/check-cw-subscriber?moderator_id=X
+// Проверяет, запустил ли пользователь @czcw_bot (т.е. может получать от него сообщения)
+router.get('/check-cw-subscriber', async (req, res) => {
+    const { moderator_id } = req.query;
+    if (!moderator_id) return res.json({ subscribed: false });
+    try {
+        const cwBot = require('../services/telegramMvp.service').getContentBot();
+        if (!cwBot) return res.json({ subscribed: false, error: 'CW bot not available' });
+        await cwBot.telegram.getChat(moderator_id);
+        res.json({ subscribed: true });
+    } catch (e) {
+        res.json({ subscribed: false });
+    }
+});
+
 // GET /api/manage/integrations
 router.get('/integrations', (req, res) => {
     const chatId = req.query.chat_id;

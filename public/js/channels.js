@@ -1,6 +1,63 @@
 const API_MANAGE = `${window.location.origin}/api/manage`;
 const API_CONTENT = `${window.location.origin}/api/content`;
 
+// === Модератор: автозаполнение и проверка подписки на @czcw_bot ===
+
+const ALL_MODERATOR_FIELDS = [
+    'contentModeratorUserId',
+    'vkModeratorUserId',
+    'okModeratorUserId',
+    'wordpressModeratorUserId',
+    'pinterestModeratorUserId',
+    'instagramModeratorUserId',
+    'instagramReelsModeratorUserId',
+    'facebookModeratorUserId',
+    'youtubeModeratorUserId',
+    'tiktokModeratorUserId',
+    'vkVideoModeratorUserId',
+];
+
+async function onModeratorFieldChange(el, chatId) {
+    const value = (el.value || '').trim();
+    el.style.borderColor = '';
+    const existingWarn = el.parentElement?.querySelector('.moderator-warn');
+    if (existingWarn) existingWarn.remove();
+    if (!value || value === String(chatId)) return;
+    try {
+        const resp = await fetch(`${API_MANAGE}/check-cw-subscriber?moderator_id=${encodeURIComponent(value)}`);
+        const data = await resp.json();
+        if (data.subscribed) {
+            el.style.borderColor = '#28a745';
+        } else {
+            el.style.borderColor = '#dc3545';
+            const warn = document.createElement('p');
+            warn.className = 'moderator-warn';
+            warn.style.cssText = 'font-size:11px; margin:4px 0 0; color:#dc3545;';
+            warn.textContent = 'Пользователь не подписан на @czcw_bot — попросите его запустить бота для получения черновиков';
+            el.parentElement.appendChild(warn);
+        }
+    } catch (e) {
+        el.style.borderColor = '#dc3545';
+    }
+}
+
+function initModeratorFields(chatId) {
+    ALL_MODERATOR_FIELDS.forEach(fieldId => {
+        const el = document.getElementById(fieldId);
+        if (!el) return;
+        if (!el.value) el.value = chatId;
+        el.addEventListener('change', () => onModeratorFieldChange(el, chatId));
+    });
+}
+
+async function checkAllModeratorSubscriptions(chatId) {
+    for (const fieldId of ALL_MODERATOR_FIELDS) {
+        const el = document.getElementById(fieldId);
+        if (!el || !el.value || el.value === String(chatId)) continue;
+        await onModeratorFieldChange(el, chatId);
+    }
+}
+
 // === Инициализация scheduler элементов ===
 function initSchedulerChannels() {
     // Generate hour options for channels that use JS-generated selects
@@ -32,6 +89,7 @@ function initSchedulerChannels() {
         generateTimezoneSelect('wordpressScheduleTz', 'Europe/Moscow');
         generateTimezoneSelect('vkVideoScheduleTz', 'Europe/Moscow');
         generateTimezoneSelect('tiktokScheduleTz', 'Europe/Moscow');
+        generateTimezoneSelect('instagramReelsScheduleTz', 'Europe/Moscow');
     }
 
     // Initialize weekday checkboxes for ALL channels
@@ -47,7 +105,8 @@ function initSchedulerChannels() {
             'pinterestWeekdays': { prefix: 'pinterest-weekday', days: defaultWeekdays },
             'wordpressWeekdays': { prefix: 'wordpress-weekday', days: defaultWeekdays },
             'vkVideoWeekdays': { prefix: 'vkvideo-weekday', days: [0, 1, 2, 3, 4, 5, 6] },
-            'tiktokWeekdays': { prefix: 'tiktok-weekday', days: [0, 1, 2, 3, 4, 5, 6] }
+            'tiktokWeekdays': { prefix: 'tiktok-weekday', days: [0, 1, 2, 3, 4, 5, 6] },
+            'instagramReelsWeekdays': { prefix: 'instagramreels-weekday', days: [0, 1, 2, 3, 4, 5, 6] }
         };
 
         Object.entries(weekdayConfigs).forEach(([elId, cfg]) => {
@@ -75,6 +134,8 @@ function initSchedulerChannels() {
     updatePinterestScheduleEndTime();
     updateVkVideoScheduleEndTime();
     updateTiktokScheduleTime();
+    updateInstagramReelsScheduleTime();
+    updateInstagramReelsScheduleEndTime();
 
     // Initialize moderator field visibility
     toggleTelegramModeratorField();
@@ -86,6 +147,7 @@ function initSchedulerChannels() {
     if (typeof togglePinterestModeratorField === 'function') togglePinterestModeratorField();
     if (typeof toggleWordpressModeratorField === 'function') toggleWordpressModeratorField();
     toggleVkVideoModeratorField();
+    toggleInstagramReelsModeratorField();
 }
 
 // === Переключение табов каналов ===
@@ -109,6 +171,9 @@ function initChannelTabs() {
             if (channel === 'vkvideo') {
                 loadVkVideoConfig();
             }
+            if (channel === 'instagramreels') {
+                loadInstagramReelsConfig();
+            }
         });
     });
 }
@@ -119,12 +184,13 @@ const ALL_CHANNELS = [
     { id: 'vk', name: 'ВКонтакте' },
     { id: 'ok', name: 'Одноклассники' },
     { id: 'pinterest', name: 'Pinterest' },
-    { id: 'instagram', name: 'Instagram' },
-    { id: 'youtube', name: 'YouTube' },
     { id: 'facebook', name: 'Facebook' },
-    { id: 'dzen', name: 'Яндекс Дзен' },
+    { id: 'instagramreels', name: 'Instagram Reels' },
+    { id: 'blog', name: 'WP-блог' },
+    { id: 'dzen', name: 'Дзен' },
+    { id: 'vkvideo', name: 'VKВидео' },
+    { id: 'youtube', name: 'Shorts' },
     { id: 'tiktok', name: 'TikTok' },
-    { id: 'vkvideo', name: 'VK Видео' }
 ];
 
 // Текущие включённые каналы (обновляется при загрузке)
@@ -243,6 +309,11 @@ async function onLoginSuccess() {
     await loadFacebookConfig();
     await loadVkVideoConfig();
     await loadTiktokConfig();
+    await loadInstagramReelsConfig();
+
+    // Автозаполнение пустых полей модератора chatId + проверка подписки на @czcw_bot
+    initModeratorFields(currentChatId);
+    await checkAllModeratorSubscriptions(currentChatId);
 }
 
 // Специальная инициализация для страницы каналов
@@ -811,6 +882,9 @@ async function loadPinterestConfig() {
             if (premoderEl) {
                 premoderEl.checked = !!cfg.premoderation_enabled;
             }
+            const pinterestModeratorEl = document.getElementById('pinterestModeratorUserId');
+            if (pinterestModeratorEl) pinterestModeratorEl.value = cfg.moderator_user_id || '';
+            togglePinterestModeratorField();
             // Устанавливаем выбранную доску в select
             const boardSelect = document.getElementById('pinterestBoardSelect');
             if (boardSelect && cfg.board_id) {
@@ -1046,6 +1120,7 @@ async function savePinterestConfig() {
     const allowedWeekdays = getWeekdays('pinterest-weekday');
     const randomPublish = !!document.getElementById('pinterestRandomPublish')?.checked;
     const premoderationEnabled = !!document.getElementById('pinterestPremoderation')?.checked;
+    const pinterestModeratorUserId = (document.getElementById('pinterestModeratorUserId')?.value || '').trim();
 
     if (!websiteUrl) {
         showToast('Укажите Website URL', 'error');
@@ -1069,7 +1144,8 @@ async function savePinterestConfig() {
                 publish_interval_hours: publishInterval,
                 allowed_weekdays: allowedWeekdays,
                 random_publish: randomPublish,
-                premoderation_enabled: premoderationEnabled
+                premoderation_enabled: premoderationEnabled,
+                moderator_user_id: pinterestModeratorUserId
         };
         if (bufferChannelId) body.buffer_channel_id = bufferChannelId;
 
@@ -1234,6 +1310,9 @@ async function loadInstagramConfig() {
             if (premoderationEl) {
                 premoderationEl.checked = !!cfg.premoderation;
             }
+            const instagramModeratorEl = document.getElementById('instagramModeratorUserId');
+            if (instagramModeratorEl) instagramModeratorEl.value = cfg.moderator_user_id || '';
+            toggleInstagramModeratorField();
         } else {
             statusEl.textContent = '';
             if (disconnectBtn) disconnectBtn.style.display = 'none';
@@ -1337,6 +1416,7 @@ async function saveInstagramConfig() {
     const allowedWeekdays = getWeekdays('instagram-weekday');
     const randomPublish = !!document.getElementById('instagramRandomPublish')?.checked;
     const premoderation = !!document.getElementById('instagramPremoderation')?.checked;
+    const instagramModeratorUserId = (document.getElementById('instagramModeratorUserId')?.value || '').trim();
 
     const body = {
         chat_id: chatId,
@@ -1350,7 +1430,8 @@ async function saveInstagramConfig() {
         publish_interval_hours: publishInterval,
         allowed_weekdays: allowedWeekdays,
         random_publish: randomPublish,
-        premoderation: premoderation
+        premoderation: premoderation,
+        moderator_user_id: instagramModeratorUserId
     };
     if (bufferChannelId) body.buffer_channel_id = bufferChannelId;
 
@@ -1983,6 +2064,9 @@ async function loadYoutubeConfig() {
         if (premoderEl) {
             premoderEl.checked = !!cfg.premoderation_enabled;
         }
+        const youtubeModeratorEl = document.getElementById('youtubeModeratorUserId');
+        if (youtubeModeratorEl) youtubeModeratorEl.value = cfg.moderator_user_id || '';
+        toggleYoutubeModeratorField();
 
         // Автозагрузка каналов Buffer для восстановления select
         if (cfg.buffer_channel_id) {
@@ -2031,7 +2115,8 @@ async function saveYoutubeConfig() {
                 publish_interval_hours: parseInt(document.getElementById('youtubePublishInterval').value, 10),
                 allowed_weekdays: getWeekdays('youtube-weekday'),
                 random_publish: !!document.getElementById('youtubeRandomPublish')?.checked,
-                premoderation_enabled: !!document.getElementById('youtubePremoderation')?.checked
+                premoderation_enabled: !!document.getElementById('youtubePremoderation')?.checked,
+                moderator_user_id: (document.getElementById('youtubeModeratorUserId')?.value || '').trim()
             })
         });
         const data = await res.json();
@@ -2299,7 +2384,6 @@ async function loadBufferChannels(apiKey, service, selectElementId, chatId = nul
         });
 
         selectEl.disabled = false;
-        showToast(`Загружено ${channels.length} канал(ов)`, 'success');
     } catch (e) {
         selectEl.innerHTML = '<option value="">— ошибка загрузки —</option>';
         selectEl.disabled = false;
@@ -2447,6 +2531,9 @@ async function loadVkVideoConfig() {
             // auto_publish=false означает premoderation включена
             premoderEl.checked = cfg.auto_publish === false || cfg.auto_publish === undefined;
         }
+        const vkVideoModeratorEl = document.getElementById('vkVideoModeratorUserId');
+        if (vkVideoModeratorEl) vkVideoModeratorEl.value = cfg.moderator_user_id || '';
+        toggleVkVideoModeratorField();
 
     } catch (e) {
         console.error('loadVkVideoConfig', e);
@@ -2484,7 +2571,8 @@ async function saveVkVideoSettings() {
                 publish_interval_hours: publishInterval,
                 random_publish: randomPublish,
                 premoderation_enabled: premoderation,
-                allowed_weekdays: allowedWeekdays
+                allowed_weekdays: allowedWeekdays,
+                moderator_user_id: (document.getElementById('vkVideoModeratorUserId')?.value || '').trim()
             })
         });
         const data = await res.json();
@@ -2662,6 +2750,7 @@ async function saveTiktokSettings() {
                 random_publish: !!document.getElementById('tiktokRandomPublish')?.checked,
                 auto_publish: !premoderation,
                 allowed_weekdays: getWeekdays('tiktok-weekday'),
+                moderator_user_id: (document.getElementById('tiktokModeratorUserId')?.value || '').trim(),
                 is_active: true
             })
         });
@@ -2789,8 +2878,256 @@ async function loadTiktokConfig() {
         if (premodEl && cfg.auto_publish !== undefined) {
             premodEl.checked = !cfg.auto_publish;
         }
+        const tiktokModeratorEl = document.getElementById('tiktokModeratorUserId');
+        if (tiktokModeratorEl) tiktokModeratorEl.value = cfg.moderator_user_id || '';
+        toggleTiktokModeratorField();
 
     } catch (e) {
         console.error('loadTiktokConfig error:', e);
+    }
+}
+
+// ============================================
+// === Instagram Reels ===
+// ============================================
+
+function updateInstagramReelsScheduleTime() {
+    const hour = document.getElementById('instagramReelsScheduleHour')?.value || '14';
+    const minute = document.getElementById('instagramReelsScheduleMinute')?.value || '00';
+    const hidden = document.getElementById('instagramReelsScheduleTime');
+    if (hidden) hidden.value = `${hour}:${minute.padStart(2, '0')}`;
+}
+
+function validateInstagramReelsMinutes() {
+    const el = document.getElementById('instagramReelsScheduleMinute');
+    if (!el) return;
+    let v = parseInt(el.value, 10);
+    if (isNaN(v) || v < 0) v = 0;
+    if (v > 59) v = 59;
+    el.value = v;
+}
+
+function updateInstagramReelsScheduleEndTime() {
+    const hour = document.getElementById('instagramReelsScheduleEndHour')?.value || '23';
+    const minute = document.getElementById('instagramReelsScheduleEndMinute')?.value || '00';
+    const hidden = document.getElementById('instagramReelsScheduleEndTime');
+    if (hidden) hidden.value = `${hour}:${minute.padStart(2, '0')}`;
+}
+
+function validateInstagramReelsEndMinutes() {
+    const el = document.getElementById('instagramReelsScheduleEndMinute');
+    if (!el) return;
+    let v = parseInt(el.value, 10);
+    if (isNaN(v) || v < 0) v = 0;
+    if (v > 59) v = 59;
+    el.value = v;
+}
+
+function onInstagramReelsChannelSelectChange() {
+    const selectEl = document.getElementById('instagramReelsBufferChannelSelect');
+    const hiddenInput = document.getElementById('instagramReelsBufferChannelId');
+    if (selectEl && hiddenInput) hiddenInput.value = selectEl.value;
+}
+
+function fetchInstagramReelsBufferChannels() {
+    const apiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
+    loadBufferChannels(apiKey, 'instagram', 'instagramReelsBufferChannelSelect', getChatId());
+}
+
+async function connectInstagramReelsBuffer() {
+    const chatId = getChatId();
+    const channelId = document.getElementById('instagramReelsBufferChannelId')?.value?.trim();
+    if (!channelId) {
+        showToast('Выберите Buffer Channel', 'error');
+        return;
+    }
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/instagram-reels`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, buffer_channel_id: channelId })
+        });
+        if (res.ok) {
+            showToast('Instagram Reels подключён через Buffer', 'success');
+            await loadInstagramReelsConfig();
+        } else {
+            const data = await res.json();
+            showToast(data.error || 'Ошибка подключения', 'error');
+        }
+    } catch (e) {
+        showToast('Ошибка сети', 'error');
+    }
+}
+
+async function disconnectInstagramReels() {
+    const chatId = getChatId();
+    try {
+        await fetch(`${API_MANAGE}/channels/instagram-reels`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, buffer_channel_id: null, is_active: false })
+        });
+        showToast('Instagram Reels отключён', 'success');
+        await loadInstagramReelsConfig();
+    } catch (e) {
+        showToast('Ошибка сети', 'error');
+    }
+}
+
+function toggleInstagramReelsModeratorField() {
+    const premod = document.getElementById('instagramReelsPremoderation');
+    const field = document.getElementById('instagramReelsModeratorField');
+    if (field) field.style.display = premod?.checked ? 'block' : 'none';
+}
+
+async function loadInstagramReelsConfig() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/instagram-reels?chat_id=${encodeURIComponent(chatId)}`);
+        const data = await res.json();
+        const statusEl = document.getElementById('instagramReelsStatus');
+        const disconnectBtn = document.getElementById('disconnectInstagramReelsBtn');
+
+        const cfg = data.config || {};
+        const connected = !!cfg.buffer_channel_id;
+
+        if (statusEl) {
+            statusEl.innerHTML = connected
+                ? '<span style="color: #0a0;">✅ Instagram Reels подключён через Buffer</span>'
+                : '<span style="color: #888;">⬜ Не подключён — выберите Buffer Channel</span>';
+        }
+        if (disconnectBtn) disconnectBtn.style.display = connected ? 'inline-block' : 'none';
+
+        if (connected && cfg.buffer_channel_id) {
+            const hiddenEl = document.getElementById('instagramReelsBufferChannelId');
+            if (hiddenEl) hiddenEl.value = cfg.buffer_channel_id;
+            const globalApiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
+            if (globalApiKey) {
+                loadBufferChannels(globalApiKey, 'instagram', 'instagramReelsBufferChannelSelect', getChatId()).then(() => {
+                    const selectEl = document.getElementById('instagramReelsBufferChannelSelect');
+                    if (selectEl) selectEl.value = cfg.buffer_channel_id;
+                });
+            }
+        }
+
+        if (cfg.schedule_time) {
+            const [h, m] = cfg.schedule_time.split(':');
+            const hourEl = document.getElementById('instagramReelsScheduleHour');
+            const minEl = document.getElementById('instagramReelsScheduleMinute');
+            if (hourEl) hourEl.value = h;
+            if (minEl) minEl.value = m || '00';
+            updateInstagramReelsScheduleTime();
+        }
+        if (cfg.schedule_end_time) {
+            const [h, m] = cfg.schedule_end_time.split(':');
+            const hourEl = document.getElementById('instagramReelsScheduleEndHour');
+            const minEl = document.getElementById('instagramReelsScheduleEndMinute');
+            if (hourEl) hourEl.value = h;
+            if (minEl) minEl.value = m || '00';
+            updateInstagramReelsScheduleEndTime();
+        }
+        if (cfg.schedule_tz) {
+            const tzEl = document.getElementById('instagramReelsScheduleTz');
+            if (tzEl) tzEl.value = cfg.schedule_tz;
+        }
+        if (cfg.daily_limit !== undefined) {
+            const dlEl = document.getElementById('instagramReelsDailyLimit');
+            if (dlEl) dlEl.value = cfg.daily_limit;
+        }
+        if (cfg.publish_interval_hours !== undefined) {
+            const piEl = document.getElementById('instagramReelsPublishInterval');
+            if (piEl) piEl.value = cfg.publish_interval_hours;
+        }
+        if (cfg.allowed_weekdays !== undefined) setWeekdays('instagramreels-weekday', cfg.allowed_weekdays);
+        if (cfg.random_publish !== undefined) {
+            const rpEl = document.getElementById('instagramReelsRandomPublish');
+            if (rpEl) rpEl.checked = !!cfg.random_publish;
+        }
+        const premodEl = document.getElementById('instagramReelsPremoderation');
+        if (premodEl && cfg.auto_publish !== undefined) premodEl.checked = !cfg.auto_publish;
+        const modEl = document.getElementById('instagramReelsModeratorUserId');
+        if (modEl) modEl.value = cfg.moderator_user_id || '';
+        toggleInstagramReelsModeratorField();
+
+    } catch (e) {
+        console.error('loadInstagramReelsConfig error:', e);
+    }
+}
+
+async function saveInstagramReelsSettings() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    updateInstagramReelsScheduleTime();
+    updateInstagramReelsScheduleEndTime();
+
+    const premoderation = !!document.getElementById('instagramReelsPremoderation')?.checked;
+    const statusEl = document.getElementById('instagramReelsSettingsStatus');
+
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/instagram-reels`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: chatId,
+                schedule_time: (document.getElementById('instagramReelsScheduleTime')?.value || '').trim(),
+                schedule_end_time: (document.getElementById('instagramReelsScheduleEndTime')?.value || '').trim() || null,
+                schedule_tz: (document.getElementById('instagramReelsScheduleTz')?.value || '').trim(),
+                daily_limit: parseInt(document.getElementById('instagramReelsDailyLimit')?.value || '3', 10),
+                publish_interval_hours: parseFloat(document.getElementById('instagramReelsPublishInterval')?.value || '6'),
+                random_publish: !!document.getElementById('instagramReelsRandomPublish')?.checked,
+                premoderation_enabled: premoderation,
+                allowed_weekdays: getWeekdays('instagramreels-weekday'),
+                moderator_user_id: (document.getElementById('instagramReelsModeratorUserId')?.value || '').trim(),
+                is_active: true
+            })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            showToast('Настройки Instagram Reels сохранены', 'success');
+            if (statusEl) statusEl.innerHTML = '<span style="color:#0a0;">✅ Настройки сохранены</span>';
+        } else {
+            showToast(data.error || 'Ошибка сохранения', 'error');
+            if (statusEl) statusEl.innerHTML = `<span style="color:#c00;">❌ ${data.error || 'Ошибка сохранения'}</span>`;
+        }
+    } catch (e) {
+        showToast('Ошибка сети', 'error');
+    }
+}
+
+async function runInstagramReelsNow() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    const btn = document.getElementById('instagramReelsRunNowBtn');
+    const statusEl = document.getElementById('instagramReelsSettingsStatus');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Генерация...'; }
+    if (statusEl) statusEl.innerHTML = '<span style="color:#888;">Генерация Instagram Reels... Это может занять 2-3 минуты.</span>';
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 180000);
+        const res = await fetch(`${API_MANAGE}/channels/instagram-reels/run-now`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId }),
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); } catch { data = { error: text || `HTTP ${res.status}` }; }
+        if (res.ok && data.ok) {
+            showToast(data.message || 'Задача запущена', 'success');
+            if (statusEl) statusEl.innerHTML = '<span style="color:#0a0;">✅ ' + (data.message || 'Задача запущена') + '</span>';
+        } else {
+            const errMsg = data.error || data.message || `HTTP ${res.status}`;
+            showToast(errMsg, 'error');
+            if (statusEl) statusEl.innerHTML = '<span style="color:#c00;">❌ ' + errMsg + '</span>';
+        }
+    } catch (e) {
+        const errMsg = e.name === 'AbortError' ? 'Таймаут (3 мин). Проверьте логи сервера.' : ('Ошибка сети: ' + e.message);
+        showToast(errMsg, 'error');
+        if (statusEl) statusEl.innerHTML = '<span style="color:#c00;">❌ ' + errMsg + '</span>';
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '▶️ Тест сейчас'; }
     }
 }

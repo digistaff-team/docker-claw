@@ -14,6 +14,7 @@ const manageStore = require('../manage/store');
 const storageService = require('./storage.service');
 const videoPipeline = require('./videoPipeline.service');
 const repository = require('./content/repository');
+const { safeSendToModerator } = require('./telegram.utils');
 
 let cwBot = null;
 
@@ -462,33 +463,40 @@ async function sendVkVideoToModerator(chatId, bot, draft) {
 
   try {
     const videoFullPath = path.join(videoPipeline.VIDEO_TEMP_ROOT, chatId, draft.videoPath);
-    try {
-      await cwBot.telegram.sendVideo(moderatorId, { source: videoFullPath }, {
-        caption,
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '✅ Одобрить', callback_data: `vk_vid_mod:${draft.jobId}:approve` },
-              { text: '❌ Отклонить', callback_data: `vk_vid_mod:${draft.jobId}:reject` }
-            ],
-            [
-              { text: '🔄 Перегенерировать текст', callback_data: `vk_vid_mod:${draft.jobId}:regen_text` }
-            ]
-          ]
+    await safeSendToModerator({
+      sendFn: async () => {
+        try {
+          return await cwBot.telegram.sendVideo(moderatorId, { source: videoFullPath }, {
+            caption,
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '✅ Одобрить', callback_data: `vk_vid_mod:${draft.jobId}:approve` },
+                  { text: '❌ Отклонить', callback_data: `vk_vid_mod:${draft.jobId}:reject` }
+                ],
+                [
+                  { text: '🔄 Перегенерировать текст', callback_data: `vk_vid_mod:${draft.jobId}:regen_text` }
+                ]
+              ]
+            }
+          });
+        } catch {
+          return await cwBot.telegram.sendMessage(moderatorId, caption + `\n\n⚠️ Видео не доступно`, {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '✅ Одобрить', callback_data: `vk_vid_mod:${draft.jobId}:approve` },
+                  { text: '❌ Отклонить', callback_data: `vk_vid_mod:${draft.jobId}:reject` }
+                ]
+              ]
+            }
+          });
         }
-      });
-    } catch {
-      await cwBot.telegram.sendMessage(moderatorId, caption + `\n\n⚠️ Видео не доступно`, {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '✅ Одобрить', callback_data: `vk_vid_mod:${draft.jobId}:approve` },
-              { text: '❌ Отклонить', callback_data: `vk_vid_mod:${draft.jobId}:reject` }
-            ]
-          ]
-        }
-      });
-    }
+      },
+      chatId,
+      moderatorId,
+      notifyBot: cwBot
+    });
   } catch (e) {
     console.error(`[VK-VIDEO-MVP] Ошибка отправки модератору: ${e.message}`);
   }

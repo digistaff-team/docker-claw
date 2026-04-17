@@ -20,6 +20,7 @@ const videoService = require('./content/video.service');
 const videoPipeline = require('./videoPipeline.service');
 const youtubeRepo = require('./content/youtube.repository');
 const bufferService = require('./buffer.service');
+const { safeSendToModerator } = require('./telegram.utils');
 
 const contentModules = require('./content/index');
 const {
@@ -514,21 +515,23 @@ async function sendYtToModerator(chatId, bot, draft) {
 
   const moderatorBot = cwBot && cwBot.token !== bot?.token ? cwBot : bot;
 
-  try {
-    const sent = await moderatorBot.telegram.sendVideo(moderatorId, { source: videoLocalPath }, { caption, reply_markup: kb });
-    await setYtDraft(chatId, String(draft.jobId), {
-      ...draft,
-      moderationMessageId: sent.message_id
-    });
-  } catch (e) {
-    // Если видео недоступ — отправляем только текст
-    console.warn(`[YOUTUBE-MVP] Video send failed, sending text only: ${e.message}`);
-    const sent = await moderatorBot.telegram.sendMessage(moderatorId, caption, { reply_markup: kb });
-    await setYtDraft(chatId, String(draft.jobId), {
-      ...draft,
-      moderationMessageId: sent.message_id
-    });
-  }
+  const sent = await safeSendToModerator({
+    sendFn: async () => {
+      try {
+        return await moderatorBot.telegram.sendVideo(moderatorId, { source: videoLocalPath }, { caption, reply_markup: kb });
+      } catch (e) {
+        console.warn(`[YOUTUBE-MVP] Video send failed, sending text only: ${e.message}`);
+        return await moderatorBot.telegram.sendMessage(moderatorId, caption, { reply_markup: kb });
+      }
+    },
+    chatId,
+    moderatorId,
+    notifyBot: cwBot || bot
+  });
+  await setYtDraft(chatId, String(draft.jobId), {
+    ...draft,
+    moderationMessageId: sent.message_id
+  });
 }
 
 async function handleYtModerationAction(chatId, bot, jobId, action) {

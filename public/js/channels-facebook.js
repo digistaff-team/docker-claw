@@ -157,6 +157,9 @@ window.loadFacebookConfig = async function() {
         if (premoderationEl) {
             premoderationEl.checked = !!cfg.premoderation;
         }
+        const facebookModeratorEl = document.getElementById('facebookModeratorUserId');
+        if (facebookModeratorEl) facebookModeratorEl.value = cfg.moderator_user_id || '';
+        toggleFacebookModeratorField();
 
         // Статус
         const pageName = cfg.page_name ? `Страница: ${cfg.page_name}` : '';
@@ -279,7 +282,8 @@ window.saveFacebookConfig = async function() {
             publish_interval_hours: publishInterval,
             allowed_weekdays: allowedWeekdays,
             random_publish: randomPublish,
-            premoderation: premoderation
+            premoderation: premoderation,
+            moderator_user_id: (document.getElementById('facebookModeratorUserId')?.value || '').trim()
         };
 
         await jfetch(`${API_MANAGE}/channels/facebook`, {

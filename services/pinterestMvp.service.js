@@ -15,6 +15,7 @@ const storageService = require('./storage.service');
 const pinterestRepo = require('./content/pinterest.repository');
 const bufferService = require('./buffer.service');
 const inputImageContext = require('./inputImageContext.service');
+const { safeSendToModerator } = require('./telegram.utils');
 
 const contentModules = require('./content/index');
 const {
@@ -513,7 +514,10 @@ async function sendPinToModerator(chatId, bot, draft) {
   
   // Используем cwBot если он есть и у пользователя нет своего бота
   const moderatorBot = cwBot && cwBot.token !== bot?.token ? cwBot : bot;
-  const sent = await moderatorBot.telegram.sendPhoto(moderatorId, { source: tempPath }, { caption, reply_markup: kb });
+  const sent = await safeSendToModerator({
+    sendFn: () => moderatorBot.telegram.sendPhoto(moderatorId, { source: tempPath }, { caption, reply_markup: kb }),
+    chatId, moderatorId, notifyBot: bot || cwBot
+  });
   await fs.unlink(tempPath).catch(() => {});
 
   await setDraft(chatId, String(draft.jobId), {

@@ -16,6 +16,7 @@ const okService = require('./ok.service');
 const okRepo = require('./content/ok.repository');
 const { databaseExists } = require('./postgres.service');
 const inputImageContext = require('./inputImageContext.service');
+const { safeSendToModerator } = require('./telegram.utils');
 
 const contentModules = require('./content/index');
 const {
@@ -556,7 +557,10 @@ async function sendOkToModerator(chatId, bot, draft) {
       console.log(`[OK-MODERATION] Sending photo to Telegram...`);
       // Используем cwBot если он есть и у пользователя нет своего бота
       const moderatorBot = cwBot && cwBot.token !== bot?.token ? cwBot : bot;
-      const sent = await moderatorBot.telegram.sendPhoto(moderatorId, { source: tempPath }, { caption, reply_markup: kb });
+      const sent = await safeSendToModerator({
+        sendFn: () => moderatorBot.telegram.sendPhoto(moderatorId, { source: tempPath }, { caption, reply_markup: kb }),
+        chatId, moderatorId, notifyBot: bot || cwBot
+      });
       console.log(`[OK-MODERATION] Photo sent, messageId=${sent.message_id}`);
 
       await fs.unlink(tempPath).catch(() => {});
@@ -574,7 +578,10 @@ async function sendOkToModerator(chatId, bot, draft) {
     console.log(`[OK-MODERATION] Sending text message to Telegram...`);
     // Используем cwBot если он есть и у пользователя нет своего бота
     const moderatorBot = cwBot && cwBot.token !== bot?.token ? cwBot : bot;
-    const sent = await moderatorBot.telegram.sendMessage(moderatorId, caption, { reply_markup: kb });
+    const sent = await safeSendToModerator({
+      sendFn: () => moderatorBot.telegram.sendMessage(moderatorId, caption, { reply_markup: kb }),
+      chatId, moderatorId, notifyBot: bot || cwBot
+    });
     console.log(`[OK-MODERATION] Message sent, messageId=${sent.message_id}`);
 
     await setDraft(chatId, String(draft.jobId), {

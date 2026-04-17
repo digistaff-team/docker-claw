@@ -15,6 +15,7 @@ const storageService = require('./storage.service');
 const bufferService = require('./buffer.service');
 const fbRepo = require('./content/facebook.repository');
 const inputImageContext = require('./inputImageContext.service');
+const { safeSendToModerator } = require('./telegram.utils');
 
 const contentModules = require('./content/index');
 const {
@@ -440,11 +441,18 @@ ${caption}
 Выберите действие:`;
 
   try {
-    if (cwBot && cwBot.telegram) {
-      await cwBot.telegram.sendMessage(moderatorId, message, { reply_markup: keyboard });
-    } else if (bot && bot.telegram) {
-      await bot.telegram.sendMessage(moderatorId, message, { reply_markup: keyboard });
-    }
+    await safeSendToModerator({
+      sendFn: () => {
+        if (cwBot && cwBot.telegram) {
+          return cwBot.telegram.sendMessage(moderatorId, message, { reply_markup: keyboard });
+        } else if (bot && bot.telegram) {
+          return bot.telegram.sendMessage(moderatorId, message, { reply_markup: keyboard });
+        }
+      },
+      chatId,
+      moderatorId,
+      notifyBot: cwBot || bot
+    });
   } catch (e) {
     console.error('[FB] Failed to send to moderator:', e);
   }

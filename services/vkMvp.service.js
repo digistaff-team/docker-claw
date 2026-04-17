@@ -16,6 +16,7 @@ const vkService = require('./vk.service');
 const vkRepo = require('./content/vk.repository');
 const { databaseExists } = require('./postgres.service');
 const inputImageContext = require('./inputImageContext.service');
+const { safeSendToModerator } = require('./telegram.utils');
 
 const contentModules = require('./content/index');
 const {
@@ -531,7 +532,10 @@ async function sendVkToModerator(chatId, bot, draft) {
       throw new Error('No bot available for sending VK draft');
     }
     
-    const sent = await moderatorBot.telegram.sendPhoto(moderatorId, { source: tempPath }, { caption, reply_markup: kb });
+    const sent = await safeSendToModerator({
+      sendFn: () => moderatorBot.telegram.sendPhoto(moderatorId, { source: tempPath }, { caption, reply_markup: kb }),
+      chatId, moderatorId, notifyBot: bot || cwBot
+    });
     await fs.unlink(tempPath).catch(() => {});
 
     await setDraft(chatId, String(draft.jobId), {
@@ -554,7 +558,10 @@ async function sendVkToModerator(chatId, bot, draft) {
       throw new Error('No bot available for sending VK draft');
     }
     
-    const sent = await moderatorBot.telegram.sendMessage(moderatorId, caption, { reply_markup: kb });
+    const sent = await safeSendToModerator({
+      sendFn: () => moderatorBot.telegram.sendMessage(moderatorId, caption, { reply_markup: kb }),
+      chatId, moderatorId, notifyBot: bot || cwBot
+    });
     await setDraft(chatId, String(draft.jobId), {
       ...draft,
       moderationMessageId: sent.message_id

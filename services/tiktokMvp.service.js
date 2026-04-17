@@ -13,6 +13,7 @@ const storageService = require('./storage.service');
 const bufferService = require('./buffer.service');
 const videoPipeline = require('./videoPipeline.service');
 const repository = require('./content/repository');
+const { safeSendToModerator } = require('./telegram.utils');
 
 let cwBot = null; // Центральный бот премодерации
 
@@ -361,34 +362,41 @@ async function sendTiktokToModerator(chatId, bot, draft) {
     // Отправляем видео (если есть)
     if (draft.videoPath) {
       const videoFullPath = draft.videoPath;
-      try {
-        await cwBot.telegram.sendVideo(moderatorId, { source: videoFullPath }, {
-          caption,
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: '✅ Одобрить', callback_data: `tt_mod:${draft.jobId}:approve` },
-                { text: '❌ Отклонить', callback_data: `tt_mod:${draft.jobId}:reject` }
-              ],
-              [
-                { text: '🔄 Перегенерировать текст', callback_data: `tt_mod:${draft.jobId}:regen_text` }
-              ]
-            ]
+      await safeSendToModerator({
+        sendFn: async () => {
+          try {
+            return await cwBot.telegram.sendVideo(moderatorId, { source: videoFullPath }, {
+              caption,
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: '✅ Одобрить', callback_data: `tt_mod:${draft.jobId}:approve` },
+                    { text: '❌ Отклонить', callback_data: `tt_mod:${draft.jobId}:reject` }
+                  ],
+                  [
+                    { text: '🔄 Перегенерировать текст', callback_data: `tt_mod:${draft.jobId}:regen_text` }
+                  ]
+                ]
+              }
+            });
+          } catch (e) {
+            // Если не можем отправить видео — отправляем только текст
+            return await cwBot.telegram.sendMessage(moderatorId, caption + `\n\n⚠️ Видео не доступно`, {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: '✅ Одобрить', callback_data: `tt_mod:${draft.jobId}:approve` },
+                    { text: '❌ Отклонить', callback_data: `tt_mod:${draft.jobId}:reject` }
+                  ]
+                ]
+              }
+            });
           }
-        });
-      } catch (e) {
-        // Если не можем отправить видео — отправляем только текст
-        await cwBot.telegram.sendMessage(moderatorId, caption + `\n\n⚠️ Видео не доступно`, {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: '✅ Одобрить', callback_data: `tt_mod:${draft.jobId}:approve` },
-                { text: '❌ Отклонить', callback_data: `tt_mod:${draft.jobId}:reject` }
-              ]
-            ]
-          }
-        });
-      }
+        },
+        chatId,
+        moderatorId,
+        notifyBot: cwBot
+      });
     }
   } catch (e) {
     console.error(`[TIKTOK-MVP] Failed to send to moderator: ${e.message}`);

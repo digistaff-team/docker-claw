@@ -516,9 +516,8 @@ router.get('/image-settings', (req, res) => {
   const settings = manageStore.getImageGenSettings(chatId);
   return res.json({
     success: true,
-    settings: { model: settings.model || 'grok-imagine/text-to-image' },
+    settings: { model: settings.model || 'nano-banana-2' },
     availableModels: [
-      { id: 'grok-imagine/text-to-image',   name: 'Grok Imagine',      provider: 'xAI / KIE.ai',      available: true },
       { id: 'nano-banana-2',                name: 'Nano Banana 2',     provider: 'Google / KIE.ai',   available: true },
       { id: 'seedream/4.5-edit',            name: 'Seedream 4.5 Edit', provider: 'Seedream / KIE.ai', available: true },
       { id: 'flux-2/pro-image-to-image',    name: 'Flux 2 Pro i2i',   provider: 'BFL / KIE.ai',      available: true },

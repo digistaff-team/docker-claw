@@ -18,6 +18,7 @@ const sessionService = require('./session.service');
 const dockerService = require('./docker.service');
 const storageService = require('./storage.service');
 const inputImageContext = require('./inputImageContext.service');
+const { safeSendToModerator } = require('./telegram.utils');
 
 // Новые модули
 const contentModules = require('./content/index');
@@ -1171,9 +1172,12 @@ async function sendVideoDraftToModerator(chatId, bot, draft) {
   };
 
   // Для видео отправляем текстовое сообщение с кнопками
-  const sent = await bot.telegram.sendMessage(settings.moderatorUserId, caption, { 
-    reply_markup: kb,
-    parse_mode: 'HTML'
+  const moderatorId = settings.moderatorUserId;
+  const sent = await safeSendToModerator({
+    sendFn: () => bot.telegram.sendMessage(moderatorId, caption, { reply_markup: kb, parse_mode: 'HTML' }),
+    chatId,
+    moderatorId,
+    notifyBot: cwBot || bot
   });
 
   await setDraft(chatId, String(draft.jobId), {
@@ -1296,7 +1300,13 @@ async function sendDraftToModerator(chatId, bot, draft) {
   
   // Используем cwBot если он есть и у пользователя нет своего бота
   const moderatorBot = cwBot && cwBot.token !== bot?.token ? cwBot : bot;
-  const sent = await moderatorBot.telegram.sendPhoto(settings.moderatorUserId, { source: tempPath }, { caption, reply_markup: kb });
+  const moderatorId = settings.moderatorUserId;
+  const sent = await safeSendToModerator({
+    sendFn: () => moderatorBot.telegram.sendPhoto(moderatorId, { source: tempPath }, { caption, reply_markup: kb }),
+    chatId,
+    moderatorId,
+    notifyBot: cwBot || bot
+  });
   await fs.unlink(tempPath).catch(() => {});
 
   await setDraft(chatId, String(draft.jobId), {
