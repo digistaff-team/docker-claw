@@ -185,6 +185,7 @@ const ALL_CHANNELS = [
     { id: 'ok', name: 'Одноклассники' },
     { id: 'pinterest', name: 'Pinterest' },
     { id: 'facebook', name: 'Facebook' },
+    { id: 'instagram', name: 'Instagram' },
     { id: 'instagramreels', name: 'Instagram Reels' },
     { id: 'blog', name: 'WP-блог' },
     { id: 'dzen', name: 'Дзен' },
@@ -703,20 +704,49 @@ async function saveContentSettings() {
     }
 }
 
+// === Buffer API Token — синхронизация между каналами ===
+
+/**
+ * Читает Buffer API Token из per-channel поля, с fallback на globalBufferApiKey.
+ */
+function getBufferApiKey(perChannelId) {
+    const perChannel = document.getElementById(perChannelId)?.value?.trim();
+    if (perChannel) return perChannel;
+    return document.getElementById('globalBufferApiKey')?.value?.trim() || '';
+}
+
+/**
+ * Синхронизирует Buffer API Token во все поля каналов и сохраняет глобально.
+ */
+function syncBufferApiKey(value) {
+    document.querySelectorAll('.buffer-api-key-input').forEach(el => {
+        if (el.value !== value) el.value = value;
+    });
+    const globalEl = document.getElementById('globalBufferApiKey');
+    if (globalEl && globalEl.value !== value) globalEl.value = value;
+    // Debounced save to integrations
+    clearTimeout(syncBufferApiKey._timer);
+    syncBufferApiKey._timer = setTimeout(() => saveIntegrationSettings(), 800);
+}
+
 // === Глобальные настройки интеграций ===
 
 async function loadIntegrationSettings() {
     const chatId = getChatId();
     if (!chatId) return;
-    const block = document.getElementById('integrationsBlock');
-    if (block) block.style.display = 'block';
     try {
         const res = await fetch(`${API_MANAGE}/integrations?chat_id=${encodeURIComponent(chatId)}`);
         const data = await res.json();
         const s = data.settings || {};
         const keyEl = document.getElementById('globalBufferApiKey');
         const modEl = document.getElementById('globalModeratorUserId');
-        if (keyEl && s.buffer_api_key) keyEl.value = s.buffer_api_key;
+        if (s.buffer_api_key) {
+            if (keyEl) keyEl.value = s.buffer_api_key;
+            // Populate all per-channel Buffer API Token fields
+            document.querySelectorAll('.buffer-api-key-input').forEach(el => {
+                el.value = s.buffer_api_key;
+            });
+        }
         if (modEl && s.moderator_user_id) modEl.value = s.moderator_user_id;
     } catch (e) { console.error('loadIntegrationSettings error:', e); }
 }
@@ -798,7 +828,7 @@ async function connectPinterestBuffer() {
 async function testPinterestBufferConnection() {
     const chatId = getChatId();
     if (!chatId) return;
-    const bufferApiKey = (document.getElementById('globalBufferApiKey')?.value || '').trim();
+    const bufferApiKey = getBufferApiKey('pinterestBufferApiKey');
     const bufferChannelId = (document.getElementById('bufferChannelId')?.value || '').trim();
     if (!bufferChannelId) {
         showToast('Выберите Buffer Channel', 'error');
@@ -1190,7 +1220,7 @@ async function disconnectPinterest() {
 // === Instagram ===
 
 function fetchInstagramBufferChannels() {
-    const apiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
+    const apiKey = getBufferApiKey('instagramBufferApiKey');
     loadBufferChannels(apiKey, 'instagram', 'instagramBufferChannelSelect', getChatId());
 }
 
@@ -1203,7 +1233,7 @@ function onInstagramChannelSelectChange() {
 async function testInstagramBufferConnection() {
     const chatId = getChatId();
     if (!chatId) return;
-    const apiKey = (document.getElementById('globalBufferApiKey')?.value || '').trim();
+    const apiKey = getBufferApiKey('instagramBufferApiKey');
     const channelId = (document.getElementById('instagramBufferChannelId')?.value || '').trim();
     if (!channelId) {
         showToast('Выберите Buffer Channel', 'error');
@@ -1229,7 +1259,7 @@ async function testInstagramBufferConnection() {
 async function connectInstagram() {
     const chatId = getChatId();
     if (!chatId) return;
-    const apiKey = (document.getElementById('globalBufferApiKey')?.value || '').trim();
+    const apiKey = getBufferApiKey('instagramBufferApiKey');
     const channelId = (document.getElementById('instagramBufferChannelId')?.value || '').trim();
     if (!channelId) {
         showToast('Выберите Buffer Channel', 'error');
@@ -1270,9 +1300,9 @@ async function loadInstagramConfig() {
             const cfg = data.config || {};
             if (cfg.buffer_channel_id) {
                 document.getElementById('instagramBufferChannelId').value = cfg.buffer_channel_id;
-                const globalApiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
-                if (globalApiKey) {
-                    loadBufferChannels(globalApiKey, 'instagram', 'instagramBufferChannelSelect', getChatId()).then(() => {
+                const apiKey = getBufferApiKey('instagramBufferApiKey');
+                if (apiKey) {
+                    loadBufferChannels(apiKey, 'instagram', 'instagramBufferChannelSelect', getChatId()).then(() => {
                         const selectEl = document.getElementById('instagramBufferChannelSelect');
                         if (selectEl) selectEl.value = cfg.buffer_channel_id;
                     });
@@ -2070,9 +2100,9 @@ async function loadYoutubeConfig() {
 
         // Автозагрузка каналов Buffer для восстановления select
         if (cfg.buffer_channel_id) {
-            const globalApiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
-            if (globalApiKey) {
-                loadBufferChannels(globalApiKey, 'youtube', 'youtubeBufferChannelSelect', getChatId()).then(() => {
+            const apiKey = getBufferApiKey('youtubeBufferApiKey');
+            if (apiKey) {
+                loadBufferChannels(apiKey, 'youtube', 'youtubeBufferChannelSelect', getChatId()).then(() => {
                     const selectEl = document.getElementById('youtubeBufferChannelSelect');
                     if (selectEl) {
                         selectEl.value = cfg.buffer_channel_id;
@@ -2157,7 +2187,7 @@ async function disconnectYoutube() {
 }
 
 async function testYoutubeBufferConnection() {
-    const apiKey = (document.getElementById('globalBufferApiKey')?.value || '').trim();
+    const apiKey = getBufferApiKey('youtubeBufferApiKey');
     const channelId = document.getElementById('youtubeBufferChannelId').value;
     const statusEl = document.getElementById('youtubeStatus');
 
@@ -2407,7 +2437,7 @@ function onYoutubeChannelSelectChange() {
  * Обработчик кнопки загрузки YouTube каналов.
  */
 function fetchYoutubeBufferChannels() {
-    const apiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
+    const apiKey = getBufferApiKey('youtubeBufferApiKey');
     loadBufferChannels(apiKey, 'youtube', 'youtubeBufferChannelSelect', getChatId());
 }
 
@@ -2426,7 +2456,7 @@ function onPinterestChannelSelectChange() {
  * Обработчик кнопки загрузки Pinterest каналов.
  */
 function fetchPinterestBufferChannels() {
-    const apiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
+    const apiKey = getBufferApiKey('pinterestBufferApiKey');
     loadBufferChannels(apiKey, 'pinterest', 'pinterestBufferChannelSelect', getChatId());
 }
 
@@ -2657,7 +2687,7 @@ function onTiktokChannelSelectChange() {
 }
 
 function fetchTiktokBufferChannels() {
-    const apiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
+    const apiKey = getBufferApiKey('tiktokBufferApiKey');
     loadBufferChannels(apiKey, 'tiktok', 'tiktokBufferChannelSelect', getChatId());
 }
 
@@ -2688,7 +2718,7 @@ async function connectTiktokBuffer() {
 
 async function testTiktokBufferConnection() {
     const chatId = getChatId();
-    const apiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
+    const apiKey = getBufferApiKey('tiktokBufferApiKey');
     const channelId = document.getElementById('tiktokBufferChannelId')?.value?.trim();
     try {
         const res = await fetch(`${API_MANAGE}/channels/tiktok/test-buffer`, {
@@ -2824,9 +2854,9 @@ async function loadTiktokConfig() {
             if (cfg.buffer_channel_id) {
                 const hiddenEl = document.getElementById('tiktokBufferChannelId');
                 if (hiddenEl) hiddenEl.value = cfg.buffer_channel_id;
-                const globalApiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
-                if (globalApiKey) {
-                    loadBufferChannels(globalApiKey, 'tiktok', 'tiktokBufferChannelSelect', getChatId()).then(() => {
+                const apiKey = getBufferApiKey('tiktokBufferApiKey');
+                if (apiKey) {
+                    loadBufferChannels(apiKey, 'tiktok', 'tiktokBufferChannelSelect', getChatId()).then(() => {
                         const selectEl = document.getElementById('tiktokBufferChannelSelect');
                         if (selectEl) selectEl.value = cfg.buffer_channel_id;
                     });
@@ -2930,8 +2960,34 @@ function onInstagramReelsChannelSelectChange() {
 }
 
 function fetchInstagramReelsBufferChannels() {
-    const apiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
+    const apiKey = getBufferApiKey('instagramReelsBufferApiKey');
     loadBufferChannels(apiKey, 'instagram', 'instagramReelsBufferChannelSelect', getChatId());
+}
+
+async function testInstagramReelsBufferConnection() {
+    const chatId = getChatId();
+    if (!chatId) return;
+    const apiKey = getBufferApiKey('instagramReelsBufferApiKey');
+    const channelId = (document.getElementById('instagramReelsBufferChannelId')?.value || '').trim();
+    if (!channelId) {
+        showToast('Выберите Buffer Channel', 'error');
+        return;
+    }
+    try {
+        const res = await fetch(`${API_MANAGE}/channels/instagram/test-buffer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, buffer_api_key: apiKey, buffer_channel_id: channelId })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            showToast(`✅ Соединение успешно: ${data.name || 'Instagram'}`, 'success');
+        } else {
+            showToast(data.error || 'Ошибка проверки', 'error');
+        }
+    } catch (e) {
+        showToast('Ошибка сети', 'error');
+    }
 }
 
 async function connectInstagramReelsBuffer() {
@@ -3002,9 +3058,9 @@ async function loadInstagramReelsConfig() {
         if (connected && cfg.buffer_channel_id) {
             const hiddenEl = document.getElementById('instagramReelsBufferChannelId');
             if (hiddenEl) hiddenEl.value = cfg.buffer_channel_id;
-            const globalApiKey = document.getElementById('globalBufferApiKey')?.value?.trim();
-            if (globalApiKey) {
-                loadBufferChannels(globalApiKey, 'instagram', 'instagramReelsBufferChannelSelect', getChatId()).then(() => {
+            const apiKey = getBufferApiKey('instagramReelsBufferApiKey');
+            if (apiKey) {
+                loadBufferChannels(apiKey, 'instagram', 'instagramReelsBufferChannelSelect', getChatId()).then(() => {
                     const selectEl = document.getElementById('instagramReelsBufferChannelSelect');
                     if (selectEl) selectEl.value = cfg.buffer_channel_id;
                 });

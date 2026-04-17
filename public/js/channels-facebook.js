@@ -14,7 +14,7 @@ window.fetchFacebookBufferChannels = async function() {
         return;
     }
 
-    const apiKey = (document.getElementById('globalBufferApiKey')?.value || '').trim();
+    const apiKey = (document.getElementById('facebookBufferApiKey')?.value || document.getElementById('globalBufferApiKey')?.value || '').trim();
 
     try {
         setFbStatus('Загрузка каналов...', '#666');
@@ -67,7 +67,7 @@ window.testFacebookBufferConnection = async function() {
         return;
     }
 
-    const apiKey = (document.getElementById('globalBufferApiKey')?.value || '').trim();
+    const apiKey = (document.getElementById('facebookBufferApiKey')?.value || document.getElementById('globalBufferApiKey')?.value || '').trim();
     const channelId = $('fbBufferChannelId').value;
 
     if (!channelId) {

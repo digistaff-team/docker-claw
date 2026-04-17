@@ -38,32 +38,11 @@
                 <h2>📡 Каналы для публикаций</h2>
                 <p style="color: #666; margin-bottom: 20px;">Подключите каналы для публикаций контента</p>
 
-                <!-- Глобальные настройки интеграций -->
-                <div class="channel-card" id="integrationsBlock" style="margin-bottom: 24px; display: none;">
-                    <h3>🔗 Интеграции</h3>
-                    <p style="color: #666; margin-bottom: 16px; font-size: 13px;">Настройки, общие для всех каналов публикации.</p>
-                    <div class="scheduler-container">
-                        <div class="channel-settings-block">
-                            <h3>⚙️ Buffer API</h3>
-                            <div style="display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap;">
-                                <div style="flex: 1; min-width: 220px;">
-                                    <label for="globalBufferApiKey" style="display: block; margin-bottom: 6px;">Buffer API Token</label>
-                                    <div style="display: flex; gap: 6px; align-items: center;">
-                                        <input type="password" id="globalBufferApiKey" placeholder="Buffer API Token" autocomplete="off" style="flex: 1;" />
-                                        <button class="btn btn-secondary" onclick="testGlobalBufferConnection()" style="white-space: nowrap; padding: 12px 14px;" title="Проверить токен">🧪</button>
-                                    </div>
-                                </div>
-                                <div style="flex: 1; min-width: 180px;">
-                                    <label for="globalModeratorUserId" style="display: block; margin-bottom: 6px;">ID Модератора</label>
-                                    <input type="text" id="globalModeratorUserId" placeholder="Telegram user ID модератора" style="width: 100%;" />
-                                </div>
-                            </div>
-                            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                                <button class="btn btn-success" onclick="saveIntegrationSettings()">💾 Сохранить</button>
-                            </div>
-                            <div id="integrationsStatus" class="scheduler-status"></div>
-                        </div>
-                    </div>
+                <!-- Глобальные настройки интеграций (скрыто, только для JS-совместимости) -->
+                <div id="integrationsBlock" style="display: none;">
+                    <input type="hidden" id="globalBufferApiKey" />
+                    <input type="hidden" id="globalModeratorUserId" />
+                    <div id="integrationsStatus"></div>
                 </div>
 
                 <nav class="channel-tabs" id="channelTabs">
@@ -72,13 +51,13 @@
                     <button class="channel-tab" data-channel="ok" style="display: none;">ОК</button>
                     <button class="channel-tab" data-channel="pinterest" style="display: none;">Pinterest</button>
                     <button class="channel-tab" data-channel="facebook" style="display: none;">Fb</button>
-                    <button class="channel-tab" data-channel="instagramreels" style="display: none;">Inst Reels</button>
+                    <button class="channel-tab" data-channel="instagram" style="display: none;">Inst</button>
+                    <button class="channel-tab" data-channel="instagramreels" style="display: none;">Reels</button>
                     <button class="channel-tab" data-channel="blog" style="display: none;">WP-блог</button>
                     <button class="channel-tab" data-channel="dzen" style="display: none;">Дзен</button>
                     <button class="channel-tab" data-channel="vkvideo" style="display: none;">VKВидео</button>
                     <button class="channel-tab" data-channel="youtube" style="display: none;">Shorts</button>
                     <button class="channel-tab" data-channel="tiktok" style="display: none;">TikTok</button>
-                    <button class="channel-tab" data-channel="instagram" style="display: none;">Instagram</button>
                     <button class="channel-tab" data-channel="email" style="display: none;">Email</button>
                     <button class="channel-tab channel-tab-add" id="addChannelBtn" title="Добавить канал">+</button>
                 </nav>
@@ -221,6 +200,14 @@
                             <div class="scheduler-container">
                                 <div class="channel-settings-block">
                                     <h3>⚙️ Настройки канала</h3>
+
+                                    <div class="scheduler-field-row">
+                                        <label for="pinterestBufferApiKey">Buffer API Token</label>
+                                        <div style="display: flex; gap: 6px; align-items: center;">
+                                            <input type="password" class="buffer-api-key-input" id="pinterestBufferApiKey" placeholder="Введите Buffer API Token" autocomplete="off" style="flex: 1;" oninput="syncBufferApiKey(this.value)" />
+                                            <button class="btn btn-secondary" onclick="testPinterestBufferConnection()" style="white-space: nowrap; padding: 12px 14px;" title="Проверить токен">🧪</button>
+                                        </div>
+                                    </div>
 
                                     <div class="scheduler-field-row">
                                         <label for="bufferChannelId">Buffer Channel ID</label>
@@ -369,6 +356,14 @@
                                 <!-- BLOCK 1: Channel Settings -->
                                 <div class="channel-settings-block">
                                     <h3>⚙️ Настройки канала</h3>
+
+                                    <div class="scheduler-field-row">
+                                        <label for="instagramBufferApiKey">Buffer API Token</label>
+                                        <div style="display: flex; gap: 6px; align-items: center;">
+                                            <input type="password" class="buffer-api-key-input" id="instagramBufferApiKey" placeholder="Введите Buffer API Token" autocomplete="off" style="flex: 1;" oninput="syncBufferApiKey(this.value)" />
+                                            <button class="btn btn-secondary" onclick="testInstagramBufferConnection()" style="white-space: nowrap; padding: 12px 14px;" title="Проверить токен">🧪</button>
+                                        </div>
+                                    </div>
 
                                     <div class="scheduler-field-row">
                                         <label for="instagramBufferChannelSelect">Buffer Channel ID</label>
@@ -753,6 +748,14 @@
                                     <h3>⚙️ Настройки канала</h3>
 
                                     <div class="scheduler-field-row">
+                                        <label for="youtubeBufferApiKey">Buffer API Token</label>
+                                        <div style="display: flex; gap: 6px; align-items: center;">
+                                            <input type="password" class="buffer-api-key-input" id="youtubeBufferApiKey" placeholder="Введите Buffer API Token" autocomplete="off" style="flex: 1;" oninput="syncBufferApiKey(this.value)" />
+                                            <button class="btn btn-secondary" onclick="testYoutubeBufferConnection()" style="white-space: nowrap; padding: 12px 14px;" title="Проверить токен">🧪</button>
+                                        </div>
+                                    </div>
+
+                                    <div class="scheduler-field-row">
                                         <label for="youtubeBufferChannelId">Buffer Channel ID</label>
                                         <select id="youtubeBufferChannelSelect" onchange="onYoutubeChannelSelectChange()">
                                             <option value="">— выберите канал —</option>
@@ -880,6 +883,14 @@
                                 <!-- BLOCK 1: Channel Settings -->
                                 <div class="channel-settings-block">
                                     <h3>⚙️ Настройки канала</h3>
+
+                                    <div class="scheduler-field-row">
+                                        <label for="facebookBufferApiKey">Buffer API Token</label>
+                                        <div style="display: flex; gap: 6px; align-items: center;">
+                                            <input type="password" class="buffer-api-key-input" id="facebookBufferApiKey" placeholder="Введите Buffer API Token" autocomplete="off" style="flex: 1;" oninput="syncBufferApiKey(this.value)" />
+                                            <button class="btn btn-secondary" onclick="testFacebookBufferConnection()" style="white-space: nowrap; padding: 12px 14px;" title="Проверить токен">🧪</button>
+                                        </div>
+                                    </div>
 
                                     <div class="scheduler-field-row">
                                         <label for="fbBufferChannelId">Facebook канал (из Buffer)</label>
@@ -1483,6 +1494,14 @@
                                     <h3>⚙️ Настройки канала</h3>
 
                                     <div class="scheduler-field-row">
+                                        <label for="tiktokBufferApiKey">Buffer API Token</label>
+                                        <div style="display: flex; gap: 6px; align-items: center;">
+                                            <input type="password" class="buffer-api-key-input" id="tiktokBufferApiKey" placeholder="Введите Buffer API Token" autocomplete="off" style="flex: 1;" oninput="syncBufferApiKey(this.value)" />
+                                            <button class="btn btn-secondary" onclick="testTiktokBufferConnection()" style="white-space: nowrap; padding: 12px 14px;" title="Проверить токен">🧪</button>
+                                        </div>
+                                    </div>
+
+                                    <div class="scheduler-field-row">
                                         <label for="tiktokBufferChannelId">Buffer Channel ID</label>
                                         <select id="tiktokBufferChannelSelect" onchange="onTiktokChannelSelectChange()">
                                             <option value="">— выберите канал —</option>
@@ -1596,7 +1615,7 @@
                 <div class="channel-panel" id="channelPanel-instagramreels" style="display: none;">
                     <div class="channel-card">
                         <h3>🎬 Instagram Reels</h3>
-                        <p>Автоматическая генерация и публикация коротких видео через Buffer. Введите Channel ID подключённого Instagram-аккаунта (API-ключ Buffer берётся из раздела Интеграции).</p>
+                        <p>Автоматическая генерация и публикация коротких видео через Buffer. Введите API-ключ и Channel ID подключённого Instagram-аккаунта.</p>
 
                         <div id="instagramReelsStatus" class="channel-status" style="margin-top: 0; font-size: 14px;"></div>
 
@@ -1604,6 +1623,14 @@
                             <div class="scheduler-container">
                                 <div class="channel-settings-block">
                                     <h3>⚙️ Настройки канала</h3>
+
+                                    <div class="scheduler-field-row">
+                                        <label for="instagramReelsBufferApiKey">Buffer API Token</label>
+                                        <div style="display: flex; gap: 6px; align-items: center;">
+                                            <input type="password" class="buffer-api-key-input" id="instagramReelsBufferApiKey" placeholder="Введите Buffer API Token" autocomplete="off" style="flex: 1;" oninput="syncBufferApiKey(this.value)" />
+                                            <button class="btn btn-secondary" onclick="testInstagramReelsBufferConnection()" style="white-space: nowrap; padding: 12px 14px;" title="Проверить токен">🧪</button>
+                                        </div>
+                                    </div>
 
                                     <div class="scheduler-field-row">
                                         <label for="instagramReelsBufferChannelId">Buffer Channel ID</label>
