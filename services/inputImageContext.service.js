@@ -87,25 +87,41 @@ async function getInputContext(chatId) {
   return _parseFiles(files, textContents);
 }
 
+// Схемы i2i по моделям: поле для изображения + дополнительные обязательные параметры
+const I2I_SCHEMAS = {
+  'nano-banana-2':             { imageField: 'image_input' },
+  'seedream/4.5-edit':         { imageField: 'image_urls',  extra: { quality: 'basic' } },
+  'flux-2/pro-image-to-image': { imageField: 'input_urls',  extra: { resolution: '1K' } },
+};
+const I2I_DEFAULT_SCHEMA = { imageField: 'imageUrls' };
+
+// Модели, которые не поддерживают t2i — при отсутствии фото используем fallback
+const I2I_ONLY_MODELS = new Set(['flux-2/pro-image-to-image']);
+
 /**
- * Image-to-image через /api/v1/jobs/createTask (тот же эндпоинт что t2i, но с imageUrls в input)
+ * Image-to-image через /api/v1/jobs/createTask.
+ * Каждая модель использует свой формат поля для референсного изображения:
+ * - grok-imagine/text-to-image → imageUrls: [url]
+ * - nano-banana-2              → image_input: [url]
+ * - seedream/4.5-edit          → image_urls: [url], quality: 'basic'
  */
 async function _generateI2I(prompt, imagePublicUrl, aspectRatio, model) {
   const apiKey = process.env.KIE_API_KEY;
   if (!apiKey) throw new Error('KIE_API_KEY is not set');
 
+  const schema = I2I_SCHEMAS[model] || I2I_DEFAULT_SCHEMA;
+  const input = {
+    prompt: prompt.slice(0, 800),
+    aspect_ratio: aspectRatio,
+    nsfw_checker: true,
+    ...(schema.extra || {}),
+    [schema.imageField]: [imagePublicUrl]
+  };
+
   const createResp = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      input: {
-        prompt: prompt.slice(0, 800),
-        aspect_ratio: aspectRatio,
-        nsfw_checker: true,
-        imageUrls: [imagePublicUrl]
-      }
-    }),
+    body: JSON.stringify({ model, input }),
     timeout: 30000
   });
 
@@ -145,17 +161,26 @@ async function _generateI2I(prompt, imagePublicUrl, aspectRatio, model) {
 /**
  * Text-to-image через /api/v1/jobs/createTask
  */
+// Дополнительные обязательные параметры для t2i по моделям
+const T2I_EXTRAS = {
+  'seedream/4.5-edit': { quality: 'basic', image_urls: [] },
+};
+
 async function _generateT2I(prompt, aspectRatio, model) {
   const apiKey = process.env.KIE_API_KEY;
   if (!apiKey) throw new Error('KIE_API_KEY is not set');
 
+  const input = {
+    prompt: prompt.slice(0, 800),
+    aspect_ratio: aspectRatio,
+    nsfw_checker: true,
+    ...(T2I_EXTRAS[model] || {})
+  };
+
   const createResp = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      input: { prompt: prompt.slice(0, 800), aspect_ratio: aspectRatio, nsfw_checker: true }
-    }),
+    body: JSON.stringify({ model, input }),
     timeout: 30000
   });
   if (!createResp.ok) {
@@ -268,14 +293,15 @@ async function generateImage(chatId, basePrompt, aspectRatio, t2iModel) {
 
   const productContext = textPrompt || basePrompt;
   const prompt = _buildPrompt(productContext, interior);
+  console.log(`[IMAGE-CTX] prompt: ${prompt}`);
 
   if (interior) {
     console.log(`[IMAGE-CTX] Interior: style="${interior.style || 'n/a'}" id=${interior.id}`);
   }
 
-  if (imageFile) {
+  if (imageFile && I2I_SCHEMAS[t2iModel]) {
     const imagePublicUrl = `${config.APP_URL}/api/video/input/${chatId}/${encodeURIComponent(imageFile)}`;
-    console.log(`[IMAGE-CTX] i2i: chatId=${chatId} file=${imageFile}`);
+    console.log(`[IMAGE-CTX] i2i: chatId=${chatId} file=${imageFile} model=${t2iModel}`);
     try {
       return await _generateI2I(prompt, imagePublicUrl, aspectRatio, t2iModel);
     } catch (e) {
@@ -283,8 +309,9 @@ async function generateImage(chatId, basePrompt, aspectRatio, t2iModel) {
     }
   }
 
-  console.log(`[IMAGE-CTX] t2i: chatId=${chatId}`);
-  return await _generateT2I(prompt, aspectRatio, t2iModel);
+  const effectiveT2iModel = I2I_ONLY_MODELS.has(t2iModel) ? 'grok-imagine/text-to-image' : t2iModel;
+  console.log(`[IMAGE-CTX] t2i: chatId=${chatId} model=${effectiveT2iModel}`);
+  return await _generateT2I(prompt, aspectRatio, effectiveT2iModel);
 }
 
 module.exports = { getInputContext, generateImage, _parseFiles, _buildPrompt, LIGHTING_VARIANTS, ANGLE_VARIANTS };

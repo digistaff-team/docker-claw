@@ -531,7 +531,8 @@ router.get('/channels/pinterest', (req, res) => {
 router.post('/channels/pinterest', async (req, res) => {
     const { chat_id: chatId, board_id, board_name, website_url, is_active, auto_publish,
         buffer_api_key, buffer_channel_id,
-        schedule_time, schedule_tz, daily_limit, publish_interval_hours, allowed_weekdays } = req.body;
+        schedule_time, schedule_tz, daily_limit, publish_interval_hours, allowed_weekdays,
+        random_publish, premoderation_enabled, moderator_user_id } = req.body;
     if (!chatId) return res.status(400).json({ error: 'chat_id is required' });
     try {
         const patch = {};
@@ -548,6 +549,9 @@ router.post('/channels/pinterest', async (req, res) => {
         if (daily_limit !== undefined) patch.daily_limit = daily_limit;
         if (publish_interval_hours !== undefined) patch.publish_interval_hours = publish_interval_hours;
         if (allowed_weekdays !== undefined) patch.allowed_weekdays = allowed_weekdays;
+        if (random_publish !== undefined) patch.random_publish = random_publish;
+        if (premoderation_enabled !== undefined) patch.premoderation_enabled = premoderation_enabled;
+        if (moderator_user_id !== undefined) patch.moderator_user_id = moderator_user_id;
         await manageStore.setPinterestConfig(chatId, patch);
 
         // Создаём таблицы для Pinterest

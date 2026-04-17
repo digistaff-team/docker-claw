@@ -847,10 +847,13 @@ function setVideoPipelineSettings(chatId, patch = {}) {
 
 // === Image Gen Settings ===
 
-const ALLOWED_IMAGE_MODELS = ['google/nano-banana-2', 'seedream/4.5-text-to-image', 'grok-imagine/text-to-image'];
+const ALLOWED_IMAGE_MODELS = ['grok-imagine/text-to-image', 'nano-banana-2', 'seedream/4.5-edit', 'flux-2/pro-image-to-image'];
+const DEFAULT_IMAGE_MODEL = 'grok-imagine/text-to-image';
 
 function getImageGenSettings(chatId) {
-    return statesCache[chatId]?.imageGenSettings || { model: 'grok-imagine/text-to-image' };
+    const saved = statesCache[chatId]?.imageGenSettings;
+    const model = saved?.model && ALLOWED_IMAGE_MODELS.includes(saved.model) ? saved.model : DEFAULT_IMAGE_MODEL;
+    return { model };
 }
 
 function setImageGenSettings(chatId, patch = {}) {
@@ -858,7 +861,7 @@ function setImageGenSettings(chatId, patch = {}) {
     const current = statesCache[chatId].imageGenSettings || {};
     const next = { ...current };
     if (patch.model !== undefined) {
-        next.model = ALLOWED_IMAGE_MODELS.includes(patch.model) ? patch.model : 'grok-imagine/text-to-image';
+        next.model = ALLOWED_IMAGE_MODELS.includes(patch.model) ? patch.model : DEFAULT_IMAGE_MODEL;
     }
     statesCache[chatId].imageGenSettings = next;
     return persist(chatId);

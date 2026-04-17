@@ -228,7 +228,8 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
 }
 
 async function generatePinImage(chatId, topic, pinTitle) {
-  const basePrompt = (`Pinterest pin image. Topic: ${topic.topic}. Title: ${pinTitle || ''}. Style: vertical, aesthetic, clean, visually appealing, no text overlay, no logos, professional photography style.`).slice(0, 800);
+  const titlePart = pinTitle ? `. Title: ${pinTitle}` : '';
+  const basePrompt = `Topic: ${topic.topic}${titlePart}`.slice(0, 300);
   const imageModel = manageStore.getImageGenSettings(chatId).model;
   return inputImageContext.generateImage(chatId, basePrompt, '2:3', imageModel);
 }

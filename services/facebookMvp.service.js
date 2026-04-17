@@ -182,7 +182,7 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
 }
 
 async function generateFbImage(chatId, topic, imagePrompt, jobId) {
-  const basePrompt = (imagePrompt || `Facebook post image about ${topic.topic}. Style: professional, engaging, social media optimized, no text overlay.`).slice(0, 800);
+  const basePrompt = (imagePrompt || `Topic: ${topic.topic}`).slice(0, 300);
   const imageModel = manageStore.getImageGenSettings(chatId).model;
   return inputImageContext.generateImage(chatId, basePrompt, '1:1', imageModel);
 }

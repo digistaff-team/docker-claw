@@ -174,7 +174,7 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
 }
 
 async function generateIgImage(chatId, topic, imagePrompt) {
-  const basePrompt = (imagePrompt || `Instagram post image. Topic: ${topic.topic}. Style: bright, vibrant, Instagram-optimized, square format, no text overlay.`).slice(0, 800);
+  const basePrompt = (imagePrompt || `Topic: ${topic.topic}`).slice(0, 300);
   const imageModel = manageStore.getImageGenSettings(chatId).model;
   return inputImageContext.generateImage(chatId, basePrompt, '1:1', imageModel);
 }

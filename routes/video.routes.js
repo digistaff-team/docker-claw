@@ -518,9 +518,10 @@ router.get('/image-settings', (req, res) => {
     success: true,
     settings: { model: settings.model || 'grok-imagine/text-to-image' },
     availableModels: [
-      { id: 'google/nano-banana-2',       name: 'Nano Banana 2', provider: 'Google / KIE.ai',    available: true },
-      { id: 'seedream/4.5-text-to-image', name: 'Seedream 4.5',  provider: 'ByteDance / KIE.ai', available: true },
-      { id: 'grok-imagine/text-to-image', name: 'Grok Imagine',  provider: 'xAI / KIE.ai',       available: true },
+      { id: 'grok-imagine/text-to-image',   name: 'Grok Imagine',      provider: 'xAI / KIE.ai',      available: true },
+      { id: 'nano-banana-2',                name: 'Nano Banana 2',     provider: 'Google / KIE.ai',   available: true },
+      { id: 'seedream/4.5-edit',            name: 'Seedream 4.5 Edit', provider: 'Seedream / KIE.ai', available: true },
+      { id: 'flux-2/pro-image-to-image',    name: 'Flux 2 Pro i2i',   provider: 'BFL / KIE.ai',      available: true },
     ]
   });
 });

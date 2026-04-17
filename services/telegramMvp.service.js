@@ -718,16 +718,7 @@ async function generatePostText(chatId, topic, materialsText, personaText = '') 
 
 // Генерация изображения с помощью сервиса Kie.ai
 async function generateImage(chatId, topic, text) {
-  const basePrompt = `Image for Telegram post. Topic: ${topic.topic}. ` +
-    `You are an advanced AI image generation assistant. Your purpose is to create high-quality, ` +
-    `visually compelling images based on user requests. CORE PRINCIPLES: 1) Quality First - always aim ` +
-    `for highest artistic and technical quality. 2) Safety - never generate harmful, illegal, explicit, ` +
-    `or dangerous content. 3) Respect - create inclusive, non-discriminatory content. 4) Accuracy - ` +
-    `represent subjects truthfully. 5) Creativity - interpret requests creatively while staying true to ` +
-    `user intent. TECHNICAL SPECS: Default aspect ratio 1:1, highest quality, photorealistic or artistic ` +
-    `based on context. OUTPUT: Generate detailed optimized prompt including main subject, lighting, ` +
-    `atmosphere, color scheme, quality level.`;
-
+  const basePrompt = `Topic: ${topic.topic}`.slice(0, 300);
   const imageModel = manageStore.getImageGenSettings(chatId).model;
   return inputImageContext.generateImage(chatId, basePrompt, '1:1', imageModel);
 }
