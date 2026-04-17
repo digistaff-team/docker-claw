@@ -97,6 +97,7 @@
 
                 <!-- Таблица тем -->
                 <div class="content-jobs-head" style="margin-top: 18px;">
+                    <h3 style="margin: 0;">Загруженные темы</h3>
                     <div class="content-jobs-filters">
                         <select id="topicsStatusFilter" onchange="loadTopics()">
                             <option value="">Все статусы</option>
@@ -272,16 +273,16 @@
                     </div>
                 </div>
 
-                <div class="content-jobs-table-wrap">
+                <div class="content-jobs-table-wrap" style="max-height: 250px; overflow-y: auto;">
                     <table class="content-jobs-table">
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>Тема</th>
-                                <th>Статус</th>
-                                <th>Публикация</th>
-                                <th>Создано</th>
-                                <th>Действие</th>
+                                <th style="position: sticky; top: 0; z-index: 1;">ID</th>
+                                <th style="position: sticky; top: 0; z-index: 1;">Тема</th>
+                                <th style="position: sticky; top: 0; z-index: 1;">Статус</th>
+                                <th style="position: sticky; top: 0; z-index: 1;">Публикация</th>
+                                <th style="position: sticky; top: 0; z-index: 1;">Создано</th>
+                                <th style="position: sticky; top: 0; z-index: 1;">Действие</th>
                             </tr>
                         </thead>
                         <tbody id="jobsTableBody">
