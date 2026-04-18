@@ -1,7 +1,8 @@
 /**
  * TASK-006: Репозиторий для работы с очередью задач в БД
+ * OPTIMIZATION: Connection pooling для производительности
  */
-const { Client } = require('pg');
+const { Client, Pool } = require('pg');
 const config = require('../../config');
 const { QUEUE_STATUS } = require('./status');
 
@@ -9,8 +10,44 @@ const MAX_ATTEMPTS = 5;
 const BACKOFF_BASE_MS = 5000; // 5 сек
 const BACKOFF_MAX_MS = 300000; // 5 минут
 
+// Connection pool cache для избежания создания новых соединений
+const poolCache = new Map();
+const POOL_IDLE_TIMEOUT_MS = 30000; // 30 сек
+
 function getDbName(chatId) {
   return `db_${String(chatId).replace(/[^a-z0-9_]/gi, '_').toLowerCase()}`;
+}
+
+/**
+ * Получить или создать connection pool для chatId
+ */
+function getPool(chatId) {
+  if (!poolCache.has(chatId)) {
+    const pool = new Pool({
+      host: config.PG_ADMIN_HOST || config.PG_HOST,
+      port: config.PG_PORT,
+      user: config.PG_USER,
+      password: config.PG_PASSWORD,
+      database: getDbName(chatId),
+      ssl: false,
+      max: 10, // Максимум 10 соединений в пуле
+      idleTimeoutMillis: POOL_IDLE_TIMEOUT_MS,
+      connectionTimeoutMillis: 5000
+    });
+    
+    // Очистка пула после простоя
+    const cleanupTimer = setTimeout(() => {
+      if (poolCache.get(chatId) === pool) {
+        pool.end().catch(() => {});
+        poolCache.delete(chatId);
+      }
+    }, POOL_IDLE_TIMEOUT_MS * 2);
+    cleanupTimer.unref();
+    
+    poolCache.set(chatId, pool);
+  }
+  
+  return poolCache.get(chatId);
 }
 
 function getDbClient(chatId) {
@@ -32,6 +69,19 @@ async function withClient(chatId, fn) {
     return await fn(client);
   } finally {
     await client.end().catch(() => {});
+  }
+}
+
+/**
+ * Выполнить операцию с использованием connection pool
+ */
+async function withPoolClient(chatId, fn) {
+  const pool = getPool(chatId);
+  const client = await pool.connect();
+  try {
+    return await fn(client);
+  } finally {
+    client.release();
   }
 }
 
@@ -94,7 +144,7 @@ async function enqueue(chatId, options) {
     runAt = new Date()
   } = options;
 
-  return withClient(chatId, async (client) => {
+  return withPoolClient(chatId, async (client) => {
     const result = await client.query(
       `INSERT INTO content_job_queue
         (chat_id, job_type, job_id, priority, payload, correlation_id, next_run_at)
@@ -113,7 +163,7 @@ async function enqueue(chatId, options) {
  * @returns {Array<object>} список задач со статусом 'processing'
  */
 async function pollNextJobs(chatId, limit = 1) {
-  return withClient(chatId, async (client) => {
+  return withPoolClient(chatId, async (client) => {
     await client.query('BEGIN');
     try {
       const result = await client.query(
@@ -147,7 +197,7 @@ async function pollNextJobs(chatId, limit = 1) {
  * Отметить задачу как выполненную
  */
 async function markDone(chatId, queueId) {
-  return withClient(chatId, async (client) => {
+  return withPoolClient(chatId, async (client) => {
     await client.query(
       `UPDATE content_job_queue
        SET status = $1,
@@ -163,7 +213,7 @@ async function markDone(chatId, queueId) {
  * Отметить задачу как failed с backoff retry
  */
 async function markFailed(chatId, queueId, errorMessage, retry = true) {
-  return withClient(chatId, async (client) => {
+  return withPoolClient(chatId, async (client) => {
     const job = await client.query(
       `SELECT attempts, max_attempts FROM content_job_queue WHERE id = $1`,
       [queueId]
@@ -209,7 +259,7 @@ async function markFailed(chatId, queueId, errorMessage, retry = true) {
  * Получить "застрявшие" задачи (processing слишком долго)
  */
 async function getStuckJobs(chatId, timeoutMinutes = 10) {
-  return withClient(chatId, async (client) => {
+  return withPoolClient(chatId, async (client) => {
     const result = await client.query(
       `SELECT * FROM content_job_queue
        WHERE chat_id = $1
@@ -225,7 +275,7 @@ async function getStuckJobs(chatId, timeoutMinutes = 10) {
  * Сбросить застрявшие задачи обратно в очередь
  */
 async function resetStuckJobs(chatId, timeoutMinutes = 10) {
-  return withClient(chatId, async (client) => {
+  return withPoolClient(chatId, async (client) => {
     const result = await client.query(
       `UPDATE content_job_queue
        SET status = $1,
@@ -246,7 +296,7 @@ async function resetStuckJobs(chatId, timeoutMinutes = 10) {
  * Получить статистику очереди
  */
 async function getQueueStats(chatId) {
-  return withClient(chatId, async (client) => {
+  return withPoolClient(chatId, async (client) => {
     const result = await client.query(
       `SELECT status, COUNT(*)::int as count
        FROM content_job_queue
@@ -278,6 +328,7 @@ module.exports = {
   getStuckJobs,
   resetStuckJobs,
   getQueueStats,
+  withPoolClient,
   withClient,
   MAX_ATTEMPTS,
   BACKOFF_BASE_MS,

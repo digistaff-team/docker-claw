@@ -1,34 +1,16 @@
-# Пользовательские данные
-data/
-*.bak
+```
+# Dependencies
+node_modules/
 
-# IDE
-.idea/
-.vscode/
-*.swp
+# Logs and temp files
+*.log
+*.tmp
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Docker
-*.pem
-*.key
-!docs/*.md
-
+# Environment
 .env
 .env.local
-node_modules/
-__pycache__/
-*.log
-documents/
+*.env.*
 
-# Playwright
-playwright-report/
-test-results/
-
-# Файлы кодеров
-CLAUDE.md
-QWEN.md
-KODA.md
-.mcp.json
+# Editors
+.vscode/
+```
