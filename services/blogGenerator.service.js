@@ -76,13 +76,13 @@ async function aiChat(chatId, systemPrompt, userPrompt) {
  * @returns {Promise<{bodyHtml: string, seoTitle: string, metaDesc: string, slug: string, imageBuffer: Buffer, imageMime: string, imageFilename: string}>}
  */
 async function generate(chatId, { topic, keywords, techDocId, moderatorNote }) {
-  // 0. Проверка баланса
-  const balanceCheck = await tokenBilling.hasBalance(chatId, ESTIMATED_TOKENS_PER_ARTICLE);
-  if (!balanceCheck.canUse) {
-    throw new InsufficientBalanceError(
-      `Insufficient token balance for article generation. ${balanceCheck.reason || ''}`
-    );
-  }
+  // 0. Проверка баланса отключена (модуль биллинга пока не используется)
+  // const balanceCheck = await tokenBilling.hasBalance(chatId, ESTIMATED_TOKENS_PER_ARTICLE);
+  // if (!balanceCheck.canUse) {
+  //   throw new InsufficientBalanceError(
+  //     `Insufficient token balance for article generation. ${balanceCheck.reason || ''}`
+  //   );
+  // }
 
   // 1. Загрузка базы знаний (если указана)
   const knowledgeDoc = await loadKnowledge(chatId, techDocId);
