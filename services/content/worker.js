@@ -14,10 +14,10 @@ const contentLimits = require('./limits');
 const manageStore = require('../../manage/store');
 const alerts = require('./alerts');
 
-const POLL_INTERVAL_MS = 5000; // 5 секунд
+const POLL_INTERVAL_MS = 2000; // OPTIMIZATION: Уменьшили интервал polling с 5с до 2с
 const VIDEO_POLL_INTERVAL_MS = parseInt(process.env.VIDEO_POLL_INTERVAL_MS || '10000', 10); // TASK-015
 const BLOG_POLL_INTERVAL_MS = 60000; // 60 секунд для планировщика тем WordPress
-const MAX_CONCURRENT_JOBS = 1; // Максимум параллельных задач на chat
+const MAX_CONCURRENT_JOBS = 3; // OPTIMIZATION: Увеличили с 1 до 3 для параллельной обработки
 const STUCK_TIMEOUT_MINUTES = 10;
 
 let workerHandle = null;
