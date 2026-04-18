@@ -1045,6 +1045,7 @@ router.post('/wordpress/run-now', async (req, res) => {
     return res.status(400).json({ error: 'chat_id is required' });
   }
 
+  let topicRow = null;
   try {
     const wpConfig = manageStore.getWpConfig(chatId);
     if (!wpConfig || !wpConfig.enabled) {
@@ -1063,20 +1064,11 @@ router.post('/wordpress/run-now', async (req, res) => {
       return res.status(429).json({ error: quotaCheck.reason });
     }
 
-    // Ищем следующую тему
-    const topicRow = await contentRepo.withClient(chatId, async (client) => {
-      const result = await client.query(
-        `SELECT id, topic, focus, secondary, lsi
-         FROM content_topics
-         WHERE status = 'pending'
-         ORDER BY created_at ASC, id ASC
-         LIMIT 1`
-      );
-      return result.rows[0] || null;
-    });
+    // Ищем следующую тему (wordpress или универсальные с channel IS NULL)
+    topicRow = await contentRepo.reserveNextTopic(chatId, 'wordpress');
 
     if (!topicRow) {
-      return res.status(400).json({ error: 'No available topics in queue' });
+      return res.status(400).json({ error: 'Нет доступных тем в очереди. Добавьте темы в разделе «Материалы» с каналом «WP-блог» или «Все каналы».' });
     }
 
     // Собираем ключевые слова из полей focus/secondary/lsi
@@ -1120,14 +1112,6 @@ router.post('/wordpress/run-now', async (req, res) => {
       publishStatus: wpConfig.autoPublish ? 'approved' : 'ready'
     });
 
-    // Отмечаем тему
-    await contentRepo.withClient(chatId, async (client) => {
-      await client.query(
-        `UPDATE content_topics SET used_at = NOW() WHERE id = $1`,
-        [topicRow.id]
-      );
-    });
-
     // Если авто-публикация — публикуем сразу
     if (wpConfig.autoPublish) {
       await wordpressMvpService.publishPost(chatId, draftResult.id);
@@ -1142,6 +1126,7 @@ router.post('/wordpress/run-now', async (req, res) => {
       topic: topicRow.topic
     });
   } catch (e) {
+    if (topicRow) await contentRepo.releaseTopic(chatId, topicRow.id).catch(() => {});
     return res.status(500).json({ error: e.message });
   }
 });
