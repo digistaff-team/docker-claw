@@ -13,4 +13,9 @@ node_modules/
 
 # Editors
 .vscode/
+
+# Documents
+documents/
+playwright-report/
+test-results/
 ```
