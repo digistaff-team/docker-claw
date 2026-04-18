@@ -109,52 +109,70 @@ async function getAutoVkCopywriterSkill() {
  */
 function isInstagramChannelActive(chatId) {
     const igConfig = manageStore.getInstagramConfig(chatId);
-    return !!(igConfig?.is_active && igConfig?.buffer_api_key && igConfig?.buffer_channel_id);
+    return !!(igConfig?.is_active && igConfig?.buffer_channel_id);
+}
+
+function isInstagramReelsChannelActive(chatId) {
+    const cfg = manageStore.getInstagramReelsConfig(chatId);
+    return !!(cfg?.is_active && cfg?.buffer_channel_id);
+}
+
+function isFacebookChannelActive(chatId) {
+    const cfg = manageStore.getFacebookConfig ? manageStore.getFacebookConfig(chatId) : null;
+    return !!(cfg?.is_active && cfg?.buffer_channel_id);
+}
+
+function isPinterestChannelActive(chatId) {
+    const cfg = manageStore.getPinterestConfig ? manageStore.getPinterestConfig(chatId) : null;
+    return !!(cfg?.buffer_channel_id);
+}
+
+function isTiktokChannelActive(chatId) {
+    const cfg = manageStore.getTiktokConfig ? manageStore.getTiktokConfig(chatId) : null;
+    return !!(cfg?.is_active && cfg?.buffer_channel_id);
+}
+
+function isVkVideoChannelActive(chatId) {
+    const cfg = manageStore.getVkVideoConfig ? manageStore.getVkVideoConfig(chatId) : null;
+    return !!(cfg?.is_active);
+}
+
+function isBlogChannelActive(chatId) {
+    const cfg = manageStore.getWpConfig ? manageStore.getWpConfig(chatId) : null;
+    return !!(cfg?.base_url && cfg?.is_active);
 }
 
 /**
- * Получает навык "Копирайтер для Instagram" автоматически
- * @returns {Promise<Object|null>}
+ * Получает навык копирайтера по slug автоматически
  */
-async function getAutoInstagramCopywriterSkill() {
+async function getAutoSkill(slug, tag) {
     try {
-        const skill = await mysqlService.getSkillBySlug('instagram-copywriter');
-        if (skill) {
-            console.log('[AUTO-SKILL-IG] Found Instagram copywriter skill:', skill.name);
-        }
+        const skill = await mysqlService.getSkillBySlug(slug);
+        if (skill) console.log(`[AUTO-SKILL-${tag}] Found:`, skill.name);
         return skill || null;
     } catch (e) {
-        console.error('[AUTO-SKILL-IG] Error:', e.message);
+        console.error(`[AUTO-SKILL-${tag}] Error:`, e.message);
         return null;
     }
 }
+
+async function getAutoInstagramCopywriterSkill()      { return getAutoSkill('instagram-copywriter', 'IG'); }
+async function getAutoInstagramReelsCopywriterSkill() { return getAutoSkill('instagram-reels-copywriter', 'REELS'); }
+async function getAutoFacebookCopywriterSkill()       { return getAutoSkill('facebook-copywriter', 'FB'); }
+async function getAutoPinterestCopywriterSkill()      { return getAutoSkill('pinterest-copywriter', 'PIN'); }
+async function getAutoTiktokCopywriterSkill()         { return getAutoSkill('tiktok-copywriter', 'TT'); }
+async function getAutoVkVideoCopywriterSkill()        { return getAutoSkill('vkvideo-copywriter', 'VKVID'); }
+async function getAutoBlogCopywriterSkill()           { return getAutoSkill('blog-copywriter', 'BLOG'); }
 
 /**
  * Проверяет, подключён ли канал YouTube
- * @param {string} chatId - ID чата
- * @returns {boolean}
  */
 function isYoutubeChannelActive(chatId) {
     const ytConfig = manageStore.getYoutubeConfig(chatId);
-    return !!(ytConfig?.is_active && ytConfig?.buffer_api_key && ytConfig?.buffer_channel_id);
+    return !!(ytConfig?.is_active && ytConfig?.buffer_channel_id);
 }
 
-/**
- * Получает навык "Копирайтер для YouTube" автоматически
- * @returns {Promise<Object|null>}
- */
-async function getAutoYoutubeCopywriterSkill() {
-    try {
-        const skill = await mysqlService.getSkillBySlug('youtube-copywriter');
-        if (skill) {
-            console.log('[AUTO-SKILL-YT] Found YouTube copywriter skill:', skill.name);
-        }
-        return skill || null;
-    } catch (e) {
-        console.error('[AUTO-SKILL-YT] Error:', e.message);
-        return null;
-    }
-}
+async function getAutoYoutubeCopywriterSkill() { return getAutoSkill('youtube-copywriter', 'YT'); }
 
 /**
  * Собирает контекст окружения для ответа бота: последние команды, структура файлов, персона.
@@ -388,8 +406,43 @@ async function buildFullContextStructured(chatId) {
         const ytSkill = await getAutoYoutubeCopywriterSkill();
         if (ytSkill && !skills.find(s => s.slug === 'youtube-copywriter')) {
             skills.push(ytSkill);
-            console.log('[AUTO-SKILL-YT] Added YouTube copywriter skill for chat:', chatId);
         }
+    }
+
+    // === INSTAGRAM REELS ===
+    if (isInstagramReelsChannelActive(chatId)) {
+        const skill = await getAutoInstagramReelsCopywriterSkill();
+        if (skill && !skills.find(s => s.slug === 'instagram-reels-copywriter')) skills.push(skill);
+    }
+
+    // === FACEBOOK ===
+    if (isFacebookChannelActive(chatId)) {
+        const skill = await getAutoFacebookCopywriterSkill();
+        if (skill && !skills.find(s => s.slug === 'facebook-copywriter')) skills.push(skill);
+    }
+
+    // === PINTEREST ===
+    if (isPinterestChannelActive(chatId)) {
+        const skill = await getAutoPinterestCopywriterSkill();
+        if (skill && !skills.find(s => s.slug === 'pinterest-copywriter')) skills.push(skill);
+    }
+
+    // === TIKTOK ===
+    if (isTiktokChannelActive(chatId)) {
+        const skill = await getAutoTiktokCopywriterSkill();
+        if (skill && !skills.find(s => s.slug === 'tiktok-copywriter')) skills.push(skill);
+    }
+
+    // === VK VIDEO ===
+    if (isVkVideoChannelActive(chatId)) {
+        const skill = await getAutoVkVideoCopywriterSkill();
+        if (skill && !skills.find(s => s.slug === 'vkvideo-copywriter')) skills.push(skill);
+    }
+
+    // === BLOG / ДЗЕН ===
+    if (isBlogChannelActive(chatId)) {
+        const skill = await getAutoBlogCopywriterSkill();
+        if (skill && !skills.find(s => s.slug === 'blog-copywriter')) skills.push(skill);
     }
 
     // Получаем информацию о персональной базе данных из сессии

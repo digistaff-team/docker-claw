@@ -413,6 +413,29 @@ router.post('/cron/poll-now', async (req, res) => {
     }
 });
 
+router.get('/ai/active-skills', async (req, res) => {
+    const chatId = req.query.chat_id;
+    if (!chatId) {
+        return res.status(400).json({ error: 'chat_id is required' });
+    }
+
+    try {
+        const context = require('./context');
+        const structured = await context.buildFullContextStructured(chatId);
+        const skills = (structured.skills || []).map(s => ({
+            id: s.id,
+            name: s.name,
+            slug: s.slug,
+            description: s.description,
+            system_prompt: s.system_prompt,
+        }));
+        res.json({ skills });
+    } catch (e) {
+        console.error('[AI-ACTIVE-SKILLS-ERROR]', e.message);
+        res.json({ skills: [], error: e.message });
+    }
+});
+
 router.get('/ai/skills', async (req, res) => {
     const chatId = req.query.chat_id;
     if (!chatId) {

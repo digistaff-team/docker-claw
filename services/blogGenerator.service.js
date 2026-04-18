@@ -18,6 +18,7 @@ const {
   BLOG_PROMPT_SEO_DESC,
   BLOG_PROMPT_SEO_SLUG
 } = require('../manage/prompts');
+const channelSkills = require('./channelSkills');
 
 // Оценка токенов для проверки баланса (приблизительно)
 const ESTIMATED_TOKENS_PER_ARTICLE = 15000; // ~15k tokens на полную генерацию
@@ -132,9 +133,10 @@ async function generate(chatId, { topic, keywords, techDocId, moderatorNote }) {
   });
 
   // 5. Генерация статьи в HTML
+  const blogWritePrompt = await channelSkills.buildSystemPrompt('blog-copywriter', BLOG_PROMPT_WRITE);
   const articleHtml = await aiChat(
     chatId,
-    BLOG_PROMPT_WRITE,
+    blogWritePrompt,
     `Структура: ${JSON.stringify(formatData, null, 2)}\n${knowledgeContext}Тема: ${topic}\nКлючевые слова: ${keywords}${moderatorNoteSection}Правила SEO: используй ключевые слова естественно, добавь H2/H3 подзаголовки, списки где уместно`
   );
 

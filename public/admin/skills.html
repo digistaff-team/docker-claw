@@ -650,9 +650,9 @@
                 if (id) {
                     // UPDATE
                     await mysqlQuery(
-                        `UPDATE ai_skills SET name = %s, slug = %s, category_slug = %s, category_name = %s,
-                         short_desc = %s, system_prompt = %s, examples_text = %s, tags = %s,
-                         metadata_text = %s, is_public = %s, updated_at = NOW() WHERE id = %s`,
+                        `UPDATE ai_skills SET name = ?, slug = ?, category_slug = ?, category_name = ?,
+                         short_desc = ?, system_prompt = ?, examples_text = ?, tags = ?,
+                         metadata_text = ?, is_public = ?, updated_at = NOW() WHERE id = ?`,
                         [name, slug, category, categoryName, shortDesc, systemPrompt, examples, tags, metadata, isPublic, id]
                     );
                 } else {
@@ -661,7 +661,7 @@
                     await mysqlQuery(
                         `INSERT INTO ai_skills (user_email, name, slug, category_slug, category_name, short_desc,
                          system_prompt, examples_text, tags, metadata_text, is_public, is_active, usage_count, created_at, updated_at)
-                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, 0, NOW(), NOW())`,
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, NOW(), NOW())`,
                         [userEmail, name, slug, category, categoryName, shortDesc, systemPrompt, examples, tags, metadata, isPublic]
                     );
                 }
@@ -677,7 +677,7 @@
             if (!confirm('Удалить этот навык? Это действие необратимо.')) return;
 
             try {
-                await mysqlQuery(`DELETE FROM ai_skills WHERE id = %s`, [skillId]);
+                await mysqlQuery(`DELETE FROM ai_skills WHERE id = ?`, [skillId]);
                 await loadSkills();
             } catch (e) {
                 alert(`Ошибка удаления навыка: ${e.message}`);

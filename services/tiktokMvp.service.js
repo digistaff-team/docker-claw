@@ -14,6 +14,7 @@ const bufferService = require('./buffer.service');
 const videoPipeline = require('./videoPipeline.service');
 const repository = require('./content/repository');
 const { safeSendToModerator } = require('./telegram.utils');
+const channelSkills = require('./channelSkills');
 
 let cwBot = null; // Центральный бот премодерации
 
@@ -142,8 +143,14 @@ async function generateTiktokContent(chatId, topic, dna, tov) {
     topic.focus ? `Фокус: ${topic.focus}` : null
   ].filter(Boolean).join('\n\n');
 
+  const sysPrompt = await channelSkills.buildSystemPrompt(
+    'tiktok-copywriter',
+    TIKTOK_CAPTION_SYSTEM,
+    'Отвечай только JSON.'
+  );
+
   const response = await aiRouterService.chatCompletion(chatId, [
-    { role: 'system', content: TIKTOK_CAPTION_SYSTEM },
+    { role: 'system', content: sysPrompt },
     { role: 'user', content: userMessage }
   ], { temperature: 1, max_tokens: 512 });
 

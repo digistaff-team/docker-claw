@@ -15,6 +15,7 @@ const storageService = require('./storage.service');
 const videoPipeline = require('./videoPipeline.service');
 const repository = require('./content/repository');
 const { safeSendToModerator } = require('./telegram.utils');
+const channelSkills = require('./channelSkills');
 
 let cwBot = null;
 
@@ -105,7 +106,7 @@ async function loadUserPersona(chatId) {
 // ============================================
 
 async function generateVkVideoContent(chatId, topic, materialsText, personaText) {
-  const systemPrompt = `Ты — профессиональный VK копирайтер. Создай привлекательное описание для видео ВКонтакте.
+  const _fallbackSystemPrompt = `Ты — профессиональный VK копирайтер. Создай привлекательное описание для видео ВКонтакте.
 
 Формат ответа (JSON):
 {
@@ -130,6 +131,12 @@ ${materialsText.slice(0, 3000)}
 ${personaText.slice(0, 2000)}
 
 Создай описание для VK видео.`;
+
+  const systemPrompt = await channelSkills.buildSystemPrompt(
+    'vkvideo-copywriter',
+    _fallbackSystemPrompt,
+    'Отвечай только JSON.'
+  );
 
   const response = await aiRouterService.chatCompletion(chatId, [
     { role: 'system', content: systemPrompt },

@@ -23,6 +23,7 @@ const dockerService = require('./docker.service');
 const storageService = require('./storage.service');
 const sessionService = require('./session.service');
 const manageStore = require('../manage/store');
+const { I2I_SCHEMAS } = require('./inputImageContext.service');
 const vpRepo = require('./content/videoPipeline.repository');
 
 // ============================================
@@ -219,14 +220,18 @@ async function generateImageViaKIE(chatId, prompt, productImageUrl, correlationI
   const apiKey = process.env.KIE_API_KEY;
   if (!apiKey) throw new Error('KIE_API_KEY is not set');
 
-  const model = process.env.KIE_IMAGE_MODEL || 'kie-image-v1';
+  const imageSettings = manageStore.getImageGenSettings(chatId);
+  const model = imageSettings.model || process.env.KIE_IMAGE_MODEL || 'nano-banana-2';
+  const schema = I2I_SCHEMAS[model] || { imageField: 'imageUrls' };
+
   const input = {
     prompt,
     aspect_ratio: '9:16',
-    nsfw_checker: true
+    nsfw_checker: true,
+    ...(schema.extra || {}),
   };
   if (productImageUrl) {
-    input.imageUrls = [productImageUrl];
+    input[schema.imageField] = [productImageUrl];
   }
 
   const createResp = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {

@@ -17,6 +17,7 @@ const okRepo = require('./content/ok.repository');
 const { databaseExists } = require('./postgres.service');
 const inputImageContext = require('./inputImageContext.service');
 const { safeSendToModerator } = require('./telegram.utils');
+const channelSkills = require('./channelSkills');
 
 const contentModules = require('./content/index');
 const {
@@ -176,8 +177,13 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
 Требования к imagePrompt: на английском, описание визуала, формат 1:1, без текста на изображении
 Язык: русский (кроме imagePrompt)`;
 
+  const sysPrompt = await channelSkills.buildSystemPrompt(
+    'ok-copywriter',
+    'Ты копирайтер для Одноклассников.',
+    'Отвечай только JSON.'
+  );
   const messages = [
-    { role: 'system', content: 'Ты копирайтер для Одноклассников. Отвечай только JSON.' },
+    { role: 'system', content: sysPrompt },
     { role: 'user', content: prompt }
   ];
 

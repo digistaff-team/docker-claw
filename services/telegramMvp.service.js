@@ -18,6 +18,7 @@ const sessionService = require('./session.service');
 const dockerService = require('./docker.service');
 const storageService = require('./storage.service');
 const inputImageContext = require('./inputImageContext.service');
+const channelSkills = require('./channelSkills');
 const { safeSendToModerator } = require('./telegram.utils');
 
 // Новые модули
@@ -690,8 +691,12 @@ async function generatePostText(chatId, topic, materialsText, personaText = '') 
   if (!data || !hasApiKey || !data.aiModel) {
     throw new Error('AI model is not configured for chat');
   }
+  const sysPrompt = await channelSkills.buildSystemPrompt(
+    'tg-copywriter',
+    'Ты маркетинговый редактор Telegram-канала. Пиши кратко, фактически и без выдумок.'
+  );
   const messages = [
-    { role: 'system', content: 'Ты маркетинговый редактор Telegram-канала. Пиши кратко, фактически и без выдумок.' },
+    { role: 'system', content: sysPrompt },
     { role: 'user', content: buildTextPrompt(topic, materialsText, personaText) }
   ];
   // Передаём aiCustomApiKey для OpenAI или aiAuthToken для ProTalk
@@ -1906,7 +1911,8 @@ async function createTopic(chatId, data = {}) {
     lsi: Array.isArray(data.lsi)
       ? JSON.stringify(data.lsi)
       : String(data.lsi || '').trim() || null,
-    status
+    status,
+    channel: data.channel || null
   });
 }
 
@@ -1933,7 +1939,8 @@ async function updateTopic(chatId, topicId, data = {}) {
     lsi: Array.isArray(data.lsi)
       ? JSON.stringify(data.lsi)
       : (data.lsi ? String(data.lsi).trim() : undefined),
-    status
+    status,
+    channel: 'channel' in data ? (data.channel || null) : undefined
   });
 
   if (!updated) {
