@@ -198,17 +198,19 @@ async function refreshSystemContext() {
 
     try {
         let selectedSkills = [];
-        if (currentUserEmail) {
-            const result = await mysqlQuery(
-                `SELECT s.* FROM ai_skills s
-                 INNER JOIN user_selected_skills us ON s.id = us.skill_id
-                 WHERE us.user_email = %s AND s.is_active = 1`,
-                [currentUserEmail]
-            );
-            selectedSkills = result.data || [];
+        const chatId = getChatId();
+        if (chatId) {
+            try {
+                const r = await fetch(`/api/manage/ai/active-skills?chat_id=${encodeURIComponent(chatId)}`);
+                if (r.ok) {
+                    const data = await r.json();
+                    selectedSkills = data.skills || [];
+                }
+            } catch (e) {
+                console.warn('active-skills fetch error:', e);
+            }
         }
 
-        const chatId = getChatId();
         let personaFiles = {};
         for (const fname of ['IDENTITY.md', 'SOUL.md', 'USER.md', 'MEMORY.md']) {
             try {

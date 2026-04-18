@@ -16,6 +16,7 @@ const vkService = require('./vk.service');
 const vkRepo = require('./content/vk.repository');
 const { databaseExists } = require('./postgres.service');
 const inputImageContext = require('./inputImageContext.service');
+const channelSkills = require('./channelSkills');
 const { safeSendToModerator } = require('./telegram.utils');
 
 const contentModules = require('./content/index');
@@ -171,8 +172,13 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
 - imagePrompt: на английском, описание визуала для поста, без текста на изображении, люди - только славяне
 - Язык: русский (кроме imagePrompt)`;
 
+  const sysPrompt = await channelSkills.buildSystemPrompt(
+    'vk-copywriter',
+    'Ты SMM-маркетолог ВКонтакте.',
+    'Отвечай только JSON.'
+  );
   const messages = [
-    { role: 'system', content: 'Ты SMM-маркетолог ВКонтакте. Отвечай только JSON.' },
+    { role: 'system', content: sysPrompt },
     { role: 'user', content: prompt }
   ];
 

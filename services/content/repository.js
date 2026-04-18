@@ -954,7 +954,7 @@ async function listTopics(chatId, options = {}) {
 
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const result = await client.query(
-      `SELECT id, topic, focus, secondary, lsi, status, created_at, used_at
+      `SELECT id, topic, focus, secondary, lsi, status, channel, created_at, used_at
        FROM content_topics
        ${whereSql}
        ORDER BY created_at DESC, id DESC
@@ -1030,12 +1030,12 @@ async function updateTopic(chatId, topicId, data) {
       values.push(data.lsi);
     }
     if (data.status !== undefined) {
-      fields.push(`status = ${paramIndex++}::text`);
+      fields.push(`status = $${paramIndex++}::text`);
       values.push(data.status);
-      fields.push(`used_at = CASE WHEN ${paramIndex - 1}::text = 'pending' THEN NULL ELSE COALESCE(used_at, NOW()) END`);
+      fields.push(`used_at = CASE WHEN $${paramIndex - 1}::text = 'pending' THEN NULL ELSE COALESCE(used_at, NOW()) END`);
     }
     if (data.channel !== undefined) {
-      fields.push(`channel = ${paramIndex++}::text`);
+      fields.push(`channel = $${paramIndex++}::text`);
       values.push(data.channel);
     }
 
@@ -1048,7 +1048,7 @@ async function updateTopic(chatId, topicId, data) {
     const result = await client.query(
       `UPDATE content_topics
        SET ${fields.join(', ')}
-       WHERE id = ${paramIndex}
+       WHERE id = $${paramIndex}
        RETURNING id, topic, focus, secondary, lsi, status, channel, created_at, used_at`,
       values
     );

@@ -18,6 +18,7 @@ const inputImageContext = require('./inputImageContext.service');
 const { safeSendToModerator } = require('./telegram.utils');
 
 const contentModules = require('./content/index');
+const channelSkills = require('./channelSkills');
 const {
   generateCorrelationId,
   repository,
@@ -160,8 +161,13 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
 - Стиль: разговорный, профессиональный, CTA в конце
 - Язык: русский (кроме imagePrompt)`;
 
+  const sysPrompt = await channelSkills.buildSystemPrompt(
+    'facebook-copywriter',
+    'Ты SMM-маркетолог Facebook.',
+    'Отвечай только JSON.'
+  );
   const messages = [
-    { role: 'system', content: 'Ты SMM-маркетолог Facebook. Отвечай только JSON.' },
+    { role: 'system', content: sysPrompt },
     { role: 'user', content: prompt }
   ];
 

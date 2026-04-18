@@ -48,6 +48,10 @@ Expected Output:
     #Editors
     .vscode/
     .idea/
+    #Documents
+    documents/
+    playwright-report/
+    test-results/
     #Original rules preserved
     *.log
 Final reminder: Output ONLY the .gitignore content. If nothing should be ignored, output NOTHING.

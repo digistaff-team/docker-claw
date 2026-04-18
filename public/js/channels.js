@@ -159,6 +159,7 @@ function initChannelTabs() {
             // Убираем active у всех табов
             tabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
+            localStorage.setItem('activeChannelTab', channel);
             // Скрываем все панели, показываем нужную
             document.querySelectorAll('.channel-panel').forEach(p => p.style.display = 'none');
             const panel = document.getElementById('channelPanel-' + channel);
@@ -292,10 +293,12 @@ async function onLoginSuccess() {
         if (e.target === overlay) closeChannelPicker();
     });
 
-    // Активируем первый таб
-    const firstTab = document.querySelector(`.channel-tab[data-channel="${enabledChannels[0]}"]`);
-    if (firstTab) {
-        firstTab.click();
+    // Восстанавливаем последний активный таб или активируем первый
+    const savedChannel = localStorage.getItem('activeChannelTab');
+    const targetChannel = savedChannel && enabledChannels.includes(savedChannel) ? savedChannel : enabledChannels[0];
+    const targetTab = document.querySelector(`.channel-tab[data-channel="${targetChannel}"]`);
+    if (targetTab) {
+        targetTab.click();
     }
 
     // Загружаем статус всех каналов

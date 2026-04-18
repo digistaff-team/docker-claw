@@ -180,7 +180,7 @@ function renderTopicsTable(items) {
     const body = document.getElementById('topicsTableBody');
     if (!body) return;
     if (!items.length) {
-        body.innerHTML = '<tr><td colspan="7" class="content-empty-cell">Темы не найдены</td></tr>';
+        body.innerHTML = '<tr><td colspan="8" class="content-empty-cell">Темы не найдены</td></tr>';
         return;
     }
 
@@ -203,6 +203,24 @@ function renderTopicsTable(items) {
                         </div>
                     `
                     : escapeHtml([parseMaybeJsonArray(item.secondary), parseMaybeJsonArray(item.lsi)].filter(Boolean).join(' | ') || '-')}</td>
+                <td>${isEditing
+                    ? `
+                        <select id="topic-edit-channel-${item.id}" class="content-inline-input">
+                            <option value="">Все</option>
+                            <option value="telegram" ${item.channel === 'telegram' ? 'selected' : ''}>Telegram</option>
+                            <option value="vk" ${item.channel === 'vk' ? 'selected' : ''}>ВКонтакте</option>
+                            <option value="ok" ${item.channel === 'ok' ? 'selected' : ''}>Одноклассники</option>
+                            <option value="instagram" ${item.channel === 'instagram' ? 'selected' : ''}>Instagram</option>
+                            <option value="instagram_reels" ${item.channel === 'instagram_reels' ? 'selected' : ''}>Instagram Reels</option>
+                            <option value="facebook" ${item.channel === 'facebook' ? 'selected' : ''}>Facebook</option>
+                            <option value="pinterest" ${item.channel === 'pinterest' ? 'selected' : ''}>Pinterest</option>
+                            <option value="wordpress" ${item.channel === 'wordpress' ? 'selected' : ''}>WP-блог</option>
+                            <option value="youtube" ${item.channel === 'youtube' ? 'selected' : ''}>YouTube Shorts</option>
+                            <option value="tiktok" ${item.channel === 'tiktok' ? 'selected' : ''}>TikTok</option>
+                            <option value="vk_video" ${item.channel === 'vk_video' ? 'selected' : ''}>VK Видео</option>
+                        </select>
+                    `
+                    : escapeHtml(item.channel || '—')}</td>
                 <td>${isEditing
                     ? `
                         <select id="topic-edit-status-${item.id}" class="content-inline-input">
@@ -241,11 +259,12 @@ async function createTopic() {
                 topic: document.getElementById('topicTitle')?.value.trim(),
                 focus: document.getElementById('topicFocus')?.value.trim(),
                 secondary: document.getElementById('topicSecondary')?.value.trim(),
-                lsi: document.getElementById('topicLsi')?.value.trim()
+                lsi: document.getElementById('topicLsi')?.value.trim(),
+                channel: document.getElementById('topicChannel')?.value || null
             })
         });
         showToast('Тема добавлена', 'success');
-        ['topicTitle', 'topicFocus', 'topicSecondary', 'topicLsi'].forEach((id) => {
+        ['topicTitle', 'topicFocus', 'topicSecondary', 'topicLsi', 'topicChannel'].forEach((id) => {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
@@ -297,6 +316,10 @@ async function saveTopicInline(topicId) {
     if (lsiEl) {
         const val = lsiEl.value.trim();
         if (val) payload.lsi = val;
+    }
+    const channelEl = document.getElementById(`topic-edit-channel-${topicId}`);
+    if (channelEl) {
+        payload.channel = channelEl.value || null;
     }
     if (statusEl) {
         const val = statusEl.value.trim();

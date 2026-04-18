@@ -312,4 +312,4 @@ async function generateImage(chatId, basePrompt, aspectRatio, t2iModel) {
   return await _generateT2I(prompt, aspectRatio, effectiveT2iModel);
 }
 
-module.exports = { getInputContext, generateImage, _parseFiles, _buildPrompt, LIGHTING_VARIANTS, ANGLE_VARIANTS };
+module.exports = { getInputContext, generateImage, _parseFiles, _buildPrompt, LIGHTING_VARIANTS, ANGLE_VARIANTS, I2I_SCHEMAS };

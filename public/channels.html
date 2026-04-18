@@ -1025,7 +1025,7 @@
 
                                     <div class="scheduler-field-row">
                                         <label for="wordpressAppPassword">Application Password</label>
-                                        <input type="password" id="wordpressAppPassword" placeholder="xxxx xxxx xxxx xxxx xxxx xxxx" autocomplete="off" />
+                                        <input type="text" id="wordpressAppPassword" placeholder="xxxx xxxx xxxx xxxx xxxx xxxx" autocomplete="off" />
                                         <p style="color: #666; font-size: 12px; margin-top: 4px;">Создайте в WP: Пользователи → Профиль → Application Passwords. Требуется HTTPS на сайте.</p>
                                     </div>
 
@@ -1049,13 +1049,6 @@
                                         </div>
                                     </div>
 
-                                    <div class="scheduler-field-row">
-                                        <label for="wordpressUseKnowledgeBase">База знаний</label>
-                                        <div class="scheduler-checkbox-row">
-                                            <input type="checkbox" id="wordpressUseKnowledgeBase" checked>
-                                            <label for="wordpressUseKnowledgeBase">Использовать базу знаний</label>
-                                        </div>
-                                    </div>
                                 </div>
 
                                 <div class="schedule-settings-block">
@@ -1147,33 +1140,6 @@
                             </div>
                             <div id="wordpressSettingsStatus" class="scheduler-status"></div>
 
-                            <!-- Темы -->
-                            <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #eee;">
-                                <h4 style="margin-bottom: 12px;">📚 Темы для генерации</h4>
-                                <p style="color: #666; font-size: 12px; margin-bottom: 12px;">Список тем, из которых планировщик будет последовательно создавать статьи. Каждая тема используется один раз.</p>
-                                <div style="display: grid; grid-template-columns: 2fr 2fr 1fr auto; gap: 8px; margin-bottom: 10px; align-items: end;">
-                                    <div>
-                                        <label for="wordpressNewTopic" style="font-size: 12px;">Тема</label>
-                                        <input type="text" id="wordpressNewTopic" placeholder="Как выбрать фрезер" />
-                                    </div>
-                                    <div>
-                                        <label for="wordpressNewKeywords" style="font-size: 12px;">Ключевые слова</label>
-                                        <input type="text" id="wordpressNewKeywords" placeholder="фрезер, выбор, инструмент" />
-                                    </div>
-                                    <div>
-                                        <label for="wordpressNewPriority" style="font-size: 12px;">Приоритет</label>
-                                        <select id="wordpressNewPriority">
-                                            <option value="0">Низкий</option>
-                                            <option value="1" selected>Обычный</option>
-                                            <option value="2">Высокий</option>
-                                        </select>
-                                    </div>
-                                    <button class="btn btn-primary" onclick="addWordpressTopic()" style="height: 38px;">➕ Добавить</button>
-                                </div>
-                                <div id="wordpressTopicsList" style="margin-top: 12px; font-size: 13px;">
-                                    <em style="color: #999;">Темы пока не добавлены</em>
-                                </div>
-                            </div>
 
                             <!-- Последние посты -->
                             <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #eee;">

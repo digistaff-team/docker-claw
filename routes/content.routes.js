@@ -832,12 +832,17 @@ router.get('/facebook/settings', async (req, res) => {
 
 // POST /api/content/wordpress/connect — подключить WordPress блог
 router.post('/wordpress/connect', async (req, res) => {
-  const chatId = normalizeChatId(req.body.chat_id);
+  const chatId = normalizeChatId(req.body.chat_id || req.body.chatId);
   if (!chatId) {
     return res.status(400).json({ error: 'chat_id is required' });
   }
 
-  const { baseUrl, username, appPassword, defaultCategoryId } = req.body || {};
+  const { baseUrl, username, defaultCategoryId } = req.body || {};
+  let { appPassword } = req.body || {};
+  const existingConfig = manageStore.getWpConfig(chatId) || {};
+  if (!appPassword && existingConfig.appPassword) {
+    appPassword = existingConfig.appPassword;
+  }
   if (!baseUrl || !username || !appPassword) {
     return res.status(400).json({ error: 'baseUrl, username, and appPassword are required' });
   }
@@ -881,7 +886,7 @@ router.post('/wordpress/connect', async (req, res) => {
 
 // POST /api/content/wordpress/disconnect — отключить WordPress
 router.post('/wordpress/disconnect', async (req, res) => {
-  const chatId = normalizeChatId(req.body.chat_id);
+  const chatId = normalizeChatId(req.body.chat_id || req.body.chatId);
   if (!chatId) {
     return res.status(400).json({ error: 'chat_id is required' });
   }
@@ -896,7 +901,7 @@ router.post('/wordpress/disconnect', async (req, res) => {
 
 // GET /api/content/wordpress/status — статус и последние посты
 router.get('/wordpress/status', async (req, res) => {
-  const chatId = normalizeChatId(req.query.chat_id);
+  const chatId = normalizeChatId(req.query.chat_id || req.query.chatId);
   if (!chatId) {
     return res.status(400).json({ error: 'chat_id is required' });
   }
@@ -914,6 +919,7 @@ router.get('/wordpress/status', async (req, res) => {
     }
 
     return res.json({
+      connected: !!(wpConfig.enabled && wpConfig.baseUrl),
       config: wpConfig,
       stats,
       publishedToday,
@@ -927,7 +933,7 @@ router.get('/wordpress/status', async (req, res) => {
 
 // GET /api/content/wordpress/config — получить конфигурацию
 router.get('/wordpress/config', async (req, res) => {
-  const chatId = normalizeChatId(req.query.chat_id);
+  const chatId = normalizeChatId(req.query.chat_id || req.query.chatId);
   if (!chatId) {
     return res.status(400).json({ error: 'chat_id is required' });
   }
@@ -955,14 +961,14 @@ router.get('/wordpress/config', async (req, res) => {
 
 // PUT /api/content/wordpress/config — сохранить конфигурацию
 router.put('/wordpress/config', async (req, res) => {
-  const chatId = normalizeChatId(req.body.chat_id);
+  const chatId = normalizeChatId(req.body.chat_id || req.body.chatId);
   if (!chatId) {
     return res.status(400).json({ error: 'chat_id is required' });
   }
 
   try {
     const currentConfig = manageStore.getWpConfig(chatId) || {};
-    const patch = req.body || {};
+    const patch = req.body.config || req.body;
 
     // Валидация
     if (patch.scheduleTime !== undefined && patch.scheduleTime) {
@@ -994,12 +1000,16 @@ router.put('/wordpress/config', async (req, res) => {
       enabled: patch.enabled !== undefined ? patch.enabled : currentConfig.enabled,
       autoPublish: patch.autoPublish !== undefined ? patch.autoPublish : currentConfig.autoPublish,
       announceTelegram: patch.announceTelegram !== undefined ? patch.announceTelegram : currentConfig.announceTelegram,
-      useKnowledgeBase: patch.useKnowledgeBase !== undefined ? patch.useKnowledgeBase : currentConfig.useKnowledgeBase,
       scheduleTime: patch.scheduleTime || currentConfig.scheduleTime,
+      scheduleEndTime: patch.scheduleEndTime !== undefined ? patch.scheduleEndTime : currentConfig.scheduleEndTime,
       scheduleTz: patch.scheduleTz || currentConfig.scheduleTz,
       scheduleDays: patch.scheduleDays || currentConfig.scheduleDays,
       dailyLimit: patch.dailyLimit || currentConfig.dailyLimit,
-      minIntervalHours: patch.minIntervalHours || currentConfig.minIntervalHours
+      minIntervalHours: patch.minIntervalHours || currentConfig.minIntervalHours,
+      randomPublish: patch.randomPublish !== undefined ? patch.randomPublish : currentConfig.randomPublish,
+      premoderationEnabled: patch.premoderationEnabled !== undefined ? patch.premoderationEnabled : currentConfig.premoderationEnabled,
+      moderatorUserId: patch.moderatorUserId !== undefined ? patch.moderatorUserId : currentConfig.moderatorUserId,
+      defaultCategoryId: patch.defaultCategoryId !== undefined ? patch.defaultCategoryId : currentConfig.defaultCategoryId,
     });
 
     return res.json({ ok: true, config: manageStore.getWpConfig(chatId) });
@@ -1010,7 +1020,7 @@ router.put('/wordpress/config', async (req, res) => {
 
 // GET /api/content/wordpress/categories — получить категории WordPress (прокси)
 router.get('/wordpress/categories', async (req, res) => {
-  const chatId = normalizeChatId(req.query.chat_id);
+  const chatId = normalizeChatId(req.query.chat_id || req.query.chatId);
   if (!chatId) {
     return res.status(400).json({ error: 'chat_id is required' });
   }
@@ -1030,11 +1040,12 @@ router.get('/wordpress/categories', async (req, res) => {
 
 // POST /api/content/wordpress/run-now — запустить генерацию сейчас
 router.post('/wordpress/run-now', async (req, res) => {
-  const chatId = normalizeChatId(req.body.chat_id);
+  const chatId = normalizeChatId(req.body.chat_id || req.body.chatId);
   if (!chatId) {
     return res.status(400).json({ error: 'chat_id is required' });
   }
 
+  let topicRow = null;
   try {
     const wpConfig = manageStore.getWpConfig(chatId);
     if (!wpConfig || !wpConfig.enabled) {
@@ -1053,27 +1064,21 @@ router.post('/wordpress/run-now', async (req, res) => {
       return res.status(429).json({ error: quotaCheck.reason });
     }
 
-    // Ищем следующую тему
-    const topicRow = await contentRepo.withClient(chatId, async (client) => {
-      const result = await client.query(
-        `SELECT id, topic, keywords, tech_doc_id
-         FROM content_topics
-         WHERE used_at IS NULL
-         ORDER BY priority DESC, created_at ASC
-         LIMIT 1`
-      );
-      return result.rows[0] || null;
-    });
+    // Ищем следующую тему (wordpress или универсальные с channel IS NULL)
+    topicRow = await contentRepo.reserveNextTopic(chatId, 'wordpress');
 
     if (!topicRow) {
-      return res.status(400).json({ error: 'No available topics in queue' });
+      return res.status(400).json({ error: 'Нет доступных тем в очереди. Добавьте темы в разделе «Материалы» с каналом «WP-блог» или «Все каналы».' });
     }
+
+    // Собираем ключевые слова из полей focus/secondary/lsi
+    const keywords = [topicRow.focus, topicRow.secondary, topicRow.lsi]
+      .filter(Boolean).join(', ') || null;
 
     // Запускаем генерацию
     const article = await blogGenerator.generate(chatId, {
       topic: topicRow.topic,
-      keywords: topicRow.keywords,
-      techDocId: topicRow.tech_doc_id
+      keywords
     });
 
     // Загружаем изображение в WordPress
@@ -1107,14 +1112,6 @@ router.post('/wordpress/run-now', async (req, res) => {
       publishStatus: wpConfig.autoPublish ? 'approved' : 'ready'
     });
 
-    // Отмечаем тему
-    await contentRepo.withClient(chatId, async (client) => {
-      await client.query(
-        `UPDATE content_topics SET used_at = NOW() WHERE id = $1`,
-        [topicRow.id]
-      );
-    });
-
     // Если авто-публикация — публикуем сразу
     if (wpConfig.autoPublish) {
       await wordpressMvpService.publishPost(chatId, draftResult.id);
@@ -1129,44 +1126,11 @@ router.post('/wordpress/run-now', async (req, res) => {
       topic: topicRow.topic
     });
   } catch (e) {
+    if (topicRow) await contentRepo.releaseTopic(chatId, topicRow.id).catch(() => {});
     return res.status(500).json({ error: e.message });
   }
 });
 
-// POST /api/content/topics — создать тему
-router.post('/topics', async (req, res) => {
-  const chatId = normalizeChatId(req.body.chat_id);
-  if (!chatId) {
-    return res.status(400).json({ error: 'chat_id is required' });
-  }
-
-  try {
-    const { topic, keywords, techDocId, priority } = req.body || {};
-    if (!topic) {
-      return res.status(400).json({ error: 'topic is required' });
-    }
-
-    const result = await contentRepo.withClient(chatId, async (client) => {
-      const res = await client.query(
-        `INSERT INTO content_topics (chat_id, topic, keywords, tech_doc_id, priority)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING *`,
-        [
-          chatId,
-          topic.trim(),
-          keywords || null,
-          techDocId ? parseInt(techDocId, 10) : null,
-          priority ? parseInt(priority, 10) : 5
-        ]
-      );
-      return res.rows[0];
-    });
-
-    return res.status(201).json({ topic: result });
-  } catch (e) {
-    return res.status(500).json({ error: e.message });
-  }
-});
 
 // GET /api/content/topics — список тем
 router.get('/topics', async (req, res) => {
@@ -1302,7 +1266,7 @@ router.delete('/knowledge/:id', async (req, res) => {
 
 // GET /api/content/wordpress/posts — список блог-постов
 router.get('/wordpress/posts', async (req, res) => {
-  const chatId = normalizeChatId(req.query.chat_id);
+  const chatId = normalizeChatId(req.query.chat_id || req.query.chatId);
   if (!chatId) {
     return res.status(400).json({ error: 'chat_id is required' });
   }
@@ -1326,7 +1290,7 @@ router.get('/wordpress/posts', async (req, res) => {
 
 // POST /api/content/wordpress/posts/:id/approve — одобрить пост
 router.post('/wordpress/posts/:id/approve', async (req, res) => {
-  const chatId = normalizeChatId(req.body.chat_id);
+  const chatId = normalizeChatId(req.body.chat_id || req.body.chatId);
   const postId = parseInt(req.params.id, 10);
   if (!chatId) {
     return res.status(400).json({ error: 'chat_id is required' });
@@ -1345,7 +1309,7 @@ router.post('/wordpress/posts/:id/approve', async (req, res) => {
 
 // POST /api/content/wordpress/posts/:id/reject — отклонить пост
 router.post('/wordpress/posts/:id/reject', async (req, res) => {
-  const chatId = normalizeChatId(req.body.chat_id);
+  const chatId = normalizeChatId(req.body.chat_id || req.body.chatId);
   const postId = parseInt(req.params.id, 10);
   if (!chatId) {
     return res.status(400).json({ error: 'chat_id is required' });

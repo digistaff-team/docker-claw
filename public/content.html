@@ -88,6 +88,23 @@
                                 <label for="topicLsi">LSI-ключи</label>
                                 <input type="text" id="topicLsi" placeholder="лиды, юнит-экономика" />
                             </div>
+                            <div>
+                                <label for="topicChannel">Канал</label>
+                                <select id="topicChannel">
+                                    <option value="">Все каналы</option>
+                                    <option value="telegram">Telegram</option>
+                                    <option value="vk">ВКонтакте</option>
+                                    <option value="ok">Одноклассники</option>
+                                    <option value="instagram">Instagram</option>
+                                    <option value="instagram_reels">Instagram Reels</option>
+                                    <option value="facebook">Facebook</option>
+                                    <option value="pinterest">Pinterest</option>
+                                    <option value="wordpress">WP-блог</option>
+                                    <option value="youtube">YouTube Shorts</option>
+                                    <option value="tiktok">TikTok</option>
+                                    <option value="vk_video">VK Видео</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="content-actions">
                             <button class="btn btn-primary" onclick="createTopic()">Сохранить тему</button>
@@ -116,13 +133,14 @@
                                 <th style="position: sticky; top: 0; z-index: 1;">Тема</th>
                                 <th style="position: sticky; top: 0; z-index: 1;">Фокус</th>
                                 <th style="position: sticky; top: 0; z-index: 1;">Ключи</th>
+                                <th style="position: sticky; top: 0; z-index: 1;">Канал</th>
                                 <th style="position: sticky; top: 0; z-index: 1;">Статус</th>
                                 <th style="position: sticky; top: 0; z-index: 1;">Создано</th>
                                 <th style="position: sticky; top: 0; z-index: 1;">Действия</th>
                             </tr>
                         </thead>
                         <tbody id="topicsTableBody">
-                            <tr><td colspan="7" class="content-empty-cell">Темы не загружены</td></tr>
+                            <tr><td colspan="8" class="content-empty-cell">Темы не загружены</td></tr>
                         </tbody>
                     </table>
                 </div>

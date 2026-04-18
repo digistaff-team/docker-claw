@@ -1489,7 +1489,6 @@ module.exports = {
         if (patch.enabled !== undefined) next.enabled = !!patch.enabled;
         if (patch.autoPublish !== undefined) next.autoPublish = !!patch.autoPublish;
         if (patch.announceTelegram !== undefined) next.announceTelegram = !!patch.announceTelegram;
-        if (patch.useKnowledgeBase !== undefined) next.useKnowledgeBase = !!patch.useKnowledgeBase;
         if (patch.scheduleTime !== undefined) next.scheduleTime = patch.scheduleTime || null;
         if (patch.scheduleEndTime !== undefined) next.scheduleEndTime = patch.scheduleEndTime || null;
         if (patch.scheduleTz !== undefined) next.scheduleTz = patch.scheduleTz || null;
@@ -1506,6 +1505,9 @@ module.exports = {
             const hours = parseInt(patch.minIntervalHours, 10);
             next.minIntervalHours = Number.isFinite(hours) && hours > 0 ? Math.min(hours, 48) : 6;
         }
+        if (patch.randomPublish !== undefined) next.randomPublish = !!patch.randomPublish;
+        if (patch.premoderationEnabled !== undefined) next.premoderationEnabled = !!patch.premoderationEnabled;
+        if (patch.moderatorUserId !== undefined) next.moderatorUserId = String(patch.moderatorUserId || '').trim() || null;
         if (patch.lastPublishedAt !== undefined) next.lastPublishedAt = patch.lastPublishedAt || null;
         if (patch.consecutiveErrors !== undefined) {
             const errors = parseInt(patch.consecutiveErrors, 10);

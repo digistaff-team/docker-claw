@@ -19,6 +19,7 @@ const { safeSendToModerator } = require('./telegram.utils');
 const videoPipeline = require('./videoPipeline.service');
 
 const contentModules = require('./content/index');
+const channelSkills = require('./channelSkills');
 const {
   generateCorrelationId,
   repository,
@@ -148,7 +149,7 @@ async function loadUserPersona(chatId) {
 // AI-генерация для Instagram
 // ============================================
 
-async function generateIgPostText(chatId, topic, materialsText, personaText) {
+async function generateIgPostText(chatId, topic, materialsText, personaText, skillSlug = 'instagram-copywriter') {
   const data = manageStore.getState(chatId);
   const hasApiKey = data?.aiCustomApiKey || data?.aiAuthToken;
   if (!hasApiKey || !data?.aiModel) {
@@ -175,8 +176,13 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
 - Стиль: живой, разговорный, без канцелярита
 - Язык: русский (кроме imagePrompt)`;
 
+  const sysPrompt = await channelSkills.buildSystemPrompt(
+    skillSlug,
+    'Ты SMM-маркетолог Instagram.',
+    'Отвечай только JSON.'
+  );
   const messages = [
-    { role: 'system', content: 'Ты SMM-маркетолог Instagram. Отвечай только JSON.' },
+    { role: 'system', content: sysPrompt },
     { role: 'user', content: prompt }
   ];
 
@@ -676,7 +682,7 @@ async function handleIgVideoGenerateJob(chatId, queueJob, bot, correlationId) {
       loadMaterialsText(chatId, 12),
       loadUserPersona(chatId)
     ]);
-    igText = await generateIgPostText(chatId, topic, materialsText, personaText);
+    igText = await generateIgPostText(chatId, topic, materialsText, personaText, 'instagram-reels-copywriter');
     console.log(`[IG-REELS-GENERATE] ${chatId} caption generated (${(igText.caption || '').length} chars)`);
   } catch (e) {
     console.error(`[IG-REELS-GENERATE] ${chatId} caption generation failed: ${e.message}`);

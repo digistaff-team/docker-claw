@@ -18,6 +18,7 @@ const inputImageContext = require('./inputImageContext.service');
 const { safeSendToModerator } = require('./telegram.utils');
 
 const contentModules = require('./content/index');
+const channelSkills = require('./channelSkills');
 const {
   generateCorrelationId,
   repository,
@@ -198,8 +199,13 @@ ${materialsText ? `--- МАТЕРИАЛЫ ---\n${materialsText}\n---` : ''}
 - Язык: русский
 - Не используй эмодзи в заголовке`;
 
+  const sysPrompt = await channelSkills.buildSystemPrompt(
+    'pinterest-copywriter',
+    'Ты Pinterest-маркетолог.',
+    'Отвечай только JSON.'
+  );
   const messages = [
-    { role: 'system', content: 'Ты Pinterest-маркетолог. Отвечай только JSON.' },
+    { role: 'system', content: sysPrompt },
     { role: 'user', content: prompt }
   ];
 

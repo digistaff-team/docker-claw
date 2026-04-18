@@ -41,9 +41,8 @@
       });
       setConnStatus(`✅ Подключено: ${r.siteName || baseUrl}`, '#0a0');
       $('disconnectWordpressBtn').style.display = 'inline-block';
-      await loadWordpressConfig();
       await loadWordpressCategories();
-      await loadWordpressTopics();
+      await loadWordpressConfig();
       await loadWordpressKnowledge();
       await loadWordpressRecentPosts();
     } catch (e) {
@@ -82,7 +81,6 @@
       if (c.enabled !== undefined) $('wordpressEnabled') && ($('wordpressEnabled').checked = !!c.enabled);
       if (c.autoPublish !== undefined) $('wordpressAutoPublish') && ($('wordpressAutoPublish').checked = !!c.autoPublish);
       $('wordpressAnnounceTelegram').checked = c.announceTelegram !== false;
-      $('wordpressUseKnowledgeBase').checked = c.useKnowledgeBase !== false;
       const time = (c.scheduleTime || '09:00').split(':');
       $('wordpressScheduleHour').value = time[0] || '09';
       $('wordpressScheduleMinute').value = (time[1] || '00').padStart(2, '0');
@@ -129,7 +127,6 @@
       enabled: $('wordpressEnabled') ? $('wordpressEnabled').checked : true,
       autoPublish: $('wordpressAutoPublish') ? $('wordpressAutoPublish').checked : false,
       announceTelegram: $('wordpressAnnounceTelegram').checked,
-      useKnowledgeBase: $('wordpressUseKnowledgeBase').checked,
       // New standard fields
       scheduleTime: $('wordpressScheduleTime').value || '09:00',
       scheduleEndTime: ($('wordpressScheduleEndTime')?.value || '').trim() || null,
@@ -250,62 +247,6 @@
     }
   };
 
-  // ===== Topics CRUD =====
-  async function loadWordpressTopics() {
-    const chatId = chat();
-    if (!chatId) return;
-    try {
-      const r = await jfetch(`${API}/topics?chatId=${encodeURIComponent(chatId)}&include_used=true&limit=50`);
-      const list = r.topics || [];
-      const el = $('wordpressTopicsList');
-      if (!list.length) { el.innerHTML = '<em style="color:#999">Темы пока не добавлены</em>'; return; }
-      el.innerHTML = list.map(t => `
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f0f0f0;">
-          <div>
-            <strong>${escapeHtml(t.topic)}</strong>
-            <span style="color:#666; font-size:12px;"> · ${escapeHtml(t.keywords || '')}</span>
-            ${t.used_at ? `<span style="color:#999; font-size:11px;"> · использована</span>` : ''}
-          </div>
-          <button class="btn btn-secondary" style="padding:4px 8px; font-size:12px;" onclick="deleteWordpressTopic(${t.id})">✕</button>
-        </div>
-      `).join('');
-    } catch (e) {
-      console.warn('loadWordpressTopics:', e.message);
-    }
-  }
-  window.loadWordpressTopics = loadWordpressTopics;
-
-  window.addWordpressTopic = async function () {
-    const chatId = chat();
-    if (!chatId) return;
-    const topic = $('wordpressNewTopic').value.trim();
-    const keywords = $('wordpressNewKeywords').value.trim();
-    const priority = parseInt($('wordpressNewPriority').value, 10) || 1;
-    if (!topic) return setStatus('Введите тему', '#c00');
-    try {
-      await jfetch(`${API}/topics`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId, topic, keywords, priority, channel: 'wordpress' })
-      });
-      $('wordpressNewTopic').value = '';
-      $('wordpressNewKeywords').value = '';
-      await loadWordpressTopics();
-    } catch (e) {
-      setStatus(`❌ ${e.message}`, '#c00');
-    }
-  };
-
-  window.deleteWordpressTopic = async function (id) {
-    const chatId = chat();
-    if (!chatId || !confirm('Удалить тему?')) return;
-    try {
-      await jfetch(`${API}/topics/${id}?chatId=${encodeURIComponent(chatId)}`, { method: 'DELETE' });
-      await loadWordpressTopics();
-    } catch (e) {
-      setStatus(`❌ ${e.message}`, '#c00');
-    }
-  };
 
   // ===== Knowledge CRUD =====
   async function loadWordpressKnowledge() {
@@ -397,10 +338,10 @@
         $('disconnectWordpressBtn').style.display = 'inline-block';
         if (r.config?.baseUrl) $('wordpressBaseUrl').value = r.config.baseUrl;
         if (r.config?.username) $('wordpressUsername').value = r.config.username;
-        await loadWordpressConfig();
+        if (r.config?.appPassword) $('wordpressAppPassword').value = r.config.appPassword;
         await loadWordpressCategories();
-        await loadWordpressTopics();
-        await loadWordpressKnowledge();
+        await loadWordpressConfig();
+          await loadWordpressKnowledge();
         await loadWordpressRecentPosts();
       } else {
         setConnStatus('Не подключено', '#888');
